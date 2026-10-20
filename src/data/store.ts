@@ -32,6 +32,8 @@ export interface StoreState {
   pending: number;
   toasts: Toast[];
   loadedFrom: string; // 이 날짜 이후 날짜별 데이터를 들고 있음
+  /** 이 기기에 마지막으로 자동 저장된 시각 */
+  savedAt: string | null;
 }
 
 const DATED: TableName[] = ['daily_orders', 'vehicle_days', 'field_assignments', 'notices'];
@@ -49,6 +51,7 @@ class Store {
     pending: 0,
     toasts: [],
     loadedFrom: addDays(seoulToday(), -LOOKBACK),
+    savedAt: null,
   };
   private listeners = new Set<() => void>();
   private outbox = new Map<string, Mutation>();
@@ -177,16 +180,32 @@ class Store {
     void this.persist();
   }
 
-  private persistTimer: ReturnType<typeof setTimeout> | null = null;
-  private persist() {
-    if (this.persistTimer) clearTimeout(this.persistTimer);
-    return new Promise<void>((resolve) => {
-      this.persistTimer = setTimeout(async () => {
-        await set(this.cacheKey(), this.state.snap).catch(() => undefined);
-        if (this.state.session) await set(`outbox:${this.state.session.userId}`, [...this.outbox.values()]).catch(() => undefined);
-        resolve();
-      }, 300);
-    });
+  /**
+   * 이 기기(IndexedDB)에 바로 저장. 저장 중에 또 바뀌면 끝난 뒤 한 번 더 저장한다.
+   * (예전에는 0.3초 모아서 저장 → 그 사이 앱을 닫으면 마지막 변경이 사라질 수 있었음)
+   */
+  private writing: Promise<void> | null = null;
+  private dirty = false;
+  private persist(): Promise<void> {
+    this.dirty = true;
+    if (!this.writing) {
+      this.writing = (async () => {
+        while (this.dirty) {
+          this.dirty = false;
+          const ok = await set(this.cacheKey(), this.state.snap).then(() => true, () => false);
+          if (ok) this.setState({ savedAt: new Date().toISOString() });
+          else this.toast('이 기기에 저장하지 못했습니다 — 저장 공간을 확인하고 백업 파일을 저장해 두세요', 'error');
+          if (this.state.session) await set(`outbox:${this.state.session.userId}`, [...this.outbox.values()]).catch(() => undefined);
+        }
+        this.writing = null;
+      })();
+    }
+    return this.writing;
+  }
+
+  /** 저장이 끝날 때까지 기다린다 (화면 이동 전 등) */
+  whenSaved(): Promise<void> {
+    return this.writing ?? Promise.resolve();
   }
 
   async flush() {
@@ -196,7 +215,7 @@ class Store {
       const sending = new Map(this.outbox);
       for (const b of toBatches([...sending.values()])) {
         const { error } = b.op === 'upsert'
-          ? await supabase.from(b.table).upsert(b.rows.map((r) => stripLocal(b.table, r)))
+          ? await supabase.from(b.table).upsert(b.rows.map((r) => stripLocal(b.table, r)), { defaultToNull: false })
           : await supabase.from(b.table).delete().in('id', b.ids);
         if (error) {
           if (isNetworkError(error)) throw error;

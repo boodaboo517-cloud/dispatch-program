@@ -19,7 +19,7 @@ export function seedSnapshot(): Snapshot {
     ['세주', ''], ['퀸메리', ''], ['목포', ''],
   ];
   s.ships = ships.map(([name, t], i) => ({
-    id: sid(1, i + 1), name, departs_at: t, route: 'both', arrival_day_offset: 1, sort_order: i,
+    id: sid(1, i + 1), name, departs_at: t, route: 'both', arrival_day_offset: 1, sort_order: i, port_times: [],
   }));
 
   const drivers: [string, string, Weekday[], string, '기사' | '현장' | '사무'][] = [
@@ -37,7 +37,7 @@ export function seedSnapshot(): Snapshot {
     ['김용현', '', MON_SAT, '목포센터', '현장'],
   ];
   s.drivers = drivers.map(([name, shift, work_days, affiliation, staff_type], i) => ({
-    id: sid(2, i + 1), name, phone: '', work_days, shift, affiliation, staff_type,
+    id: sid(2, i + 1), name, phone: '', work_days, shift, affiliation, staff_type, memo: '',
   }));
   const driver = (name: string) => s.drivers.find((d) => d.name === name)!.id;
 

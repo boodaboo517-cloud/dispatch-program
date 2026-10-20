@@ -3,13 +3,13 @@ import { useMemo, useState } from 'react';
 import {
   RecurringRuleError, activeVersion, addDays, buildBoard, planCreateRecurring, planRecurringChange, planRecurringEnd,
   previewRecurringChange, summarizeVersion, weekdaysLabel,
-  type Kind, type RecurringOrder, type ShipTag, type Unit, type VersionFields, type Weekday, type Zone,
+  type Kind, type RecurringOrder, type ShipTag, type VersionFields, type Weekday, type Zone,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
 import { fmtDate, seoulToday } from '../lib/time.ts';
 import { useSnap } from './hooks.ts';
 import { ZONE_LABEL, kindLabel, shipText, vehicleNo } from './labels.ts';
-import { UNITS } from './OrderSheet.tsx';
+import { QtyInput } from './QtyInput.tsx';
 import { Seg, WeekdayChips } from './Picker.tsx';
 import { usePickers } from './pickers.tsx';
 import { Sheet } from './Sheet.tsx';
@@ -90,12 +90,11 @@ export function RecurringSheet(p: {
       {p.mode !== 'end' && (
         <>
           <label className="field"><span>요일</span><WeekdayChips value={f.weekdays} onChange={(v) => set({ weekdays: v as Weekday[] })} /></label>
-          <div className="row">
-            <label className="field grow"><span>수량</span><input inputMode="decimal" value={f.quantity ?? ''} onChange={(e) => set({ quantity: e.target.value === '' ? null : Number(e.target.value) })} /></label>
-            <label className="field" style={{ width: 110 }}><span>단위</span><select value={f.unit} onChange={(e) => set({ unit: e.target.value as Unit })}>{UNITS.map((u) => <option key={u} value={u}>{u || '-'}</option>)}</select></label>
+          <div className="field"><span className="muted small">수량 (10파렛트 · 3대 처럼 써도 됨)</span>
+            <QtyInput quantity={f.quantity} unit={f.unit} onChange={(quantity, unit) => set({ quantity, unit })} />
           </div>
           <label className="field"><span>지역</span><input value={f.region} onChange={(e) => set({ region: e.target.value })} /></label>
-          <div className="editable" onClick={async () => { const r = await pick.ship(zone, { ship: f.ship, tag: f.ship_tag }); if (r) set({ ship: r.ship, ship_tag: r.tag as ShipTag }); }}>
+          <div className="editable" onClick={async () => { const r = await pick.ship(zone, { ship: f.ship, tag: f.ship_tag }, kind === 'load' ? 'departure' : 'arrival'); if (r) set({ ship: r.ship, ship_tag: r.tag as ShipTag }); }}>
             <span className="k">선박</span><span className="v">{shipText(f.ship, f.ship_tag) || '-'}</span><span className="muted">변경 ›</span>
           </div>
           <div className="editable" onClick={async () => {

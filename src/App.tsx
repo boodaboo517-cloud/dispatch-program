@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { addDays, type Role } from './domain/index.ts';
 import { backupOverdue } from './data/backup.ts';
+import { autoWeeklyEmail } from './data/emailBackup.ts';
 import { store } from './data/store.ts';
 import { isDemo, supabase } from './data/supabase.ts';
 import { seoulToday } from './lib/time.ts';
@@ -96,6 +97,17 @@ function TabBar({ role }: { role: Role }) {
 function Shell() {
   const session = useStore((s) => s.session);
   const ready = useStore((s) => s.ready);
+  useEffect(() => {
+    if (!ready || !session || session.role === 'viewer') return;
+    // 일주일마다 자동 이메일 백업 (설정돼 있을 때만)
+    const t = setTimeout(() => {
+      void autoWeeklyEmail(store.getState().snap).then((r) => {
+        if (r === 'sent') store.toast('📧 주간 백업을 이메일로 보냈습니다');
+        else if (r instanceof Error) store.toast(`주간 이메일 백업 실패: ${r.message}`, 'warn');
+      });
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [ready, session]);
   if (!session) return null;
   if (!ready) return <div className="page"><p>불러오는 중…</p></div>;
   const viewer = session.role === 'viewer';

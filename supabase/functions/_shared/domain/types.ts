@@ -88,11 +88,38 @@ export interface Driver extends Base {
   phone: string;
   /** 근무 요일 (0=일 … 6=토) */
   work_days: Weekday[];
-  /** 근무조 라벨: 월수금 / 화목일 / 토요일 / 부산상주 / 서울상주 / 현장 */
+  /** 근무조 라벨: 월수금 / 화목일 / 월수 / 토요일 / 주말 / 알바 / 부산상주 / 서울상주 */
   shift: string;
   affiliation: string;
   /** 직원 구분: 기사 / 현장 / 사무 */
   staff_type: '기사' | '현장' | '사무';
+  memo?: string;
+}
+
+/** 알바: 정해진 근무일 없이 출근 기록이 있는 날만 근무 */
+export const ON_CALL_SHIFT = '알바';
+export const SHIFT_PRESETS: Record<string, Weekday[]> = {
+  월수금: [1, 3, 5],
+  화목일: [2, 4, 0],
+  월수: [1, 3],
+  토요일: [6],
+  주말: [6, 0],
+  [ON_CALL_SHIFT]: [],
+};
+
+export const WORK_TYPES = ['주간근무', '야간근무', '특근', '출장', '장거리', '단거리', '야간단거리', '시간외근무'] as const;
+export type WorkType = (typeof WORK_TYPES)[number];
+/** 월간 근무현황 표의 한 칸 표시용 약자 */
+export const WORK_TYPE_SHORT: Record<WorkType, string> = {
+  주간근무: '주', 야간근무: '야', 특근: '특', 출장: '출', 장거리: '장', 단거리: '단', 야간단거리: '야단', 시간외근무: '시',
+};
+
+/** 기사 하루 근무 기록 (근무형태 · 알바 출근) */
+export interface DriverWorkLog extends Base {
+  date: string;
+  driver_id: string;
+  work_types: WorkType[];
+  memo: string;
 }
 
 export interface Ship extends Base {
@@ -101,6 +128,8 @@ export interface Ship extends Base {
   route: ShipRoute;
   arrival_day_offset: number; // 도착일 차이 (기본 1)
   sort_order: number;
+  /** departs_at = 제주 출발(상행) 시간, port_times = 기항지별 하행(육지 → 제주) 출발 시간 */
+  port_times?: { port: string; time: string }[];
 }
 
 export interface OrderSnapshot {
@@ -116,6 +145,8 @@ export interface OrderSnapshot {
   arrival_ship: string | null;
   arrival_ship_tag: ShipTag;
   date: string;
+  pickup_place?: string;
+  dropoff_place?: string;
 }
 
 export interface DailyOrder extends Base {
@@ -147,6 +178,11 @@ export interface DailyOrder extends Base {
   link_status: LinkStatus;
   /** 원본 상차가 바뀌었지만 직접 수정 때문에 반영 대기 중인 값 */
   link_pending: Partial<OrderSnapshot> | null;
+  /** 상차지 · 하차지 (오더마다 다를 수 있음) */
+  pickup_place?: string;
+  dropoff_place?: string;
+  /** 당일 왕복: 올라가서 상차하고 같은 날 내려옴 → 연결 하차가 같은 날짜, 차량 위치는 안 바뀜 */
+  same_day?: boolean;
 }
 
 /** 차량별 하루 한 줄 — 선박·상태·기사 등 차량 단위 정보 */
@@ -309,6 +345,7 @@ export interface Snapshot {
   product_suggestions: ProductSuggestion[];
   vehicles: Vehicle[];
   drivers: Driver[];
+  driver_work_logs: DriverWorkLog[];
   ships: Ship[];
   daily_orders: DailyOrder[];
   vehicle_days: VehicleDay[];
@@ -329,7 +366,7 @@ export interface Snapshot {
 export type TableName = keyof Snapshot;
 export const TABLES: TableName[] = [
   'clients', 'products', 'product_pricing', 'product_photos', 'product_suggestions',
-  'vehicles', 'drivers', 'ships', 'daily_orders', 'vehicle_days', 'recurring_orders',
+  'vehicles', 'drivers', 'driver_work_logs', 'ships', 'daily_orders', 'vehicle_days', 'recurring_orders',
   'recurring_order_versions', 'order_revenue', 'field_sites', 'field_assignments',
   'recurring_field_work', 'recurring_field_versions', 'maintenance_records',
   'maintenance_schedules', 'odometer_logs', 'settings', 'notices',

@@ -20,6 +20,8 @@ function DispatchCard({ row, date, title }: { row: BoardRow; date: string; title
       <li key={o.id} onClick={() => p && nav(`/products/${p.id}`)} style={{ cursor: p ? 'pointer' : 'default' }}>
         <b>{clientName(snap, o)}</b> {productName(snap, o)} {qtyText(o)} {o.region && <span className="muted">· {o.region}</span>}
         {p && <> <StorageBadge storage={p.storage} temp={tempText(p)} /></>}
+        {(o.pickup_place || o.dropoff_place) && <div>📍 {o.pickup_place || '-'} → {o.dropoff_place || '-'}</div>}
+        {o.same_day && <div className="badge warn">당일 왕복</div>}
         {o.memo && <div className="muted">📝 {o.memo}</div>}
         {i >= 0 && p && <div className="muted small">눌러서 주소·길찾기·전화 ›</div>}
       </li>

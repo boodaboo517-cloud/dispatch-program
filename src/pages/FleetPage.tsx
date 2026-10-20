@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   activeRepair, checkOdometer, newId, oilStatus, planCreateFieldRecurring, planFieldRecurringChange, planFieldRecurringEnd,
   setDayOff, versionOn, weekdaysLabel,
-  type Driver, type Ship, type Vehicle, type VehicleType, type Weekday,
+  ON_CALL_SHIFT, SHIFT_PRESETS, type Driver, type Ship, type Vehicle, type VehicleType, type Weekday,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
 import { fmtDate, seoulToday } from '../lib/time.ts';
@@ -14,9 +14,10 @@ import { ZONE_LABEL, driverName, vehicleNo } from '../ui/labels.ts';
 import { WeekdayChips } from '../ui/Picker.tsx';
 import { usePickers } from '../ui/pickers.tsx';
 import { Sheet, useSheet } from '../ui/Sheet.tsx';
+import { AttendancePanel } from './AttendancePanel.tsx';
 import { MaintenancePanel } from './MaintenancePanel.tsx';
 
-type Tab = 'vehicles' | 'drivers' | 'ships' | 'maintenance' | 'field';
+type Tab = 'vehicles' | 'drivers' | 'attendance' | 'ships' | 'maintenance' | 'field';
 const TYPES: VehicleType[] = ['5톤', '통윙', '통윙2냉', '1톤', '승용'];
 
 export function OilBar({ v }: { v: Vehicle }) {
@@ -93,12 +94,16 @@ function DriverSheet({ d, close }: { d: Driver; close: () => void }) {
       <Editable label="이름" value={cur.name} onSave={(v) => save({ name: v })} />
       <Editable label="연락처" value={cur.phone} type="tel" onSave={(v) => save({ phone: v })} />
       <Editable label="구분" value={cur.staff_type} options={['기사', '현장', '사무'].map((x) => ({ value: x, label: x }))} onSave={(v) => save({ staff_type: v as Driver['staff_type'] })} />
-      <Editable label="근무조" value={cur.shift} options={['', '월수금', '화목일', '토요일', '부산상주', '서울상주'].map((x) => ({ value: x, label: x || '-' }))} onSave={(v) => {
-        const preset: Record<string, Weekday[]> = { 월수금: [1, 3, 5], 화목일: [2, 4, 0], 토요일: [6] };
-        save({ shift: v, ...(preset[v] ? { work_days: preset[v] } : {}) });
+      <Editable label="근무조" value={cur.shift} options={['', ...Object.keys(SHIFT_PRESETS), '부산상주', '서울상주'].map((x) => ({ value: x, label: x === ON_CALL_SHIFT ? '알바 (원할 때만 출근)' : x || '-' }))} onSave={(v) => {
+        save({ shift: v, ...(SHIFT_PRESETS[v] ? { work_days: SHIFT_PRESETS[v] } : {}) });
       }} />
-      <label className="field"><span>근무 요일</span><WeekdayChips value={cur.work_days} onChange={(w) => save({ work_days: w as Weekday[] })} /></label>
+      {cur.shift === ON_CALL_SHIFT ? (
+        <p className="muted small">알바는 정해진 근무일이 없습니다. 출근하는 날 일정표의 기사 칸이나 근무현황에서 근무형태를 넣으면 그날 근무로 잡힙니다.</p>
+      ) : (
+        <label className="field"><span>근무 요일</span><WeekdayChips value={cur.work_days} onChange={(w) => save({ work_days: w as Weekday[] })} /></label>
+      )}
       <Editable label="소속" value={cur.affiliation} onSave={(v) => save({ affiliation: v })} />
+      <Editable label="비고" value={cur.memo ?? ''} placeholder="예: 대형면허, 야간 가능, 주 3일만" multiline onSave={(v) => save({ memo: v })} />
       <div className="card">
         <b>휴무 지정</b> <span className="muted small">(배차·현장근무 선택 목록에서 빠짐)</span>
         <div className="row"><input type="date" value={offDate} onChange={(e) => setOffDate(e.target.value)} /><button onClick={() => store.run((tx) => setDayOff(tx, offDate, d.id, true))}>휴무</button></div>
@@ -118,9 +123,9 @@ export function FleetPage() {
   const { staff } = useRole();
   const today = seoulToday();
 
-  const tabs: [Tab, string][] = [['vehicles', '차량'], ['drivers', '기사'], ['ships', '선박'], ['maintenance', '정비'], ['field', '현장근무']];
+  const tabs: [Tab, string][] = [['vehicles', '차량'], ['drivers', '기사'], ['attendance', '근무현황'], ['ships', '선박'], ['maintenance', '정비'], ['field', '현장']];
   const blankVehicle = (): Vehicle => ({ id: newId(), plate: '', short_no: '', vehicle_type: '5톤', usage: '배차', ownership: '자차', default_driver_id: null, status: '운행', home_zone: null, sort_order: snap.vehicles.length, oil_interval_km: null });
-  const blankDriver = (): Driver => ({ id: newId(), name: '', phone: '', work_days: [], shift: '', affiliation: '', staff_type: '기사' });
+  const blankDriver = (): Driver => ({ id: newId(), name: '', phone: '', work_days: [], shift: '', affiliation: '', staff_type: '기사', memo: '' });
 
   return (
     <div className="page" style={{ maxWidth: 900 }}>
@@ -136,7 +141,7 @@ export function FleetPage() {
             store.run((tx) => tx.insert('vehicles', v));
             sheet.open((c) => <VehicleSheet v={v} close={c} />);
           }}>＋ 차량 등록</button>}
-          {[...snap.vehicles].sort((a, b) => a.sort_order - b.sort_order).map((v) => {
+          {[...snap.vehicles].sort((a, b) => a.plate.localeCompare(b.plate, 'ko', { numeric: true })).map((v) => {
             const repair = activeRepair(snap.maintenance_records, v.id, today);
             const status = repair ? '정비' : v.status;
             return (
@@ -167,11 +172,14 @@ export function FleetPage() {
             <div key={type}>
               <h3>{type}</h3>
               <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                {snap.drivers.filter((d) => d.staff_type === type).map((d) => {
+                {snap.drivers.filter((d) => d.staff_type === type).sort((a, b) => a.name.localeCompare(b.name, 'ko')).map((d) => {
                   const off = snap.field_assignments.some((f) => f.date === today && f.staff_id === d.id && f.is_off);
                   return (
                     <div key={d.id} className="list-item" onClick={() => staff && sheet.open((c) => <DriverSheet d={d} close={c} />)}>
-                      <div className="grow"><b>{d.name}</b> <span className="muted">{d.shift} {d.affiliation}</span><div className="muted small">{weekdaysLabel(d.work_days)} {d.phone}</div></div>
+                      <div className="grow"><b>{d.name}</b> <span className="muted">{d.shift} {d.affiliation}</span>
+                        <div className="muted small">{d.shift === ON_CALL_SHIFT ? '원할 때만 출근' : weekdaysLabel(d.work_days)} {d.phone}</div>
+                        {d.memo && <div className="small" style={{ color: '#92400e' }}>📝 {d.memo}</div>}
+                      </div>
                       {off && <span className="badge warn">오늘 휴무</span>}
                     </div>
                   );
@@ -182,6 +190,7 @@ export function FleetPage() {
         </>
       )}
 
+      {tab === 'attendance' && <AttendancePanel />}
       {tab === 'ships' && <ShipsPanel />}
       {tab === 'maintenance' && <MaintenancePanel />}
       {tab === 'field' && <FieldSetupPanel />}
@@ -189,30 +198,73 @@ export function FleetPage() {
   );
 }
 
+function ShipEditSheet({ ship, close }: { ship: Ship; close: () => void }) {
+  const isNew = !store.getState().snap.ships.some((x) => x.id === ship.id);
+  const [x, setX] = useState<Ship>({ ...ship, port_times: ship.port_times ?? [] });
+  const set = (p: Partial<Ship>) => setX({ ...x, ...p });
+  const ports = x.port_times ?? [];
+  const setPort = (i: number, p: Partial<{ port: string; time: string }>) => set({ port_times: ports.map((y, j) => (j === i ? { ...y, ...p } : y)) });
+  const save = () => {
+    if (!x.name.trim()) return store.toast('선박명을 입력하세요', 'warn');
+    const row = { ...x, name: x.name.trim(), port_times: ports.filter((p) => p.port.trim()).map((p) => ({ port: p.port.trim(), time: p.time })) };
+    store.run((tx) => (isNew ? tx.insert('ships', row) : tx.update('ships', row.id, row)));
+    close();
+  };
+  return (
+    <Sheet title={isNew ? '선박 추가' : `선박 수정 · ${ship.name}`} onClose={close} footer={<>
+      {!isNew && <button className="danger" onClick={() => { if (confirm(`${ship.name} 선박을 삭제할까요? (이미 입력된 일정표의 선박 이름은 그대로 남습니다)`)) { store.run((tx) => tx.remove('ships', ship.id)); close(); } }}>삭제</button>}
+      <button className="primary" onClick={save}>저장</button>
+    </>}>
+      <label className="field"><span>선박명</span><input value={x.name} onChange={(e) => set({ name: e.target.value })} /></label>
+      <label className="field"><span>제주 출발 (상행) 시간</span><input type="time" value={x.departs_at} onChange={(e) => set({ departs_at: e.target.value })} /></label>
+      <div className="field">
+        <span className="muted small">기항지별 하행 (육지 → 제주) 출발 시간</span>
+        {ports.map((p, i) => (
+          <div className="row" key={i} style={{ margin: '6px 0' }}>
+            <input placeholder="기항지 (예: 목포)" value={p.port} onChange={(e) => setPort(i, { port: e.target.value })} />
+            <input type="time" style={{ width: 130 }} value={p.time} onChange={(e) => setPort(i, { time: e.target.value })} />
+            <button className="ghost" aria-label="기항지 삭제" onClick={() => set({ port_times: ports.filter((_, j) => j !== i) })}>✕</button>
+          </div>
+        ))}
+        <button onClick={() => set({ port_times: [...ports, { port: '', time: '' }] })}>＋ 기항지 추가</button>
+      </div>
+      <label className="field"><span>항로</span>
+        <select value={x.route} onChange={(e) => set({ route: e.target.value as Ship['route'] })}>
+          <option value="both">양방향</option><option value="up">상행만 (제주 → 육지)</option><option value="down">하행만 (육지 → 제주)</option>
+        </select>
+      </label>
+      <label className="field"><span>도착일 차이 (상차 다음 며칠 뒤 하차, 기본 1)</span>
+        <input inputMode="numeric" value={x.arrival_day_offset} onChange={(e) => set({ arrival_day_offset: Number(e.target.value) || 0 })} />
+      </label>
+      <p className="muted small">기항지를 넣으면 육지 하행선박을 고를 때 "퀸메리 · 목포 01:00"처럼 기항지별로 나옵니다. 기항지가 없으면 선박명 하나로 나옵니다.</p>
+    </Sheet>
+  );
+}
+
 function ShipsPanel() {
   const snap = useSnap();
+  const sheet = useSheet();
   const { staff } = useRole();
-  const save = (s: Ship, p: Partial<Ship>) => store.run((tx) => tx.update('ships', s.id, p));
+  const ships = [...snap.ships].sort((a, b) => a.name.localeCompare(b.name, 'ko') || (a.departs_at || '99').localeCompare(b.departs_at || '99'));
+  const open = (s: Ship) => staff && sheet.open((c) => <ShipEditSheet ship={s} close={c} />);
   return (
     <>
-      <p className="muted">출항시간 순. "도착일 차이"는 상차 → 반대 지역 하차 자동 입력 날짜에 쓰입니다 (기본 1일).</p>
-      {[...snap.ships].sort((a, b) => (a.departs_at || '99').localeCompare(b.departs_at || '99')).map((s) => (
-        <div key={s.id} className="card">
+      <p className="muted">선박을 누르면 수정합니다. "도착일 차이"는 상차 → 반대 지역 하차 자동 입력 날짜에 쓰입니다.</p>
+      {staff && <button className="primary" style={{ width: '100%' }} onClick={() => open({ id: newId(), name: '', departs_at: '', route: 'both', arrival_day_offset: 1, sort_order: snap.ships.length, port_times: [] })}>＋ 선박 추가</button>}
+      {ships.map((s) => (
+        <div key={s.id} className="card" onClick={() => open(s)} style={{ cursor: staff ? 'pointer' : 'default' }}>
           <div className="row">
-            <div className="grow"><Editable label="선박명" value={s.name} onSave={staff ? (v) => save(s, { name: v }) : undefined} /></div>
-            {staff && <button className="ghost" onClick={() => confirm('삭제할까요?') && store.run((tx) => tx.remove('ships', s.id))}>✕</button>}
+            <b className="grow" style={{ fontSize: 19 }}>{s.name}</b>
+            {s.route !== 'both' && <span className="badge">{s.route === 'up' ? '상행만' : '하행만'}</span>}
+            {s.arrival_day_offset !== 1 && <span className="badge warn">+{s.arrival_day_offset}일 도착</span>}
+            {staff && <span className="muted">수정 ›</span>}
           </div>
-          <div className="row wrap">
-            <div className="grow"><Editable label="출항" value={s.departs_at} placeholder="HH:mm" onSave={staff ? (v) => save(s, { departs_at: v }) : undefined} /></div>
-            <div className="grow"><Editable label="항로" value={s.route} options={[{ value: 'both', label: '양방향' }, { value: 'up', label: '상행' }, { value: 'down', label: '하행' }]} onSave={staff ? (v) => save(s, { route: v as Ship['route'] }) : undefined} /></div>
-            <div className="grow"><Editable label="도착일 차이" value={s.arrival_day_offset} type="number" onSave={staff ? (v) => save(s, { arrival_day_offset: Number(v) || 1 }) : undefined} /></div>
-          </div>
+          <div className="small">제주 출발(상행) <b>{s.departs_at || '-'}</b></div>
+          {(s.port_times ?? []).length > 0 && (
+            <div className="small">하행: {(s.port_times ?? []).map((p) => `${p.port} ${p.time || '-'}`).join(' · ')}</div>
+          )}
         </div>
       ))}
-      {staff && <button style={{ width: '100%' }} onClick={() => {
-        const name = prompt('선박명')?.trim();
-        if (name) store.run((tx) => tx.insert('ships', { id: newId(), name, departs_at: '', route: 'both', arrival_day_offset: 1, sort_order: snap.ships.length }));
-      }}>＋ 선박 추가</button>}
     </>
   );
 }

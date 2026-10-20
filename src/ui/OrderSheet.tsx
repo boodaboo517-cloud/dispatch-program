@@ -7,6 +7,7 @@ import {
   type BillingStatus, type CalcMethod, type DailyOrder, type OrderRevenue, type Unit,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
+import { QtyInput } from './QtyInput.tsx';
 import { fmtDate, fmtStamp } from '../lib/time.ts';
 import { useRole, useSnap, useWatch } from './hooks.ts';
 import {
@@ -158,25 +159,25 @@ export function OrderSheet({ orderId, close, startEditing = false }: { orderId: 
       {editing ? (
         <>
           <label className="field"><span>지역</span><input value={o.region} onChange={(e) => set({ region: e.target.value })} /></label>
-          <div className="row">
-            <label className="field grow"><span>수량</span>
-              <div className="row">
-                <button onClick={() => set({ quantity: Math.max(0, (o.quantity ?? 0) - 1) })}>－</button>
-                <input inputMode="decimal" value={o.quantity ?? ''} onChange={(e) => set({ quantity: e.target.value === '' ? null : Number(e.target.value) })} style={{ textAlign: 'center' }} />
-                <button onClick={() => set({ quantity: (o.quantity ?? 0) + 1 })}>＋</button>
-              </div>
-            </label>
-            <label className="field" style={{ width: 110 }}><span>단위</span>
-              <select value={o.unit} onChange={(e) => set({ unit: e.target.value as Unit })}>{UNITS.map((u) => <option key={u} value={u}>{u || '-'}</option>)}</select>
-            </label>
+          <PlaceFields pickup={o.pickup_place ?? ''} dropoff={o.dropoff_place ?? ''} onChange={(p) => set(p)} />
+          <div className="field"><span className="muted small">수량 (10파렛트 · 3대 처럼 써도 됨)</span>
+            <QtyInput quantity={o.quantity} unit={o.unit} onChange={(quantity, unit) => set({ quantity, unit })} />
           </div>
+          {o.kind === 'load' && (
+            <label className="row" style={{ cursor: 'pointer', minHeight: 44 }}>
+              <input type="checkbox" checked={!!o.same_day} onChange={(e) => set({ same_day: e.target.checked })} style={{ width: 24, minHeight: 24 }} />
+              <span>당일 왕복 (반대 지역 하차도 같은 날짜)</span>
+            </label>
+          )}
           <Field label="비고" value={o.memo} onEdit={async () => { const m = await pick.memo(o.memo); if (m !== null) set({ memo: m }); }} />
           <Field label="날짜" value={fmtDate(o.date)} onEdit={async () => { const d = await pick.date('날짜', o.date); if (d) set({ date: d }); }} />
         </>
       ) : (
         <>
           <Field label="지역" value={o.region} />
+          {(o.pickup_place || o.dropoff_place) && <Field label="상차지 → 하차지" value={`${o.pickup_place || '-'} → ${o.dropoff_place || '-'}`} />}
           <Field label="수량" value={o.quantity == null ? '' : `${o.quantity} ${o.unit}`} />
+          {o.same_day && <Field label="당일 왕복" value="예 (반대 지역 하차 같은 날)" />}
           <Field label="비고" value={o.memo} />
         </>
       )}
@@ -190,7 +191,7 @@ export function OrderSheet({ orderId, close, startEditing = false }: { orderId: 
       } : undefined} />
       <Field label={shipLabel} value={shipKey === 'departure' ? shipText(o.departure_ship, o.departure_ship_tag) : shipText(o.arrival_ship, o.arrival_ship_tag)} onEdit={editing ? async () => {
         const cur = shipKey === 'departure' ? { ship: o.departure_ship, tag: o.departure_ship_tag } : { ship: o.arrival_ship, tag: o.arrival_ship_tag };
-        const r2 = await pick.ship(o.zone, cur);
+        const r2 = await pick.ship(o.zone, cur, shipKey);
         if (r2) set(shipKey === 'departure' ? { departure_ship: r2.ship, departure_ship_tag: r2.tag } : { arrival_ship: r2.ship, arrival_ship_tag: r2.tag });
       } : undefined} />
       {editing && o.vehicle_id && <button className="ghost" style={{ color: 'var(--red)' }} onClick={() => set({ vehicle_id: null })}>배차 취소 (배차 대기로)</button>}
@@ -259,21 +260,36 @@ function Field(p: { label: string; value: string; onEdit?: () => void; editLabel
   );
 }
 
+/** 상차지 · 하차지 입력 (오더마다) */
+export function PlaceFields(p: { pickup: string; dropoff: string; onChange: (v: { pickup_place?: string; dropoff_place?: string }) => void }) {
+  return (
+    <div className="row">
+      <label className="field grow"><span>상차지</span><input value={p.pickup} placeholder="예: 서귀포 농협" onChange={(e) => p.onChange({ pickup_place: e.target.value })} /></label>
+      <span style={{ marginTop: 22 }}>→</span>
+      <label className="field grow"><span>하차지</span><input value={p.dropoff} placeholder="예: 김해 센터" onChange={(e) => p.onChange({ dropoff_place: e.target.value })} /></label>
+    </div>
+  );
+}
+
+/** 품목 → 거래처 순으로 등록된 상차지·하차지 주소를 기본값으로 */
+export function defaultPlaces(s: { clients: { id: string; pickup_address?: string; dropoff_address?: string }[] }, clientId: string | null, product: { pickup_address: string; dropoff_address: string } | null) {
+  const c = s.clients.find((x) => x.id === clientId);
+  return {
+    pickup_place: product?.pickup_address || c?.pickup_address || '',
+    dropoff_place: product?.dropoff_address || c?.dropoff_address || '',
+  };
+}
+
 /** 목록에서 고른 직후: "입력됨" + 수량만 빠르게 수정 */
 export function QuickQtySheet({ orderId, close }: { orderId: string; close: () => void }) {
   const snap = useSnap();
   const o = snap.daily_orders.find((x) => x.id === orderId);
   if (!o) return null;
-  const setQty = (q: number | null) => store.run((tx) => saveOrder(tx, { ...o, quantity: q }, { userEdit: false }));
+  const setQty = (quantity: number | null, unit: Unit) => store.run((tx) => saveOrder(tx, { ...o, quantity, unit }, { userEdit: false }));
   return (
     <Sheet title="✓ 입력됨" onClose={close} footer={<button className="primary" onClick={close}>완료</button>}>
       <p style={{ fontSize: 18 }}><b>{clientName(snap, o)}</b> {productName(snap, o)} {o.region && `· ${o.region}`}</p>
-      <div className="row">
-        <button style={{ width: 64, fontSize: 24 }} onClick={() => setQty(Math.max(0, (o.quantity ?? 0) - 1))}>－</button>
-        <input inputMode="decimal" style={{ textAlign: 'center', fontSize: 24, fontWeight: 800 }} value={o.quantity ?? ''} onChange={(e) => setQty(e.target.value === '' ? null : Number(e.target.value))} />
-        <button style={{ width: 64, fontSize: 24 }} onClick={() => setQty((o.quantity ?? 0) + 1)}>＋</button>
-        <span style={{ whiteSpace: 'nowrap' }}>{o.unit}</span>
-      </div>
+      <QtyInput big quantity={o.quantity} unit={o.unit} onChange={setQty} />
       <p className="muted">수량이 맞으면 완료를 누르세요. 칸을 길게 누르면 다시 수정할 수 있습니다.</p>
     </Sheet>
   );

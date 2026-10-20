@@ -1,6 +1,7 @@
 // 오더 저장·삭제와 "상차 → 다음 날 반대 지역 하차", "선박 자동 이어짐" 연결 로직.
 import { addDays } from './dates.ts';
 import { newId } from './ids.ts';
+import { findShip } from './ships.ts';
 import type { Tx } from './tx.ts';
 import type {
   DailyOrder, OrderSnapshot, ShipTag, VehicleDay, Zone, Kind, Snapshot,
@@ -33,6 +34,9 @@ export function blankOrder(p: { date: string; zone: Zone; kind: Kind } & Partial
     linked_from_id: null,
     link_status: 'none',
     link_pending: null,
+    pickup_place: '',
+    dropoff_place: '',
+    same_day: false,
     ...p,
   };
 }
@@ -58,8 +62,7 @@ export function blankVehicleDay(p: { date: string; vehicle_id: string } & Partia
 /** 선박 설정의 "도착일 차이" (기본 1일) */
 export function arrivalOffset(snap: Pick<Snapshot, 'ships'>, shipName: string | null): number {
   if (!shipName) return 1;
-  const s = snap.ships.find((x) => x.name === shipName);
-  return s?.arrival_day_offset ?? 1;
+  return findShip(snap.ships, shipName)?.arrival_day_offset ?? 1;
 }
 
 /** 상차 → 연결 하차로 복사되는 값 (기사는 복사하지 않음) */
@@ -76,20 +79,22 @@ export function linkedValues(tx: Tx, load: DailyOrder): OrderSnapshot {
     memo: load.memo,
     arrival_ship: load.departure_ship,
     arrival_ship_tag: load.departure_ship_tag,
-    date: addDays(load.date, arrivalOffset(tx.snap, load.departure_ship)),
+    date: load.same_day ? load.date : addDays(load.date, arrivalOffset(tx.snap, load.departure_ship)),
+    pickup_place: load.pickup_place ?? '',
+    dropoff_place: load.dropoff_place ?? '',
   };
 }
 
 const SNAP_KEYS: (keyof OrderSnapshot)[] = [
   'vehicle_id', 'client_id', 'client_text', 'product_id', 'product_text', 'region',
-  'quantity', 'unit', 'memo', 'arrival_ship', 'arrival_ship_tag', 'date',
+  'quantity', 'unit', 'memo', 'arrival_ship', 'arrival_ship_tag', 'date', 'pickup_place', 'dropoff_place',
 ];
 
 function diffSnapshot(cur: DailyOrder, want: OrderSnapshot): Partial<OrderSnapshot> | null {
   const d: Partial<OrderSnapshot> = {};
   let any = false;
   for (const k of SNAP_KEYS) {
-    if (cur[k] !== want[k]) {
+    if ((cur[k] ?? '') !== (want[k] ?? '')) {
       (d as Record<string, unknown>)[k] = want[k];
       any = true;
     }
@@ -298,9 +303,9 @@ export function saveOrder(tx: Tx, order: DailyOrder, opts: { userEdit?: boolean 
     : tx.insert('daily_orders', row);
 
   if (saved.vehicle_id) {
-    const vd = ensureVehicleDay(tx, saved.date, saved.vehicle_id, saved.zone);
-    // 상차 선박을 차량 줄 출발 선박으로 (비어 있을 때만)
-    if (saved.kind === 'load' && saved.departure_ship && !vd.departure_ship) {
+    const vd = placeVehicleDay(tx, saved);
+    // 상차 선박을 차량 줄 출발 선박으로 (비어 있을 때만). 당일 왕복 상차는 그날 밤 위치를 바꾸지 않으므로 제외
+    if (vd && saved.kind === 'load' && saved.departure_ship && !vd.departure_ship && !saved.same_day) {
       tx.update('vehicle_days', vd.id, { departure_ship: saved.departure_ship, departure_ship_tag: saved.departure_ship_tag });
       syncShipCarryover(tx, vd.id);
     }
@@ -311,6 +316,34 @@ export function saveOrder(tx: Tx, order: DailyOrder, opts: { userEdit?: boolean 
   }
   if (saved.kind === 'load') syncLinkedUnload(tx, saved.id);
   return tx.get('daily_orders', saved.id)!;
+}
+
+/** 당일 왕복 오더인지 (상차 자체가 당일 왕복이거나, 당일 왕복 상차에서 이어진 같은 날 하차) */
+function isSameDayTrip(tx: Tx, o: DailyOrder): boolean {
+  if (o.same_day) return true;
+  const src = o.linked_from_id ? tx.get('daily_orders', o.linked_from_id) : undefined;
+  return !!src?.same_day && src.date === o.date;
+}
+
+/**
+ * 오더를 저장할 때 차량의 그날 줄(vehicle_days) 구역을 정한다.
+ * - 줄이 없으면 오더 구역으로 만든다.
+ * - 당일 왕복 오더이거나, 줄 구역에 이미 다른 오더가 있으면 줄 구역은 그대로 둔다 (다른 구역은 보조 줄로 표시).
+ * - 그 밖에는 차량을 오더 구역으로 옮긴다.
+ */
+function placeVehicleDay(tx: Tx, o: DailyOrder): VehicleDay | undefined {
+  const cur = findVehicleDay(tx, o.date, o.vehicle_id!);
+  if (isSameDayTrip(tx, o)) {
+    // 당일 왕복: 차량은 출발한 쪽(상차 반대편)에서 하루를 시작하고 끝낸다
+    const home = o.kind === 'load' ? opposite(o.zone) : o.zone;
+    if (!cur || !cur.zone) return ensureVehicleDay(tx, o.date, o.vehicle_id!, home);
+    return cur.zone === o.zone ? cur : undefined;
+  }
+  if (!cur || !cur.zone) return ensureVehicleDay(tx, o.date, o.vehicle_id!, o.zone);
+  if (cur.zone === o.zone) return cur;
+  const others = tx.list('daily_orders').some((x) => x.id !== o.id && x.date === o.date && x.vehicle_id === o.vehicle_id && x.zone === cur.zone);
+  if (others) return undefined;
+  return ensureVehicleDay(tx, o.date, o.vehicle_id!, o.zone);
 }
 
 function releaseDepartureShip(tx: Tx, old: DailyOrder) {

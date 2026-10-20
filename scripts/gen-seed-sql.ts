@@ -3,7 +3,7 @@ import { seedSnapshot } from '../src/data/seed.ts';
 import { WRITE_ORDER } from '../src/domain/batches.ts';
 
 const s = seedSnapshot() as unknown as Record<string, Record<string, unknown>[]>;
-const JSON_COLS = new Set(['value', 'extras', 'link_pending', 'arrival_pending']);
+const JSON_COLS = new Set(['value', 'extras', 'link_pending', 'arrival_pending', 'port_times']);
 const lit = (v: unknown, col = ''): string => {
   if (JSON_COLS.has(col)) return v == null ? 'null' : `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb`;
   if (v === null || v === undefined) return 'null';

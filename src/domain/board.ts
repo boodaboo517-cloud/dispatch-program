@@ -3,7 +3,9 @@ import { addDays, weekdayOf } from './dates.ts';
 import { newId } from './ids.ts';
 import { activeRepair, repairMemo, saveMaintenance } from './maintenance.ts';
 import { ensureVehicleDay, opposite } from './orders.ts';
+import { shipTimeOf } from './ships.ts';
 import type { Tx } from './tx.ts';
+import { ON_CALL_SHIFT } from './types.ts';
 import type {
   DailyOrder, DayStatus, Driver, FieldAssignment, MaintenanceKind, ShipTag, Snapshot, Vehicle, VehicleDay, Zone,
 } from './types.ts';
@@ -47,7 +49,8 @@ function explicitZone(idx: Index, vehicleId: string, date: string): Zone | null 
 function departsOn(idx: Index, vehicleId: string, date: string): boolean {
   const vd = idx.vd.get(`${date}|${vehicleId}`);
   if (vd?.departure_ship) return true;
-  return (idx.ordersByVehicleDate.get(`${date}|${vehicleId}`) ?? []).some((o) => o.kind === 'load' && !!o.departure_ship);
+  // 당일 왕복 상차는 그날 밤 위치를 바꾸지 않는다
+  return (idx.ordersByVehicleDate.get(`${date}|${vehicleId}`) ?? []).some((o) => o.kind === 'load' && !!o.departure_ship && !o.same_day);
 }
 
 /**
@@ -88,6 +91,8 @@ export interface BoardRow {
   inRepair: boolean;
   shipPending: boolean;
   linkPending: boolean;
+  /** 당일 왕복 등으로 그날 다른 구역에도 일이 있는 차량의 보조 줄 (선박은 오더에 직접 저장) */
+  secondary: boolean;
 }
 
 export interface Board {
@@ -107,7 +112,7 @@ export interface Board {
 
 export function shipTime(snap: Snapshot, name: string | null): string {
   if (!name) return '99:99';
-  return snap.ships.find((s) => s.name === name)?.departs_at ?? '99:98';
+  return shipTimeOf(snap.ships, name) || '99:98';
 }
 
 export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex(snap)): Board {
@@ -127,8 +132,11 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
     if (v.usage === '업무용' && orders.length === 0 && !vd) continue;
     const zone = resolveVehicleZone(idx, v, date);
     if (!zone) unknownLocation.push(v);
-    const unloads = orders.filter((o) => o.kind === 'unload');
-    const loads = orders.filter((o) => o.kind === 'load');
+    // 당일 왕복 등으로 다른 구역에도 오더가 있으면 그 구역에 보조 줄을 하나 더 만든다
+    const mine = zone ? orders.filter((o) => o.zone === zone) : orders;
+    const elsewhere = zone ? orders.filter((o) => o.zone !== zone) : [];
+    const unloads = mine.filter((o) => o.kind === 'unload');
+    const loads = mine.filter((o) => o.kind === 'load');
     const repair = activeRepair(snap.maintenance_records, v.id, date);
     let status: BoardRow['status'] = vd?.status ?? '';
     let statusMemo = vd?.status_memo ?? '';
@@ -137,24 +145,50 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
       statusMemo = statusMemo || repairMemo(repair);
     } else if (!status && v.status === '정비') status = 'repair';
     else if (!status && v.status === '휴차') status = 'rest';
-    if (!status && orders.length === 0) status = 'empty';
+    if (!status && mine.length === 0) status = 'empty';
+    const driverId = vd?.driver_id ?? orders.find((o) => o.driver_id)?.driver_id ?? null;
     rows.push({
       vehicle: v,
       zone,
       vd,
       unloads,
       loads,
-      driverId: vd?.driver_id ?? orders.find((o) => o.driver_id)?.driver_id ?? null,
+      driverId,
       arrivalShip: vd?.arrival_ship ?? unloads.find((o) => o.arrival_ship)?.arrival_ship ?? null,
       arrivalTag: vd?.arrival_ship ? vd.arrival_ship_tag : unloads.find((o) => o.arrival_ship)?.arrival_ship_tag ?? '',
-      departureShip: vd?.departure_ship ?? loads.find((o) => o.departure_ship)?.departure_ship ?? null,
-      departureTag: vd?.departure_ship ? vd.departure_ship_tag : loads.find((o) => o.departure_ship)?.departure_ship_tag ?? '',
+      departureShip: vd?.departure_ship ?? loads.find((o) => o.departure_ship && !o.same_day)?.departure_ship ?? null,
+      departureTag: vd?.departure_ship ? vd.departure_ship_tag : loads.find((o) => o.departure_ship && !o.same_day)?.departure_ship_tag ?? '',
       status,
       statusMemo,
       inRepair: !!repair || v.status === '정비',
       shipPending: !!vd?.arrival_pending,
-      linkPending: orders.some((o) => o.link_status === 'source_changed'),
+      linkPending: mine.some((o) => o.link_status === 'source_changed'),
+      secondary: false,
     });
+    if (elsewhere.length) {
+      const u = elsewhere.filter((o) => o.kind === 'unload');
+      const l = elsewhere.filter((o) => o.kind === 'load');
+      const arr = u.find((o) => o.arrival_ship);
+      const dep = l.find((o) => o.departure_ship);
+      rows.push({
+        vehicle: v,
+        zone: opposite(zone!),
+        vd: undefined,
+        unloads: u,
+        loads: l,
+        driverId,
+        arrivalShip: arr?.arrival_ship ?? null,
+        arrivalTag: arr?.arrival_ship_tag ?? '',
+        departureShip: dep?.departure_ship ?? null,
+        departureTag: dep?.departure_ship_tag ?? '',
+        status: '',
+        statusMemo: '',
+        inRepair: !!repair || v.status === '정비',
+        shipPending: false,
+        linkPending: elsewhere.some((o) => o.link_status === 'source_changed'),
+        secondary: true,
+      });
+    }
   }
 
   const waitingOf = (z: Zone) =>
@@ -167,6 +201,7 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
   const waiting = { land: waitingOf('land'), jeju: waitingOf('jeju') };
   const land = rows.filter((r) => r.zone === 'land');
   const jeju = rows.filter((r) => r.zone === 'jeju');
+  const main = rows.filter((r) => !r.secondary);
   return {
     date,
     rows,
@@ -177,16 +212,16 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
     fieldVehicleIds,
     unknownLocation,
     summary: {
-      land: land.length,
-      jeju: jeju.length,
-      empty: rows.filter((r) => r.status === 'empty').length,
-      repair: rows.filter((r) => r.status === 'repair').length,
+      land: main.filter((r) => r.zone === 'land').length,
+      jeju: main.filter((r) => r.zone === 'jeju').length,
+      empty: main.filter((r) => r.status === 'empty').length,
+      repair: main.filter((r) => r.status === 'repair').length,
       field: fieldVehicleIds.size,
       waiting: waiting.land.length + waiting.jeju.length,
       unloads: dayOrders.filter((o) => o.kind === 'unload').length,
       loads: dayOrders.filter((o) => o.kind === 'load').length,
       registered: snap.vehicles.filter((v) => v.usage === '배차').length,
-      noDriver: rows.filter((r) => (r.unloads.length || r.loads.length) && !r.driverId).length,
+      noDriver: main.filter((r) => (r.unloads.length || r.loads.length) && !r.driverId).length,
     },
   };
 }
@@ -194,6 +229,9 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
 /** 기사 근무 여부: 근무 요일에 포함되고 그날 휴무자로 지정되지 않음 */
 export function isDriverWorking(snap: Snapshot, d: Driver, date: string): boolean {
   if (snap.field_assignments.some((f) => f.date === date && f.staff_id === d.id && f.is_off)) return false;
+  // 근무 기록(특근·알바 출근 등)이 있으면 근무일
+  if ((snap.driver_work_logs ?? []).some((l) => l.date === date && l.driver_id === d.id)) return true;
+  if (d.shift === ON_CALL_SHIFT) return false; // 알바: 출근 기록이 있는 날만
   return d.work_days.length === 0 || d.work_days.includes(weekdayOf(date));
 }
 
@@ -204,7 +242,7 @@ export function offStaff(snap: Snapshot, date: string): Driver[] {
 /** 배차 선택 목록용 차량: 그날 그 지역, 공차·상차 없는 차량 먼저, 현장근무 지급 차량 제외, 수리 차량은 경고 */
 export function vehicleChoices(board: Board, zone: Zone | null) {
   return board.rows
-    .filter((r) => !board.fieldVehicleIds.has(r.vehicle.id))
+    .filter((r) => !r.secondary && !board.fieldVehicleIds.has(r.vehicle.id))
     .map((r) => ({
       row: r,
       sameZone: zone === null || r.zone === zone,
@@ -261,4 +299,27 @@ export function setRowDriver(tx: Tx, p: { date: string; vehicle_id: string; zone
 /** 차량 위치 수동 변경 */
 export function setVehicleZone(tx: Tx, p: { date: string; vehicle_id: string; zone: Zone }) {
   ensureVehicleDay(tx, p.date, p.vehicle_id, p.zone);
+}
+
+/** 일정표 차량 줄 순서 변경: vehicleId 를 targetId 자리로 옮긴다 (targetId = null 이면 맨 끝). 전체 순서를 다시 매긴다 */
+export function moveVehicle(tx: Tx, vehicleId: string, targetId: string | null) {
+  const list = [...tx.list('vehicles')].sort((a, b) => a.sort_order - b.sort_order || a.short_no.localeCompare(b.short_no));
+  const from = list.findIndex((v) => v.id === vehicleId);
+  if (from < 0) return;
+  const [moved] = list.splice(from, 1);
+  const to = targetId ? list.findIndex((v) => v.id === targetId) : list.length;
+  list.splice(to < 0 ? list.length : to, 0, moved);
+  list.forEach((v, i) => {
+    if (v.sort_order !== i) tx.update('vehicles', v.id, { sort_order: i });
+  });
+}
+
+/** 한 칸 위/아래로 (같은 구역 줄 기준이 아니라 전체 차량 순서 기준) */
+export function nudgeVehicle(tx: Tx, vehicleId: string, dir: -1 | 1, visibleIds?: string[]) {
+  const order = visibleIds ?? [...tx.list('vehicles')].sort((a, b) => a.sort_order - b.sort_order).map((v) => v.id);
+  const i = order.indexOf(vehicleId);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= order.length) return;
+  // 화면에 보이는 이웃 차량 앞(위로) 또는 그 다음 차량 앞(아래로)으로 옮긴다
+  moveVehicle(tx, vehicleId, dir < 0 ? order[j] : order[j + 1] ?? null);
 }

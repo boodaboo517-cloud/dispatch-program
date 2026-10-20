@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { addDays, type Zone } from '../domain/index.ts';
 import { exportSchedule } from '../excel/exportSchedule.ts';
-import { seoulToday, fmtLong } from '../lib/time.ts';
-import { useBoard, useIsWide, useRole, useSnap } from '../ui/hooks.ts';
+import { fmtLong, fmtStamp, seoulToday } from '../lib/time.ts';
+import { useBoard, useIsWide, useRole, useSnap, useStore } from '../ui/hooks.ts';
 import { setting } from '../ui/labels.ts';
 import { useBoardActions } from '../ui/useBoardActions.tsx';
 import { FieldTab } from './schedule/FieldTab.tsx';
 import { MobileBoard } from './schedule/MobileBoard.tsx';
 import { PcBoard } from './schedule/PcBoard.tsx';
+import { ReorderPanel } from './schedule/ReorderPanel.tsx';
 
 type Tab = Zone | 'field' | 'waiting';
 type Filter = 'all' | 'empty' | 'repair' | 'waiting' | 'nodriver';
@@ -36,8 +37,10 @@ export function SchedulePage({ readOnlyHeader }: { readOnlyHeader?: boolean } = 
   const tab = (params.get('zone') as Tab) ?? 'land';
   const focusParam = params.get('focus');
   const [filter, setFilter] = useState<Filter>('all');
+  const [reorder, setReorder] = useState(false);
   const [focus, setFocus] = useState<string | null>(focusParam);
   const snap = useSnap();
+  const savedAt = useStore((st) => st.savedAt);
   const board = useBoard(date);
   const wide = useIsWide();
   const { staff } = useRole();
@@ -84,7 +87,12 @@ export function SchedulePage({ readOnlyHeader }: { readOnlyHeader?: boolean } = 
 
   return (
     <div className="page">
-      {!readOnlyHeader && <div className="muted" style={{ textAlign: 'center' }}>{setting(snap, 'header_notice', '경민물류 일정표')}</div>}
+      {!readOnlyHeader && (
+        <div className="muted" style={{ textAlign: 'center' }}>
+          {setting(snap, 'header_notice', '경민물류 일정표')}
+          {savedAt && <span className="small" style={{ color: 'var(--green)' }}> · ✓ 자동 저장됨 {fmtStamp(savedAt).split(' ')[1]}</span>}
+        </div>
+      )}
       <DateBar date={date} onChange={(d) => update({ date: d, focus: null })} />
       <div className="tabs">
         {(['land', 'jeju', 'field', 'waiting'] as Tab[]).map((t) => (
@@ -102,6 +110,7 @@ export function SchedulePage({ readOnlyHeader }: { readOnlyHeader?: boolean } = 
         <Chip on={tab === 'field'} onClick={() => update({ zone: 'field' })}>현장 {s.field}</Chip>
         {s.noDriver > 0 && <Chip on={filter === 'nodriver'} cls="alert" onClick={() => setFilter(filter === 'nodriver' ? 'all' : 'nodriver')}>기사 미지정 {s.noDriver}</Chip>}
         <span className="chip">하차 {s.unloads} · 상차 {s.loads}</span>
+        {staff && zone && <button className={`chip${reorder ? ' on' : ''}`} onClick={() => setReorder(!reorder)}>↕ 줄 순서</button>}
         {wide && <button className="chip" onClick={() => exportSchedule(snap, date, date)}>⬇ 엑셀</button>}
       </div>
       {board.unknownLocation.length > 0 && (
@@ -110,8 +119,8 @@ export function SchedulePage({ readOnlyHeader }: { readOnlyHeader?: boolean } = 
       {staff && linkPending > 0 && <div className="banner yellow">원본 상차·전날 선박이 바뀐 줄 {linkPending}건 — "!" / "변경?" 표시를 눌러 반영 또는 무시하세요.</div>}
 
       {zone && (wide
-        ? <PcBoard zone={zone} rows={rows} waiting={waiting} actions={actions} focus={focus} />
-        : <MobileBoard zone={zone} rows={rows} waiting={waiting} actions={actions} focus={focus} />)}
+        ? (reorder ? <ReorderPanel rows={rows} onDone={() => setReorder(false)} /> : <PcBoard zone={zone} rows={rows} waiting={waiting} actions={actions} focus={focus} />)
+        : (reorder ? <ReorderPanel rows={rows} onDone={() => setReorder(false)} /> : <MobileBoard date={date} zone={zone} rows={rows} waiting={waiting} actions={actions} focus={focus} />))}
       {tab === 'field' && <FieldTab date={date} />}
       {tab === 'waiting' && (
         <>
@@ -121,7 +130,7 @@ export function SchedulePage({ readOnlyHeader }: { readOnlyHeader?: boolean } = 
               {board.waiting[z].length ? (
                 wide
                   ? <PcBoard zone={z} rows={[]} waiting={board.waiting[z]} actions={actions} focus={focus} />
-                  : <MobileBoard zone={z} rows={[]} waiting={board.waiting[z]} actions={actions} focus={focus} />
+                  : <MobileBoard date={date} zone={z} rows={[]} waiting={board.waiting[z]} actions={actions} focus={focus} />
               ) : <p className="muted">없음</p>}
             </div>
           ))}

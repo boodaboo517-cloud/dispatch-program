@@ -6,13 +6,13 @@ import { OrderCellText, OrderMarks, ShipCellText, StatusChip, VehicleCellText } 
 
 type Actions = ReturnType<typeof useBoardActions>;
 
-export function MobileBoard(p: { zone: Zone; rows: BoardRow[]; waiting: DailyOrder[]; actions: Actions; focus: string | null }) {
+export function MobileBoard(p: { date: string; zone: Zone; rows: BoardRow[]; waiting: DailyOrder[]; actions: Actions; focus: string | null }) {
   const { zone, actions: a } = p;
   const L = zone === 'land' ? ['상행', '차량', '하차', '상차', '하행'] : ['도착', '차량', '오전', '오후', '오후선박'];
   return (
     <div>
       <div className="board-head">{L.map((l) => <div key={l}>{l}</div>)}</div>
-      {p.rows.map((row) => <VehicleRow key={row.vehicle.id} row={row} zone={zone} a={a} focus={p.focus} />)}
+      {p.rows.map((row) => <VehicleRow key={row.vehicle.id} date={p.date} row={row} zone={zone} a={a} focus={p.focus} />)}
       {p.waiting.length > 0 && (
         <>
           <div className="group-label">배차 대기 {p.waiting.length}건 · 노란 칸을 눌러 배차</div>
@@ -23,7 +23,7 @@ export function MobileBoard(p: { zone: Zone; rows: BoardRow[]; waiting: DailyOrd
   );
 }
 
-function VehicleRow({ row, zone, a, focus }: { row: BoardRow; zone: Zone; a: Actions; focus: string | null }) {
+function VehicleRow({ date, row, zone, a, focus }: { date: string; row: BoardRow; zone: Zone; a: Actions; focus: string | null }) {
   const snap = useSnap();
   const { staff } = useRole();
   const hasOrders = row.unloads.length + row.loads.length > 0;
@@ -40,7 +40,7 @@ function VehicleRow({ row, zone, a, focus }: { row: BoardRow; zone: Zone; a: Act
     </div>
   );
   return (
-    <div id={`row-${row.vehicle.id}`} className="vrow" style={focused ? { boxShadow: '0 0 0 4px #93c5fd' } : undefined}>
+    <div id={`row-${row.vehicle.id}`} className={`vrow${row.secondary ? ' secondary' : ''}`} style={focused ? { boxShadow: '0 0 0 4px #93c5fd' } : undefined}>
       <div className="col">
         <Cell className="ship" onTap={() => a.tapShip(row, 'arrival')} onLong={staff ? () => a.editShip(row, 'arrival') : undefined}>
           <ShipCellText snap={snap} ship={row.arrivalShip} tag={row.arrivalTag} />
@@ -49,7 +49,7 @@ function VehicleRow({ row, zone, a, focus }: { row: BoardRow; zone: Zone; a: Act
       </div>
       <div className="col">
         <Cell className="vehicle" onTap={() => (row.driverId || !staff ? a.tapVehicle(row) : a.editDriver(row))} onLong={staff ? () => a.editDriver(row) : undefined}>
-          <VehicleCellText snap={snap} row={row} />
+          <VehicleCellText snap={snap} row={row} date={date} />
           {hasOrders && <StatusChip row={row} />}
         </Cell>
       </div>

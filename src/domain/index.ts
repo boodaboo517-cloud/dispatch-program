@@ -11,3 +11,5 @@ export * from './fieldwork.ts';
 export * from './text.ts';
 export * from './batches.ts';
 export * from './actions.ts';
+export * from './ships.ts';
+export * from './workforce.ts';

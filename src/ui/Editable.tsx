@@ -23,12 +23,24 @@ export function Editable(p: {
     setEditing(false);
     if (v !== String(p.value ?? '')) p.onSave?.(v);
   };
+  // 입력 중에 시트가 닫혀도 쓰던 내용은 저장
+  const latest = useRef({ editing, v, value: p.value, onSave: p.onSave });
+  latest.current = { editing, v, value: p.value, onSave: p.onSave };
+  useEffect(() => () => {
+    const l = latest.current;
+    if (l.editing && l.v !== String(l.value ?? '')) l.onSave?.(l.v);
+  }, []);
   if (editing && p.onSave) {
     return (
       <div className="editable" style={{ borderColor: 'var(--blue)' }}>
         <span className="k">{p.label}</span>
         {p.options ? (
-          <select ref={ref} value={v} onChange={(e) => { setV(e.target.value); }} onBlur={commit}>
+          <select ref={ref} value={v} onBlur={() => setEditing(false)} onChange={(e) => {
+            // 고르는 즉시 저장 (휴대폰은 고른 뒤에도 선택칸에 포커스가 남아 있다)
+            setV(e.target.value);
+            setEditing(false);
+            if (e.target.value !== String(p.value ?? '')) p.onSave?.(e.target.value);
+          }}>
             {p.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         ) : p.multiline ? (

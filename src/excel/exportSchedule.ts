@@ -12,7 +12,8 @@ const COLS = 16; // 상행선박 차량 기사 업체 지역 품목 수량 비�
 
 function orderVals(s: Snapshot, o: DailyOrder | undefined) {
   if (!o) return ['', '', '', '', ''];
-  return [clientName(s, o), o.region, productName(s, o), qtyText(o), o.memo];
+  const places = o.pickup_place || o.dropoff_place ? `${o.pickup_place || ''}→${o.dropoff_place || ''}` : '';
+  return [clientName(s, o), o.region, productName(s, o), qtyText(o), [places, o.same_day ? '당일왕복' : '', o.memo].filter(Boolean).join(' ')];
 }
 
 function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: BoardRow[], waiting: DailyOrder[]) {

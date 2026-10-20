@@ -71,8 +71,8 @@ a { color: var(--blue); }
 @media (min-width: 1024px) { .datebar { top: 58px; } }
 .datebar .date { flex: 1; text-align: center; font-weight: 800; font-size: 20px; white-space: nowrap; }
 .datebar .date input { width: auto; border: none; background: transparent; font-weight: 800; text-align: center; }
-.tabs { display: flex; gap: 4px; background: #e5e7eb; border-radius: 12px; padding: 4px; margin: 6px 0; }
-.tabs button { flex: 1; border: none; background: transparent; min-height: 44px; font-weight: 600; padding: 0 4px; white-space: nowrap; font-size: 16px; }
+.tabs { display: flex; gap: 4px; background: #e5e7eb; border-radius: 12px; padding: 4px; margin: 6px 0; overflow-x: auto; scrollbar-width: none; }
+.tabs button { flex: 1 0 auto; border: none; background: transparent; min-height: 44px; font-weight: 600; padding: 0 4px; white-space: nowrap; font-size: 16px; }
 .tabs button.on { background: #fff; color: var(--red); box-shadow: 0 1px 2px rgba(0,0,0,.1); }
 .chips { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0; scrollbar-width: none; }
 .chip { flex: none; border-radius: 999px; min-height: 36px; padding: 0 12px; font-size: 15px; border: 1px solid var(--line); background: #fff; display: inline-flex; align-items: center; gap: 4px; }
@@ -210,3 +210,8 @@ tr.err td { background: var(--red-soft); }
 @media (min-width: 1024px) { .hide-wide { display: none !important; } }
 .only-wide { display: none; }
 @media (min-width: 1024px) { .only-wide { display: initial; } }
+.vrow.secondary { border-style: dashed; }
+.reorder-item { display: flex; align-items: center; gap: 8px; min-height: 56px; padding: 6px 10px; background: #fff; border: 2px solid var(--red); border-radius: 10px; margin: 6px 0; cursor: pointer; user-select: none; }
+.reorder-item.picked { background: #dbeafe; border-color: var(--blue); box-shadow: 0 0 0 3px #93c5fd; }
+.reorder-item.target { border-style: dashed; }
+.reorder-item .no { font-size: 20px; font-weight: 800; width: 64px; }

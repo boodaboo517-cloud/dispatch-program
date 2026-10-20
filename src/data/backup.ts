@@ -60,13 +60,27 @@ export function uploadPlan(s: Snapshot): { table: TableName; rows: Record<string
   return out;
 }
 
+export function backupStamp(d = new Date()) {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+}
+
+/** 백업 파일 읽기: 이메일로 받은 .json.gz(압축) 도 그대로 받는다 */
+export async function readBackupFile(file: File): Promise<string> {
+  const buf = new Uint8Array(await file.arrayBuffer());
+  if (buf[0] === 0x1f && buf[1] === 0x8b) {
+    if (typeof DecompressionStream === 'undefined') throw new BackupError('이 브라우저는 압축 백업(.gz)을 열 수 없습니다. 최신 크롬에서 열어 주세요');
+    const stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'));
+    return await new Response(stream).text();
+  }
+  return new TextDecoder().decode(buf);
+}
+
 export function downloadBackup(snap: Snapshot) {
   const blob = new Blob([JSON.stringify(makeBackup(snap))], { type: 'application/json' });
   const a = document.createElement('a');
-  const d = new Date();
-  const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
   a.href = URL.createObjectURL(blob);
-  a.download = `gyeongmin-backup-${stamp}.json`; // 한글 파일명은 일부 브라우저에서 "download" 로 바뀌어 영문으로
+  a.download = `gyeongmin-backup-${backupStamp()}.json`; // 한글 파일명은 일부 브라우저에서 "download" 로 바뀌어 영문으로
   document.body.appendChild(a);
   a.click();
   setTimeout(() => {
@@ -80,9 +94,11 @@ export function downloadBackup(snap: Snapshot) {
   }
 }
 
+/** 마지막 백업 (파일 저장 · 이메일 발송 중 늦은 쪽) */
 export function lastBackupAt(): string | null {
   try {
-    return localStorage.getItem('last-backup');
+    const xs = [localStorage.getItem('last-backup'), localStorage.getItem('last-email-backup')].filter(Boolean) as string[];
+    return xs.sort().pop() ?? null;
   } catch {
     return null;
   }

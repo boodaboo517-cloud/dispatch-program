@@ -1,7 +1,7 @@
 // 엑셀 업로드 (거래처·품목 / 차량·기사 / 오더 일괄) — 미리보기 후 반영, 오류 행 표시
 import type { Worksheet } from 'exceljs';
 import {
-  Tx, blankOrder, createOrder, newId,
+  SHIFT_PRESETS, Tx, blankOrder, createOrder, newId,
   type CalcMethod, type Kind, type ShipTag, type Snapshot, type Storage, type Unit, type VehicleType, type Weekday, type Zone,
 } from '../domain/index.ts';
 import { download, header, newWorkbook } from './common.ts';
@@ -10,7 +10,7 @@ export const TEMPLATES: Record<string, string[]> = {
   거래처: ['거래처명*', '담당자', '연락처', '기본선박', '메모'],
   품목: ['거래처명*', '품목명*', '기본지역', '기본수량', '단위(대/파렛트/m/박스)', '보관(상온/냉장/냉동)', '상차지주소', '하차지주소', '주의사항', '계산방식(파렛트당/대당/금액직접)', '기본단가'],
   차량: ['차량번호*', '뒤4자리', '차종*(5톤/통윙/통윙2냉/1톤/승용)', '구분(배차/업무용)', '소속(자차/개인)', '기본기사', '상태(운행/정비/휴차)', '현재위치(육지/제주)'],
-  기사: ['이름*', '연락처', '근무요일(예: 월수금)', '근무조', '소속', '직원구분(기사/현장/사무)'],
+  기사: ['이름*', '연락처', '근무요일(예: 월수금)', '근무조(월수금/화목일/월수/토요일/주말/알바/부산상주/서울상주)', '소속', '직원구분(기사/현장/사무)', '비고'],
   오더: ['날짜*(YYYY-MM-DD)', '구역*(육지/제주)', '구분*(하차/상차/오전/오후)', '거래처', '품목', '지역', '수량', '단위', '비고', '차량(뒤4자리)', '기사', '선박', '선박표시(아침/예약/야간)'],
 };
 
@@ -18,7 +18,7 @@ const EXAMPLES: Record<string, (string | number)[]> = {
   거래처: ['도민물류', '홍길동', '010-0000-0000', '제이엘', ''],
   품목: ['도민물류', '감귤', '서귀포', 10, '파렛트', '상온', '', '', '', '파렛트당', 90000],
   차량: ['제주90바9915', '9915', '통윙', '배차', '자차', '', '운행', '육지'],
-  기사: ['김기사', '010-0000-0000', '월수금', '월수금', '경민물류', '기사'],
+  기사: ['김기사', '010-0000-0000', '월수금', '월수금', '경민물류', '기사', '대형면허'],
   오더: ['2026-10-21', '육지', '상차', '도민물류', '감귤', '서귀포', 10, '파렛트', '', '9915', '', '제이엘', ''],
 };
 
@@ -101,16 +101,18 @@ export function planUpload(snap: Snapshot, data: Record<string, { line: number; 
   }
 
   for (const { line, v } of data['기사'] ?? []) {
-    const [name, phone, days, shift, aff, type] = v;
+    const [name, phone, days, shift, aff, type, memo] = v;
     const errors: string[] = [];
     if (!name) errors.push('이름 없음');
     if (type && !['기사', '현장', '사무'].includes(type)) errors.push('직원구분 오류');
     const cur = findDriver(name);
     preview.push({ sheet: '기사', line, values: v, errors, action: errors.length ? '' : cur ? '수정' : '추가' });
     if (errors.length) continue;
+    const typed = [...days].map((c) => WD[c]).filter((x) => x !== undefined) as Weekday[];
     const row = {
-      name, phone, shift, affiliation: aff,
-      work_days: [...days].map((c) => WD[c]).filter((x) => x !== undefined) as Weekday[],
+      name, phone, shift, affiliation: aff, memo: memo ?? '',
+      // 근무요일을 비우면 근무조 기본 요일 (알바는 정해진 요일 없음)
+      work_days: typed.length ? typed : SHIFT_PRESETS[shift] ?? [],
       staff_type: (type || '기사') as '기사' | '현장' | '사무',
     };
     if (cur) t.update('drivers', cur.id, row);

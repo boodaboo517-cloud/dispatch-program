@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Tx, maintenanceAlerts, newId, type Role, type Snapshot } from '../domain/index.ts';
-import { BackupError, backupSummary, downloadBackup, lastBackupAt, parseBackup, uploadPlan } from '../data/backup.ts';
+import { BackupError, backupSummary, downloadBackup, lastBackupAt, parseBackup, readBackupFile, uploadPlan } from '../data/backup.ts';
+import { emailStatus, lastEmailBackupAt, sendBackupEmail, type EmailStatus } from '../data/emailBackup.ts';
 import { store } from '../data/store.ts';
 import { isDemo, supabase } from '../data/supabase.ts';
 import { exportSchedule } from '../excel/exportSchedule.ts';
@@ -50,8 +51,8 @@ async function uploadToServer(snap: Snapshot, onProgress: (text: string) => void
       onProgress(`${table} ${Math.min(i + 500, rows.length)}/${rows.length}`);
       const chunk = rows.slice(i, i + 500);
       const { error } = table === 'settings'
-        ? await supabase!.from(table).upsert(chunk, { onConflict: 'key' })
-        : await supabase!.from(table).upsert(chunk);
+        ? await supabase!.from(table).upsert(chunk, { onConflict: 'key', defaultToNull: false })
+        : await supabase!.from(table).upsert(chunk, { defaultToNull: false });
       if (error) throw new Error(`${table}: ${error.message}`);
     }
   }
@@ -68,7 +69,7 @@ function DataPanel() {
     if (!file) return;
     let parsed;
     try {
-      parsed = parseBackup(await file.text());
+      parsed = parseBackup(await readBackupFile(file));
     } catch (e) {
       store.toast(e instanceof BackupError ? e.message : String(e), 'error');
       return;
@@ -129,11 +130,52 @@ function DataPanel() {
         <button className="primary" onClick={() => { downloadBackup(snap); store.toast('백업 파일을 저장했습니다 (다운로드 폴더)'); }}>💾 백업 파일 저장</button>
         {(isDemo || admin) && (
           <label><button onClick={(e) => (e.currentTarget.nextElementSibling as HTMLInputElement).click()}>{isDemo ? '📂 백업 불러오기' : '⬆ 데모 데이터 서버로 옮기기'}</button>
-            <input hidden type="file" accept=".json,application/json" onChange={(e) => { void restore(e.target.files?.[0]); e.target.value = ''; }} /></label>
+            <input hidden type="file" accept=".json,.gz,application/json,application/gzip" onChange={(e) => { void restore(e.target.files?.[0]); e.target.value = ''; }} /></label>
         )}
         {isDemo && <button className="danger" onClick={reset}>초기화</button>}
       </div>
       {progress && <p className="muted">옮기는 중… {progress}</p>}
+      <EmailBackup />
+    </div>
+  );
+}
+
+function EmailBackup() {
+  const snap = useSnap();
+  const [st, setSt] = useState<EmailStatus | null | undefined>(undefined);
+  const [sending, setSending] = useState(false);
+  const last = lastEmailBackupAt();
+  useEffect(() => {
+    void emailStatus().then(setSt);
+  }, []);
+  const send = async () => {
+    setSending(true);
+    try {
+      await sendBackupEmail(snap);
+      store.toast('백업을 이메일로 보냈습니다');
+    } catch (e) {
+      store.toast(e instanceof Error ? e.message : String(e), 'error');
+    } finally {
+      setSending(false);
+    }
+  };
+  return (
+    <div style={{ borderTop: '1px solid #eee', marginTop: 12, paddingTop: 10 }}>
+      <b>📧 이메일 백업 (일주일마다 자동)</b>
+      {st === undefined && <p className="muted small">확인 중…</p>}
+      {st === null && <p className="muted small">이메일 발송 기능은 Vercel에 배포된 주소에서만 동작합니다.</p>}
+      {st && !st.configured && (
+        <div className="banner yellow small">
+          아직 설정되지 않았습니다. Vercel → 프로젝트 → Settings → Environment Variables 에
+          <b> RESEND_API_KEY</b>, <b>BACKUP_EMAIL_TO</b>(받을 이메일)를 넣고 다시 배포하세요. (README "이메일 백업" 참고)
+        </div>
+      )}
+      {st?.configured && (
+        <>
+          <p className="small">받는 주소: <b>{st.to.join(', ')}</b><br />마지막 발송: {last ? fmtStamp(last) : '없음'} · 7일이 지나면 앱을 열 때 자동으로 보냅니다.</p>
+          <button disabled={sending} onClick={send}>{sending ? '보내는 중…' : '📧 지금 이메일로 보내기'}</button>
+        </>
+      )}
     </div>
   );
 }

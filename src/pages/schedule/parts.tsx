@@ -1,4 +1,4 @@
-import { DAY_STATUS_LABEL, abbrev, type BoardRow, type DailyOrder, type Snapshot } from '../../domain/index.ts';
+import { DAY_STATUS_LABEL, WORK_TYPE_SHORT, abbrev, parseShip, workLogOf, type BoardRow, type DailyOrder, type Snapshot } from '../../domain/index.ts';
 import { clientName, driverName, productName, productOf, qtyText, shipTimeOf } from '../../ui/labels.ts';
 
 export function hasMoney(snap: Snapshot, o: DailyOrder) {
@@ -32,22 +32,27 @@ export function OrderCellText({ snap, o }: { snap: Snapshot; o: DailyOrder }) {
 
 export function ShipCellText({ snap, ship, tag }: { snap: Snapshot; ship: string | null; tag: string }) {
   if (!ship) return <>＋</>;
+  const { name, port } = parseShip(ship);
   return (
     <>
       {tag && <span className="tag">{tag}</span>}
-      <span>{abbrev(ship)}</span>
+      <span>{abbrev(name)}</span>
+      {port && <span className="small" style={{ color: '#0369a1' }}>{abbrev(port, 3)}</span>}
       <span className="muted small">{shipTimeOf(snap, ship)}</span>
     </>
   );
 }
 
-export function VehicleCellText({ snap, row }: { snap: Snapshot; row: BoardRow }) {
+export function VehicleCellText({ snap, row, date }: { snap: Snapshot; row: BoardRow; date: string }) {
   const hasWork = row.unloads.length + row.loads.length > 0;
   const name = driverName(snap, row.driverId);
+  const log = row.driverId ? workLogOf(snap, row.driverId, date) : undefined;
   return (
     <>
       <span>{row.vehicle.short_no}</span>
       <span className={`drv${!name && hasWork ? ' none' : ''}`}>{name ? abbrev(name, 4) : hasWork ? '기사 미지정' : ''}</span>
+      {log && log.work_types.length > 0 && <span className="drv" style={{ color: '#1d4ed8' }}>{log.work_types.map((t) => WORK_TYPE_SHORT[t]).join('·')}</span>}
+      {row.secondary && <span className="mk link" title="당일 왕복 등 다른 구역 일정">왕복</span>}
     </>
   );
 }

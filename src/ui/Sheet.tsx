@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
 
 type Render = (close: () => void) => ReactNode;
 interface SheetApi {
@@ -31,11 +31,29 @@ export function SheetProvider({ children }: { children: ReactNode }) {
     <Ctx.Provider value={{ open, close, confirm }}>
       {children}
       {stack.map((r, i) => (
-        <div key={i} className="sheet-backdrop" onClick={(e) => e.target === e.currentTarget && close()}>
-          {r(close)}
-        </div>
+        <Backdrop key={i} onClose={close}>{r(close)}</Backdrop>
       ))}
     </Ctx.Provider>
+  );
+}
+
+/**
+ * 바깥(어두운 부분)을 눌러 닫기 — 누르기 시작한 곳과 뗀 곳이 모두 바깥일 때만.
+ * (입력칸을 닫으면 시트 높이가 줄어 손가락이 바깥에서 떨어지는 경우 시트가 닫히던 문제 방지)
+ */
+function Backdrop({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+  const downOutside = useRef(false);
+  return (
+    <div
+      className="sheet-backdrop"
+      onPointerDown={(e) => (downOutside.current = e.target === e.currentTarget)}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && downOutside.current) onClose();
+        downOutside.current = false;
+      }}
+    >
+      {children}
+    </div>
   );
 }
 
