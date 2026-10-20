@@ -40,7 +40,13 @@ function generate(tx: Tx, recId: string, from: string, to: string) {
   return n;
 }
 
-const done = (tx: Tx, extra: Record<string, number> = {}) => ({ mutations: tx.mutations() as Mutation[], snapshot: tx.result(), ...extra });
+const done = (tx: Tx, c: { removed?: number; created?: number; keptManual?: number } = {}) => ({
+  mutations: tx.mutations() as Mutation[],
+  snapshot: tx.result(),
+  removed: c.removed ?? 0,
+  created: c.created ?? 0,
+  keptManual: c.keptManual ?? 0,
+});
 
 export function planCreateFieldRecurring(snap: Snapshot, p: { staff_id: string; fields: FieldFields; startDate: string; today: string; actor?: string | null }) {
   assertStartDate(p.startDate, p.today);

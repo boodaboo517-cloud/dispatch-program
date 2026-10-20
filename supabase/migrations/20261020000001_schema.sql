@@ -216,6 +216,8 @@ create index on daily_orders (date);
 create index on daily_orders (recurring_order_id, date);
 create index on daily_orders (linked_from_id);
 create index on daily_orders (vehicle_id, date);
+-- 스케줄러와 앱이 동시에 연장해도 같은 날짜 반복 오더가 두 번 생기지 않게
+create unique index daily_orders_recurring_once on daily_orders (recurring_order_id, date) where source = 'recurring';
 
 create table vehicle_days (
   id uuid primary key default gen_random_uuid(),
@@ -321,6 +323,7 @@ create table field_assignments (
   updated_by uuid
 );
 create index on field_assignments (date);
+create unique index field_assignments_recurring_once on field_assignments (recurring_field_id, date) where source = 'recurring';
 
 create table maintenance_schedules (
   id uuid primary key default gen_random_uuid(),
