@@ -9,3 +9,4 @@ export * from './board.ts';
 export * from './maintenance.ts';
 export * from './fieldwork.ts';
 export * from './text.ts';
+export * from './batches.ts';

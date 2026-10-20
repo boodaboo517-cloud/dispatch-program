@@ -87,7 +87,7 @@ export function planFieldRecurringEnd(snap: Snapshot, p: { recurringId: string; 
   return done(tx);
 }
 
-export function planFieldExtension(snap: Snapshot, today: string, actor: string | null = 'scheduler') {
+export function planFieldExtension(snap: Snapshot, today: string, actor: string | null = null) {
   const tx = new Tx(snap, { actor });
   const until = addDays(today, HORIZON_DAYS);
   let created = 0;

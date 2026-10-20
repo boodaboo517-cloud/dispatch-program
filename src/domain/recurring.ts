@@ -227,7 +227,7 @@ export function planRecurringEnd(
 }
 
 /** 매일 새벽 스케줄러: 모든 활성 반복 발주를 오늘+8주까지 연장 */
-export function planRecurringExtension(snap: Snapshot, today: string, actor: string | null = 'scheduler'): RecurringResult {
+export function planRecurringExtension(snap: Snapshot, today: string, actor: string | null = null): RecurringResult {
   const tx = new Tx(snap, { actor });
   const until = horizon(today);
   let created = 0;
