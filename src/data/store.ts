@@ -7,7 +7,7 @@ import {
   type Mutation, type Role, type Snapshot, type TableName,
 } from '../domain/index.ts';
 import { seoulToday } from '../lib/time.ts';
-import { demoSnapshot } from './demo.ts';
+import { initialSnapshot, type DemoData } from './demo.ts';
 import { supabase } from './supabase.ts';
 
 export interface Session {
@@ -103,7 +103,10 @@ class Store {
     if (cached) this.setState({ snap: { ...emptySnapshot(), ...cached }, ready: true, pending: this.outbox.size });
 
     if (session.demo) {
-      if (!cached) this.setState({ snap: demoSnapshot(seoulToday()), ready: true });
+      if (!cached) this.setState({ snap: initialSnapshot(demoDataKind(), seoulToday()), ready: true });
+      // 브라우저가 저장 공간 부족 시 데이터를 지우지 않도록 영구 저장 요청
+      void navigator.storage?.persist?.().catch(() => undefined);
+      void this.persist();
     } else {
       await this.refresh();
       this.subscribeRealtime();
@@ -119,10 +122,18 @@ class Store {
     this.setState({ session: null, snap: emptySnapshot(), ready: false });
   }
 
-  async resetDemo() {
+  async resetDemo(kind: DemoData) {
     await del('snap:demo');
+    localStorage.setItem('demo-data', kind);
     this.outbox.clear();
-    this.setState({ snap: demoSnapshot(seoulToday()), pending: 0 });
+    this.setState({ snap: initialSnapshot(kind, seoulToday()), pending: 0 });
+    void this.persist();
+  }
+
+  /** 백업 파일 복원 (데모 모드: 이 기기 데이터를 통째로 바꾼다) */
+  replaceSnapshot(snap: Snapshot) {
+    this.outbox.clear();
+    this.setState({ snap: { ...emptySnapshot(), ...snap }, pending: 0 });
     void this.persist();
   }
 
@@ -288,6 +299,19 @@ class Store {
       })
       .subscribe();
   }
+}
+
+export function demoDataKind(): DemoData {
+  try {
+    return localStorage.getItem('demo-data') === 'sample' ? 'sample' : 'base';
+  } catch {
+    return 'base';
+  }
+}
+
+/** 이 기기에 저장된 데모 데이터 (없으면 null) */
+export async function savedDemoData(): Promise<Snapshot | null> {
+  return (await get<Snapshot>('snap:demo').catch(() => undefined)) ?? null;
 }
 
 function key(m: Mutation) {

@@ -14,7 +14,7 @@ insert into daily_orders (id, date, zone, kind, client_id, vehicle_id, driver_id
 insert into order_revenue (order_id, unit_price, quantity, supply_amount, vat, total)
   values ('33333333-3333-4333-8333-333333333333', 90000, 10, 900000, 90000, 990000);
 do $$ begin
-  assert (select count(*) from order_revenue) = 1, 'admin sees revenue';
+  assert (select count(*) from order_revenue where order_id = '33333333-3333-4333-8333-333333333333') = 1, 'admin sees revenue';
   assert (select updated_by from daily_orders where id = '33333333-3333-4333-8333-333333333333') = '11111111-1111-4111-8111-111111111111', 'updated_by recorded';
 end $$;
 update daily_orders set departure_ship = '제이엘' where id = '33333333-3333-4333-8333-333333333333';
@@ -22,7 +22,7 @@ update daily_orders set departure_ship = '제이엘' where id = '33333333-3333-4
 -- 기사(조회): 읽기 O, 금액 X, 쓰기 X
 select set_config('request.jwt.claim.sub', '22222222-2222-4222-8222-222222222222', true);
 do $$ begin
-  assert (select count(*) from daily_orders) = 1, 'driver reads orders';
+  assert (select count(*) from daily_orders where id = '33333333-3333-4333-8333-333333333333') = 1, 'driver reads orders';
   assert (select count(*) from order_revenue) = 0, 'driver must not see revenue';
   assert (select count(*) from product_pricing) = 0, 'driver must not see pricing';
   assert (select count(*) from notices where message like '상차 선박 제이엘%') = 1, 'driver notified of ship change';

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { addDays, type Role } from './domain/index.ts';
+import { backupOverdue } from './data/backup.ts';
 import { store } from './data/store.ts';
 import { isDemo, supabase } from './data/supabase.ts';
 import { seoulToday } from './lib/time.ts';
@@ -25,7 +26,17 @@ function Toasts() {
 function StatusLine() {
   const online = useStore((s) => s.online);
   const pending = useStore((s) => s.pending);
-  if (isDemo) return null;
+  const snap = useStore((s) => s.snap);
+  const role = useStore((s) => s.session?.role);
+  const nav = useNavigate();
+  if (isDemo) {
+    if (role === 'viewer' || !backupOverdue(snap)) return null;
+    return (
+      <div className="banner yellow" style={{ margin: 0, borderRadius: 0, textAlign: 'center', cursor: 'pointer' }} onClick={() => nav('/settings')}>
+        💾 데모 데이터는 이 기기에만 있습니다 — 백업 파일을 저장해 주세요 (설정 → 데이터 보관)
+      </div>
+    );
+  }
   if (!online) return <div className="banner yellow" style={{ margin: 0, borderRadius: 0, textAlign: 'center' }}>오프라인 — 보기·입력 가능, 연결되면 자동 동기화 {pending ? `(대기 ${pending}건)` : ''}</div>;
   return null;
 }

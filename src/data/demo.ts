@@ -7,6 +7,23 @@ import { SEED_IDS, seedSnapshot } from './seed.ts';
 
 const { sid } = SEED_IDS;
 
+/** base = 기본 명단만 (실제 데이터 입력용), sample = 예시 오더 포함 (연습용) */
+export type DemoData = 'base' | 'sample';
+
+/** 기본 명단(선박·차량·직원·근무지·거래처)만 — 예시 오더·반복 발주·정비 기록 없음 */
+export function baseSnapshot(today: string): Snapshot {
+  const s = seedSnapshot();
+  // 요구사항의 초성 검색 예시로만 쓰인 거래처는 실제 입력용에서 뺀다
+  const fake = s.clients.filter((c) => c.name === '대동물류').map((c) => c.id);
+  s.clients = s.clients.filter((c) => !fake.includes(c.id));
+  s.products = s.products.filter((p) => !fake.includes(p.client_id));
+  return planFieldExtension(s, today).snapshot;
+}
+
+export function initialSnapshot(kind: DemoData, today: string): Snapshot {
+  return kind === 'sample' ? demoSnapshot(today) : baseSnapshot(today);
+}
+
 export function demoSnapshot(today: string): Snapshot {
   let s = seedSnapshot();
   const v = (short: string) => s.vehicles.find((x) => x.short_no === short)!.id;

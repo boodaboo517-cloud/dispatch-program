@@ -1,12 +1,13 @@
 // 엑셀·설정·사용자 권한
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Tx, maintenanceAlerts, newId, type Role } from '../domain/index.ts';
+import { Tx, maintenanceAlerts, newId, type Role, type Snapshot } from '../domain/index.ts';
+import { BackupError, backupSummary, downloadBackup, lastBackupAt, parseBackup, uploadPlan } from '../data/backup.ts';
 import { store } from '../data/store.ts';
 import { isDemo, supabase } from '../data/supabase.ts';
 import { exportSchedule } from '../excel/exportSchedule.ts';
 import { downloadTemplates, parseUpload, planUpload, TEMPLATES, type PreviewRow } from '../excel/importer.ts';
-import { dayjs, seoulToday } from '../lib/time.ts';
+import { dayjs, fmtStamp, seoulToday } from '../lib/time.ts';
 import { Editable } from '../ui/Editable.tsx';
 import { useRole, useSnap, useStore } from '../ui/hooks.ts';
 import { setting } from '../ui/labels.ts';
@@ -39,6 +40,101 @@ function UploadPreview({ rows, data, close }: { rows: PreviewRow[]; data: Awaite
         </table>
       </div>
     </Sheet>
+  );
+}
+
+/** 데모 데이터를 서버로 옮기기: 외래키 순서대로 500행씩 upsert (같은 id 는 덮어쓰기라 여러 번 해도 중복 없음) */
+async function uploadToServer(snap: Snapshot, onProgress: (text: string) => void) {
+  for (const { table, rows } of uploadPlan(snap)) {
+    for (let i = 0; i < rows.length; i += 500) {
+      onProgress(`${table} ${Math.min(i + 500, rows.length)}/${rows.length}`);
+      const chunk = rows.slice(i, i + 500);
+      const { error } = table === 'settings'
+        ? await supabase!.from(table).upsert(chunk, { onConflict: 'key' })
+        : await supabase!.from(table).upsert(chunk);
+      if (error) throw new Error(`${table}: ${error.message}`);
+    }
+  }
+}
+
+function DataPanel() {
+  const snap = useSnap();
+  const sheet = useSheet();
+  const { admin } = useRole();
+  const [progress, setProgress] = useState('');
+  const last = lastBackupAt();
+
+  const restore = async (file: File | undefined) => {
+    if (!file) return;
+    let parsed;
+    try {
+      parsed = parseBackup(await file.text());
+    } catch (e) {
+      store.toast(e instanceof BackupError ? e.message : String(e), 'error');
+      return;
+    }
+    const { snapshot, exportedAt } = parsed;
+    if (isDemo) {
+      const ok = await sheet.confirm({
+        title: '백업 불러오기',
+        message: `${fmtStamp(exportedAt)} 백업\n${backupSummary(snapshot)}\n\n지금 이 기기의 데이터는 백업 내용으로 바뀝니다.`,
+        actions: [{ label: '불러오기', value: 'y', kind: 'primary' }],
+      });
+      if (ok) {
+        store.replaceSnapshot(snapshot);
+        store.toast('백업을 불러왔습니다');
+      }
+      return;
+    }
+    const ok = await sheet.confirm({
+      title: '데모 데이터를 서버로 옮기기',
+      message: `${fmtStamp(exportedAt)} 백업\n${backupSummary(snapshot)}\n\n서버에 같은 항목이 있으면 백업 내용으로 덮어씁니다. 서버에만 있는 데이터는 그대로 둡니다.`,
+      actions: [{ label: '서버로 옮기기', value: 'y', kind: 'primary' }],
+    });
+    if (!ok) return;
+    try {
+      await uploadToServer(snapshot, setProgress);
+      setProgress('');
+      await store.refresh();
+      store.toast('서버로 옮겼습니다');
+    } catch (e) {
+      setProgress('');
+      store.toast(`옮기기 실패 — ${e instanceof Error ? e.message : e}. 다시 실행해도 중복되지 않습니다.`, 'error');
+    }
+  };
+
+  const reset = async () => {
+    const kind = await sheet.confirm({
+      title: '데이터 초기화',
+      message: '이 기기의 데이터를 모두 지우고 다시 시작합니다. 먼저 백업 파일을 저장해 두세요.',
+      actions: [
+        { label: '기본 명단만으로 시작 (실제 입력용)', value: 'base', kind: 'danger' },
+        { label: '예시 데이터로 시작 (연습용)', value: 'sample' },
+      ],
+    });
+    if (kind) await store.resetDemo(kind as 'base' | 'sample');
+  };
+
+  return (
+    <div className="card">
+      <h3>데이터 보관</h3>
+      {isDemo && (
+        <div className="banner yellow small">
+          데모 모드는 <b>이 기기 브라우저에만</b> 저장됩니다. 다른 휴대폰·PC와 공유되지 않고, 브라우저 데이터를 지우면 사라집니다.
+          <b> 백업 파일을 자주 저장</b>해 두세요. 나중에 서버(Supabase)를 연결하면 이 파일로 그대로 옮길 수 있습니다.
+        </div>
+      )}
+      <p className="muted small">지금 데이터: {backupSummary(snap)}<br />마지막 백업: {last ? fmtStamp(last) : '없음'}</p>
+      <div className="row wrap">
+        <button className="primary" onClick={() => { downloadBackup(snap); store.toast('백업 파일을 저장했습니다 (다운로드 폴더)'); }}>💾 백업 파일 저장</button>
+        {(isDemo || admin) && (
+          <label><button onClick={(e) => (e.currentTarget.nextElementSibling as HTMLInputElement).click()}>{isDemo ? '📂 백업 불러오기' : '⬆ 데모 데이터 서버로 옮기기'}</button>
+            <input hidden type="file" accept=".json,application/json" onChange={(e) => { void restore(e.target.files?.[0]); e.target.value = ''; }} /></label>
+        )}
+        {isDemo && <button className="danger" onClick={reset}>초기화</button>}
+      </div>
+      {progress && <p className="muted">옮기는 중… {progress}</p>}
+    </div>
   );
 }
 
@@ -154,6 +250,7 @@ export function SettingsPage() {
           <Editable label="기사 제안 허용" value={String(setting(snap, 'driver_suggestions', false))} options={[{ value: 'false', label: '아니오 (관리자·배차만 수정)' }, { value: 'true', label: '예 (사진·주의사항 제안 → 승인 후 반영)' }]} onSave={(v) => saveSetting('driver_suggestions', v === 'true')} />
         </div>
       )}
+      <DataPanel />
       {admin && supabase && <UsersPanel />}
 
       <div className="card">
@@ -161,7 +258,6 @@ export function SettingsPage() {
         <p>{session?.name} · {{ admin: '관리자', dispatcher: '배차', viewer: '조회(기사)' }[session?.role ?? 'viewer']} {isDemo && <span className="badge warn">데모 모드 (이 기기에만 저장)</span>}</p>
         {!isDemo && <p className="muted small">전송 대기 {pending}건 {pending ? '— 연결되면 자동 동기화' : ''}</p>}
         <div className="row wrap">
-          {isDemo && <button onClick={() => confirm('데모 데이터를 처음 상태로 되돌릴까요?') && store.resetDemo()}>데모 초기화</button>}
           <button className="danger" onClick={async () => { await supabase?.auth.signOut(); await store.stop(); localStorage.removeItem('demo-role'); location.href = '/'; }}>로그아웃</button>
         </div>
       </div>
