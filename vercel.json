@@ -1,7 +1,7 @@
 {
   "rewrites": [
     {
-      "source": "/((?!api/|assets/|sw.js|workbox-|manifest.webmanifest|icon).*)",
+      "source": "/((?!api/|assets/|sw.js|workbox-|manifest.webmanifest|icon|favicon|apple-touch-icon).*)",
       "destination": "/index.html"
     }
   ]
