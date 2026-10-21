@@ -204,9 +204,17 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
     shipTime(snap, a.departure_ship ?? a.arrival_ship).localeCompare(shipTime(snap, b.departure_ship ?? b.arrival_ship)) || a.sort_order - b.sort_order;
   const externalOf = (z: Zone) => dayOrders.filter((o) => o.zone === z && !o.vehicle_id && isExternal(o)).sort(byShip);
   const external = { land: externalOf('land'), jeju: externalOf('jeju') };
+  // 배차 안 된 짐은 상차 예정 지역에만: 아직 차량 없는 상차에서 이어진 반대편 하차는 숨긴다
+  // (상차에 차량을 배정하면 하차에도 차량이 채워져 그 차량 줄에 나타난다). 벌크는 도착지에서 다시 배차하므로 표시.
+  const orderById = new Map(snap.daily_orders.map((o) => [o.id, o]));
+  const waitsOnSource = (o: DailyOrder) => {
+    if (o.kind !== 'unload' || !o.linked_from_id) return false;
+    const src = orderById.get(o.linked_from_id);
+    return !!src && !src.vehicle_id && !isExternal(src) && src.shipment !== 'bulk';
+  };
   const waitingOf = (z: Zone) =>
     dayOrders
-      .filter((o) => o.zone === z && !o.vehicle_id && !isExternal(o))
+      .filter((o) => o.zone === z && !o.vehicle_id && !isExternal(o) && !waitsOnSource(o))
       .sort(byShip);
   const waiting = { land: waitingOf('land'), jeju: waitingOf('jeju') };
   const land = rows.filter((r) => r.zone === 'land');

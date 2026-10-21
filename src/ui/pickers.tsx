@@ -1,7 +1,7 @@
 // 빈칸 탭 → 그 칸에 맞는 등록 목록 (아래에서 올라오는 시트). 모두 Promise 로 결과를 돌려준다.
 import { useState } from 'react';
 import {
-  DAY_STATUS_LABEL, MAINTENANCE_KINDS, ON_CALL_SHIFT, SHIP_TAG_PRESETS, addDays, composeShipTag, shipChoices, splitShipTag, isDriverWorking, newId, vehicleChoices,
+  DAY_STATUS_LABEL, MAINTENANCE_KINDS, ON_CALL_SHIFT, SHIP_TAG_PRESETS, driverGroup, addDays, composeShipTag, shipChoices, splitShipTag, isDriverWorking, newId, vehicleChoices,
   type Board, type DayStatus, type MaintenanceKind, type Product, type ShipTag, type Snapshot, type Zone,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
@@ -276,29 +276,9 @@ export function usePickers() {
         );
       }),
 
-    /** 오늘 근무 기사 먼저, 알바는 따로, 근무일 아닌 기사는 아래에 흐리게. 휴무 지정자는 제외 */
+    /** 팀별로 묶은 기사 목록: 오늘 근무 → 알바 → 근무일 아님(흐리게). 휴무 지정자는 제외 */
     driver: (date: string, current: string | null) =>
-      ask<string | null | undefined>((close, done) => {
-        const s = snap();
-        const offIds = new Set(s.field_assignments.filter((f) => f.date === date && f.is_off).map((f) => f.staff_id));
-        const ds = s.drivers.filter((d) => d.staff_type === '기사' && !offIds.has(d.id)).sort((a, b) => a.name.localeCompare(b.name, 'ko'));
-        const item = (d: (typeof ds)[number], faded = false) => ({ id: d.id, label: d.name, sub: [d.shift, d.affiliation, d.memo].filter(Boolean).join(' · '), faded });
-        const working = ds.filter((d) => isDriverWorking(s, d, date));
-        const rest = ds.filter((d) => !working.includes(d));
-        return (
-          <Sheet title="기사 선택" onClose={() => { done(undefined); close(); }} flush>
-            <PickerList
-              sections={[
-                { label: '오늘 근무', items: working.map((d) => item(d)) },
-                { label: '알바 (원할 때 출근 · 고르면 근무형태 입력)', items: rest.filter((d) => d.shift === ON_CALL_SHIFT).map((d) => item(d)) },
-                { label: '근무일 아님', items: rest.filter((d) => d.shift !== ON_CALL_SHIFT).map((d) => item(d, true)) },
-              ]}
-              onPick={(it) => { done(it.id); close(); }}
-              top={current ? <div className="list-item" onClick={() => { done(null); close(); }}><span style={{ color: 'var(--red)' }}>기사 비우기 (미지정)</span></div> : undefined}
-            />
-          </Sheet>
-        );
-      }),
+      ask<string | null | undefined>((close, done) => <DriverSheet date={date} current={current} close={close} done={done} />),
 
     workType: (date: string, driverId: string) =>
       ask<void>((close, done) => <WorkTypeSheet date={date} driverId={driverId} close={() => { done(); close(); }} />),
@@ -340,6 +320,51 @@ export function usePickers() {
     date: (title: string, initial: string, min?: string) =>
       ask<string | null>((close, done) => <DateSheet title={title} initial={initial} min={min} close={close} done={done} />),
   };
+}
+
+const groupOrder = (a: string, b: string) => (a === '팀 없음' ? 1 : b === '팀 없음' ? -1 : a.localeCompare(b, 'ko', { numeric: true }));
+
+function DriverSheet(p: { date: string; current: string | null; close: () => void; done: (v: string | null | undefined) => void }) {
+  const s = snap();
+  const [team, setTeam] = useState<string | null>(null);
+  const finish = (v: string | null | undefined) => {
+    p.done(v);
+    p.close();
+  };
+  const offIds = new Set(s.field_assignments.filter((f) => f.date === p.date && f.is_off).map((f) => f.staff_id));
+  const all = s.drivers.filter((d) => d.staff_type === '기사' && !offIds.has(d.id));
+  const teams = [...new Set(all.map(driverGroup))].sort(groupOrder);
+  const ds = all.filter((d) => !team || driverGroup(d) === team).sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  const working = ds.filter((d) => isDriverWorking(s, d, p.date));
+  const onCall = ds.filter((d) => !working.includes(d) && d.shift === ON_CALL_SHIFT);
+  const offDay = ds.filter((d) => !working.includes(d) && d.shift !== ON_CALL_SHIFT);
+  const item = (d: (typeof ds)[number], faded = false) => ({ id: d.id, label: d.name, sub: [team ? '' : driverGroup(d), d.shift !== driverGroup(d) ? d.shift : '', d.memo].filter(Boolean).join(' · '), faded });
+  const byTeam = (list: typeof ds, label: (t: string) => string, faded = false): PickSection[] =>
+    [...new Set(list.map(driverGroup))].sort(groupOrder).map((t) => ({ label: label(t), items: list.filter((d) => driverGroup(d) === t).map((d) => item(d, faded)) }));
+  return (
+    <Sheet title="기사 선택" onClose={() => finish(undefined)} flush>
+      {teams.length > 1 && (
+        <div className="chips" style={{ padding: '8px 12px 0' }}>
+          <button className={`chip${team === null ? ' on' : ''}`} onClick={() => setTeam(null)}>전체</button>
+          {teams.map((t) => (
+            <button key={t} className={`chip${team === t ? ' on' : ''}`} onClick={() => setTeam(t)}>
+              {t} <span className="muted small">{all.filter((d) => driverGroup(d) === t && isDriverWorking(s, d, p.date)).length}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <PickerList
+        key={team ?? 'all'}
+        sections={[
+          ...byTeam(working, (t) => `오늘 근무 · ${t}`),
+          ...(onCall.length ? [{ label: '알바 (원할 때 출근 · 고르면 근무형태 입력)', items: onCall.map((d) => item(d)) }] : []),
+          ...byTeam(offDay, (t) => `근무일 아님 · ${t}`, true),
+        ]}
+        onPick={(it) => finish(it.id)}
+        top={p.current ? <div className="list-item" onClick={() => finish(null)}><span style={{ color: 'var(--red)' }}>기사 비우기 (미지정)</span></div> : undefined}
+      />
+    </Sheet>
+  );
 }
 
 function DateSheet(p: { title: string; initial: string; min?: string; close: () => void; done: (v: string | null) => void }) {

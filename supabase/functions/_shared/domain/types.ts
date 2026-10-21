@@ -102,7 +102,12 @@ export interface Driver extends Base {
   /** 직원 구분: 기사 / 현장 / 사무 */
   staff_type: '기사' | '현장' | '사무';
   memo?: string;
+  /** 팀 (기사 선택 목록 묶음). 비우면 근무조로 묶는다 */
+  team?: string;
 }
+
+/** 기사 선택·근무현황에서 묶는 기준: 팀 → 근무조 → "팀 없음" */
+export const driverGroup = (d: Pick<Driver, 'team' | 'shift'>) => d.team?.trim() || d.shift || '팀 없음';
 
 /** 알바: 정해진 근무일 없이 출근 기록이 있는 날만 근무 */
 export const ON_CALL_SHIFT = '알바';

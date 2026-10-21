@@ -1,6 +1,6 @@
 // 일정표 칸 동작 (휴대폰·PC 공통)
 import {
-  ON_CALL_SHIFT, abbrev, acceptShipPending, workLogOf, assignVehicle, blankOrder, buildBoard, createOrder, ignoreShipPending, opposite, saveOrder,
+  ON_CALL_SHIFT, abbrev, acceptShipPending, nudgeVehicle, workLogOf, assignVehicle, blankOrder, buildBoard, createOrder, ignoreShipPending, opposite, saveOrder,
   setRowDriver, setRowShip, setVehicleDayStatus, setVehicleZone, shipTime,
   type Board, type BoardRow, type DailyOrder, type Kind, type Zone,
 } from '../domain/index.ts';
@@ -117,6 +117,9 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     store.run((tx) => setVehicleDayStatus(tx, { date, vehicle_id: row.vehicle.id, zone: row.zone, status: r.status, memo: r.memo, maintenance: r.maintenance }));
   };
 
+  /** 같은 구역 화면에 보이는 차량 순서 (위로/아래로는 화면에 보이는 이웃 기준) */
+  const zoneRowIds = (row: BoardRow) => board.rows.filter((r) => r.zone === row.zone && !r.secondary).map((r) => r.vehicle.id);
+
   const tapVehicle = (row: BoardRow) => {
     const snap = store.getState().snap;
     showText(
@@ -133,6 +136,8 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
             { label: '기사 지정', run: () => void editDriver(row) },
             ...(row.driverId ? [{ label: '근무형태', run: () => void pick.workType(date, row.driverId!) }] : []),
             { label: '상태·위치', run: () => void editStatus(row) },
+            { label: '▲ 위로', run: () => store.run((tx) => nudgeVehicle(tx, row.vehicle.id, -1, zoneRowIds(row))) },
+            { label: '▼ 아래로', run: () => store.run((tx) => nudgeVehicle(tx, row.vehicle.id, 1, zoneRowIds(row))) },
           ]
         : [],
     );

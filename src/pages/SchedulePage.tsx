@@ -112,7 +112,6 @@ export function SchedulePage({ readOnlyHeader }: { readOnlyHeader?: boolean } = 
         {s.external > 0 && <span className="chip">용차·화주 {s.external}</span>}
         {s.noDriver > 0 && <Chip on={filter === 'nodriver'} cls="alert" onClick={() => setFilter(filter === 'nodriver' ? 'all' : 'nodriver')}>기사 미지정 {s.noDriver}</Chip>}
         <span className="chip">하차 {s.unloads} · 상차 {s.loads}</span>
-        {staff && zone && <button className={`chip${reorder ? ' on' : ''}`} onClick={() => setReorder(!reorder)}>↕ 줄 순서</button>}
         {wide && <button className="chip" onClick={() => exportSchedule(snap, date, date)}>⬇ 엑셀</button>}
       </div>
       {board.unknownLocation.length > 0 && (
@@ -120,6 +119,11 @@ export function SchedulePage({ readOnlyHeader }: { readOnlyHeader?: boolean } = 
       )}
       {staff && linkPending > 0 && <div className="banner yellow">원본 상차·전날 선박이 바뀐 줄 {linkPending}건 — "!" / "변경?" 표시를 눌러 반영 또는 무시하세요.</div>}
 
+      {staff && zone && !reorder && (
+        <div className="row" style={{ justifyContent: 'flex-end', margin: '2px 0' }}>
+          <button className="chip" onClick={() => setReorder(true)}>↕ 차량 순서 바꾸기</button>
+        </div>
+      )}
       {zone && (wide
         ? (reorder ? <ReorderPanel rows={rows} onDone={() => setReorder(false)} /> : <PcBoard zone={zone} rows={rows} waiting={waiting} external={external} actions={actions} focus={focus} />)
         : (reorder ? <ReorderPanel rows={rows} onDone={() => setReorder(false)} /> : <MobileBoard date={date} zone={zone} rows={rows} waiting={waiting} external={external} actions={actions} focus={focus} />))}

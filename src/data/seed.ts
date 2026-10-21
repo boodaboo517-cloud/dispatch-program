@@ -37,7 +37,7 @@ export function seedSnapshot(): Snapshot {
     ['김용현', '', MON_SAT, '목포센터', '현장'],
   ];
   s.drivers = drivers.map(([name, shift, work_days, affiliation, staff_type], i) => ({
-    id: sid(2, i + 1), name, phone: '', work_days, shift, affiliation, staff_type, memo: '',
+    id: sid(2, i + 1), name, phone: '', work_days, shift, affiliation, staff_type, memo: '', team: '',
   }));
   const driver = (name: string) => s.drivers.find((d) => d.name === name)!.id;
 

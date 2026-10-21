@@ -1,7 +1,7 @@
 // 월간 기사 근무현황: 기사 × 날짜 표, 칸을 누르면 근무형태 입력
 import { useMemo, useState } from 'react';
 import {
-  ON_CALL_SHIFT, WORK_TYPES, WORK_TYPE_SHORT, monthlyDriverStatus, weekdayOf, type DayCell, type DriverMonth, type Snapshot,
+  ON_CALL_SHIFT, WORK_TYPES, driverGroup, WORK_TYPE_SHORT, monthlyDriverStatus, weekdayOf, type DayCell, type DriverMonth, type Snapshot,
 } from '../domain/index.ts';
 import { boxBorder, download, fill, header, newWorkbook } from '../excel/common.ts';
 import { dayjs, seoulToday } from '../lib/time.ts';
@@ -55,7 +55,8 @@ export function AttendancePanel() {
   const from = `${month}-01`;
   const to = dayjs(from).endOf('month').format('YYYY-MM-DD');
   const drivers = useMemo(
-    () => snap.drivers.filter((d) => d.staff_type === '기사').sort((a, b) => a.name.localeCompare(b.name, 'ko')),
+    () => snap.drivers.filter((d) => d.staff_type === '기사')
+      .sort((a, b) => driverGroup(a).localeCompare(driverGroup(b), 'ko', { numeric: true }) || a.name.localeCompare(b.name, 'ko')),
     [snap.drivers],
   );
   const rows = useMemo(() => monthlyDriverStatus(snap, from, to, drivers), [snap, from, to, drivers]);
@@ -90,7 +91,7 @@ export function AttendancePanel() {
               <tr key={r.driver.id}>
                 <td style={{ position: 'sticky', left: 0, background: '#fff', zIndex: 1 }}>
                   <b>{r.driver.name}</b>
-                  <div className="muted" style={{ fontSize: 11 }}>{r.driver.shift === ON_CALL_SHIFT ? '알바' : r.driver.shift}</div>
+                  <div className="muted" style={{ fontSize: 11 }}>{r.driver.shift === ON_CALL_SHIFT ? '알바' : driverGroup(r.driver)}</div>
                 </td>
                 {r.days.map((c) => (
                   <td

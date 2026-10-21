@@ -90,3 +90,22 @@ describe('다른 물류업체가 예약한 배', () => {
     expect(findVehicleDay(tx, '2026-10-21', 'v9915')!.arrival_ship_tag).toBe('대한물류 예약');
   });
 });
+
+describe('배차 안 된 짐은 상차 예정 지역에만', () => {
+  it('차량 없는 육지 상차의 제주 하차는 제주 배차 대기에 안 나오고, 배차하면 차량 줄에 나온다', () => {
+    const tx = new Tx(baseSnapshot());
+    const load = saveOrder(tx, blankOrder({ date: '2026-10-20', zone: 'land', kind: 'load', client_id: 'c-dm', departure_ship: '제이엘' }));
+    expect(buildBoard(tx.result(), '2026-10-20').waiting.land.map((o) => o.id)).toEqual([load.id]);
+    expect(buildBoard(tx.result(), '2026-10-21').waiting.jeju).toHaveLength(0);
+    assignVehicle(tx, load.id, 'v9915');
+    const b = buildBoard(tx.result(), '2026-10-21');
+    expect(b.waiting.jeju).toHaveLength(0);
+    expect(b.rows.find((r) => r.vehicle.id === 'v9915')!.unloads).toHaveLength(1);
+  });
+  it('벌크 하차와 직접 입력한 미배차 하차는 그 지역에 계속 나온다', () => {
+    const tx = new Tx(baseSnapshot());
+    saveOrder(tx, blankOrder({ date: '2026-10-20', zone: 'land', kind: 'load', client_id: 'c-dm', departure_ship: '제이엘', shipment: 'bulk' }));
+    saveOrder(tx, blankOrder({ date: '2026-10-21', zone: 'jeju', kind: 'unload', client_id: 'c-sin' }));
+    expect(buildBoard(tx.result(), '2026-10-21').waiting.jeju).toHaveLength(2);
+  });
+});

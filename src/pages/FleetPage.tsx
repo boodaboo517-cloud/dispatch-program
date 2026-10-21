@@ -1,10 +1,10 @@
 // 차량·기사·선박·정비·현장근무 등록
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   activeRepair, checkOdometer, newId, oilStatus, planCreateFieldRecurring, planFieldRecurringChange, planFieldRecurringEnd,
   setDayOff, versionOn, weekdaysLabel,
-  ON_CALL_SHIFT, SHIFT_PRESETS, type Driver, type Ship, type Vehicle, type VehicleType, type Weekday,
+  ON_CALL_SHIFT, SHIFT_PRESETS, driverGroup, type Driver, type Ship, type Vehicle, type VehicleType, type Weekday,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
 import { fmtDate, seoulToday } from '../lib/time.ts';
@@ -82,6 +82,29 @@ function VehicleSheet({ v, close }: { v: Vehicle; close: () => void }) {
   );
 }
 
+/** 팀: 직접 쓰거나 이미 있는 팀을 눌러 고른다 (자동 저장) */
+function TeamField({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+  const snap = useSnap();
+  const [v, setV] = useState(value);
+  useEffect(() => setV(value), [value]);
+  const teams = [...new Set(snap.drivers.map((d) => d.team?.trim()).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, 'ko', { numeric: true }));
+  const commit = (x: string) => {
+    setV(x);
+    if (x.trim() !== value) onSave(x.trim());
+  };
+  return (
+    <div className="editable" style={{ flexWrap: 'wrap' }}>
+      <span className="k">팀</span>
+      <input style={{ flex: 1, minWidth: 120 }} value={v} placeholder="예: 1팀, 부산팀 (비우면 근무조로 묶음)" onChange={(e) => setV(e.target.value)} onBlur={() => commit(v)} onKeyDown={(e) => e.key === 'Enter' && commit(v)} />
+      {teams.length > 0 && (
+        <div className="row wrap" style={{ width: '100%', marginTop: 4 }}>
+          {teams.map((t) => <button key={t} type="button" className={`chip${t === value ? ' on' : ''}`} onClick={() => commit(t)}>{t}</button>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DriverSheet({ d, close }: { d: Driver; close: () => void }) {
   const snap = useSnap();
   const cur = snap.drivers.find((x) => x.id === d.id) ?? d;
@@ -101,6 +124,7 @@ function DriverSheet({ d, close }: { d: Driver; close: () => void }) {
       ) : (
         <label className="field"><span>근무 요일</span><WeekdayChips value={cur.work_days} onChange={(w) => save({ work_days: w as Weekday[] })} /></label>
       )}
+      <TeamField value={cur.team ?? ''} onSave={(v) => save({ team: v })} />
       <Editable label="소속" value={cur.affiliation} onSave={(v) => save({ affiliation: v })} />
       <Editable label="비고" value={cur.memo ?? ''} placeholder="예: 대형면허, 야간 가능, 주 3일만" multiline onSave={(v) => save({ memo: v })} />
       <div className="card">
@@ -167,25 +191,34 @@ export function FleetPage() {
             store.run((tx) => tx.insert('drivers', d));
             sheet.open((c) => <DriverSheet d={d} close={c} />);
           }}>＋ 기사·직원 등록</button>}
-          {(['기사', '현장', '사무'] as const).map((type) => (
-            <div key={type}>
-              <h3>{type}</h3>
-              <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                {snap.drivers.filter((d) => d.staff_type === type).sort((a, b) => a.name.localeCompare(b.name, 'ko')).map((d) => {
-                  const off = snap.field_assignments.some((f) => f.date === today && f.staff_id === d.id && f.is_off);
-                  return (
-                    <div key={d.id} className="list-item" onClick={() => staff && sheet.open((c) => <DriverSheet d={d} close={c} />)}>
-                      <div className="grow"><b>{d.name}</b> <span className="muted">{d.shift} {d.affiliation}</span>
-                        <div className="muted small">{d.shift === ON_CALL_SHIFT ? '원할 때만 출근' : weekdaysLabel(d.work_days)} {d.phone}</div>
-                        {d.memo && <div className="small" style={{ color: '#92400e' }}>📝 {d.memo}</div>}
-                      </div>
-                      {off && <span className="badge warn">오늘 휴무</span>}
+          {(['기사', '현장', '사무'] as const).map((type) => {
+            const list = snap.drivers.filter((d) => d.staff_type === type);
+            const groups = type === '기사' ? [...new Set(list.map(driverGroup))].sort((a, b) => (a === '팀 없음' ? 1 : b === '팀 없음' ? -1 : a.localeCompare(b, 'ko', { numeric: true }))) : [''];
+            return (
+              <div key={type}>
+                <h3>{type}</h3>
+                {groups.map((g) => (
+                  <div key={g}>
+                    {g && <div className="muted small" style={{ margin: '8px 4px 2px', fontWeight: 700 }}>{g}</div>}
+                    <div className="card" style={{ padding: 0, overflow: 'hidden', marginTop: 2 }}>
+                      {list.filter((d) => !g || driverGroup(d) === g).sort((a, b) => a.name.localeCompare(b.name, 'ko')).map((d) => {
+                        const off = snap.field_assignments.some((f) => f.date === today && f.staff_id === d.id && f.is_off);
+                        return (
+                          <div key={d.id} className="list-item" onClick={() => staff && sheet.open((c) => <DriverSheet d={d} close={c} />)}>
+                            <div className="grow"><b>{d.name}</b> <span className="muted">{d.shift} {d.affiliation}</span>
+                              <div className="muted small">{d.shift === ON_CALL_SHIFT ? '원할 때만 출근' : weekdaysLabel(d.work_days)} {d.phone}</div>
+                              {d.memo && <div className="small" style={{ color: '#92400e' }}>📝 {d.memo}</div>}
+                            </div>
+                            {off && <span className="badge warn">오늘 휴무</span>}
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </>
       )}
 
