@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
       return Response.json({ ok: true, today, orders: a.created, field: b.created });
     }
     if (task === 'alerts') {
-      const { data } = await supabase.from('daily_orders').select('id').eq('date', today).is('vehicle_id', null).eq('kind', 'load');
+      const { data } = await supabase.from('daily_orders').select('id').eq('date', today).is('vehicle_id', null).eq('kind', 'load').eq('carrier_type', 'own');
       if (data?.length) await notice(today, `[배차] 오늘 배차 대기 상차 ${data.length}건이 남아 있습니다`);
       return Response.json({ ok: true, waiting: data?.length ?? 0 });
     }

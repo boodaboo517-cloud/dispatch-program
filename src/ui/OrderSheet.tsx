@@ -2,7 +2,8 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  CALC_LABEL, EXTRA_PRESETS, Tx, acceptLinkPending, buildBoard, computeRevenue, deleteOrder, findLinkedUnload, ignoreLinkPending, newId,
+  CALC_LABEL, CARRIER_LABEL, EXTRA_PRESETS, Tx, acceptLinkPending, arrivalOffset, buildBoard, transportSummary,
+  type CarrierType, type Shipment, computeRevenue, deleteOrder, findLinkedUnload, ignoreLinkPending, newId,
   saveOrder, saveRevenue, setProductDefaultPrice, won,
   type BillingStatus, type CalcMethod, type DailyOrder, type OrderRevenue, type Unit,
 } from '../domain/index.ts';
@@ -155,7 +156,19 @@ export function OrderSheet({ orderId, close, startEditing = false }: { orderId: 
           region: c.product?.default_region || o.region, quantity: c.product?.default_quantity ?? o.quantity, unit: c.product?.default_unit || o.unit,
         });
       } : undefined} />
-      <Field label="품목" value={productName(snap, o)} extra={product && <StorageBadge storage={product.storage} temp={tempText(product)} />} onEdit={product ? () => { close(); nav(`/products/${product.id}`); } : undefined} editLabel="품목 상세 ›" />
+      {editing ? (
+        <>
+          <Field label="품목" value={productName(snap, o)} extra={product && <StorageBadge storage={product.storage} temp={tempText(product)} />} onEdit={async () => {
+            const c = await pick.clientProduct(o.vehicle_id, o.client_id ? { id: o.client_id, text: clientName(snap, o) } : undefined);
+            if (c) set({
+              client_id: c.client_id, client_text: c.client_text, product_id: c.product?.id ?? null, product_text: c.product_text,
+              region: c.product?.default_region || o.region, unit: c.product?.default_unit || o.unit,
+            });
+          }} editLabel="품목 변경 ›" />
+        </>
+      ) : (
+        <Field label="품목" value={productName(snap, o)} extra={product && <StorageBadge storage={product.storage} temp={tempText(product)} />} onEdit={product ? () => { close(); nav(`/products/${product.id}`); } : undefined} editLabel="품목 상세 ›" />
+      )}
       {editing ? (
         <>
           <label className="field"><span>지역</span><input value={o.region} onChange={(e) => set({ region: e.target.value })} /></label>
@@ -163,12 +176,7 @@ export function OrderSheet({ orderId, close, startEditing = false }: { orderId: 
           <div className="field"><span className="muted small">수량 (10파렛트 · 3대 처럼 써도 됨)</span>
             <QtyInput quantity={o.quantity} unit={o.unit} onChange={(quantity, unit) => set({ quantity, unit })} />
           </div>
-          {o.kind === 'load' && (
-            <label className="row" style={{ cursor: 'pointer', minHeight: 44 }}>
-              <input type="checkbox" checked={!!o.same_day} onChange={(e) => set({ same_day: e.target.checked })} style={{ width: 24, minHeight: 24 }} />
-              <span>당일 왕복 (반대 지역 하차도 같은 날짜)</span>
-            </label>
-          )}
+          <TransportFields o={o} set={set} />
           <Field label="비고" value={o.memo} onEdit={async () => { const m = await pick.memo(o.memo); if (m !== null) set({ memo: m }); }} />
           <Field label="날짜" value={fmtDate(o.date)} onEdit={async () => { const d = await pick.date('날짜', o.date); if (d) set({ date: d }); }} />
         </>
@@ -177,14 +185,14 @@ export function OrderSheet({ orderId, close, startEditing = false }: { orderId: 
           <Field label="지역" value={o.region} />
           {(o.pickup_place || o.dropoff_place) && <Field label="상차지 → 하차지" value={`${o.pickup_place || '-'} → ${o.dropoff_place || '-'}`} />}
           <Field label="수량" value={o.quantity == null ? '' : `${o.quantity} ${o.unit}`} />
-          {o.same_day && <Field label="당일 왕복" value="예 (반대 지역 하차 같은 날)" />}
+          {transportSummary(snap, o) && <Field label="운송" value={transportSummary(snap, o)} />}
           <Field label="비고" value={o.memo} />
         </>
       )}
-      <Field label="차량" value={vehicleNo(snap, o.vehicle_id) || '미배차'} onEdit={editing ? async () => {
+      {(o.carrier_type ?? 'own') === 'own' && <Field label="차량" value={vehicleNo(snap, o.vehicle_id) || '미배차'} onEdit={editing ? async () => {
         const v = await pick.vehicle(buildBoard(snap, o.date), o.zone);
         if (v) set({ vehicle_id: v });
-      } : undefined} />
+      } : undefined} />}
       <Field label="기사" value={driverName(snap, o.driver_id) || '기사 미지정'} onEdit={editing ? async () => {
         const d = await pick.driver(o.date, o.driver_id);
         if (d !== undefined) set({ driver_id: d });
@@ -256,6 +264,57 @@ function Field(p: { label: string; value: string; onEdit?: () => void; editLabel
       <span className={`v${p.value ? '' : ' placeholder'}`}>{p.value || '-'}</span>
       {p.extra}
       {p.onEdit && <span className="muted">{p.editLabel ?? '변경 ›'}</span>}
+    </div>
+  );
+}
+
+/** 운송 방법: 직영/용차/화주배차, 차량째/벌크, 하차 날짜, 당일 왕복 */
+export function TransportFields({ o, set }: { o: DailyOrder; set: (p: Partial<DailyOrder>) => void }) {
+  const snap = useSnap();
+  const ct = o.carrier_type ?? 'own';
+  const isLoad = o.kind === 'load';
+  const bulk = o.shipment === 'bulk';
+  const shipDays = arrivalOffset(snap, o.departure_ship);
+  return (
+    <div className="card" style={{ background: '#f8fafc' }}>
+      <div className="muted small">운송</div>
+      <Seg value={ct} onChange={(v: CarrierType) => set(v === 'own' ? { carrier_type: v } : { carrier_type: v, vehicle_id: null, same_day: false })}
+        options={(Object.keys(CARRIER_LABEL) as CarrierType[]).map((k) => ({ value: k, label: CARRIER_LABEL[k] }))} />
+      {ct !== 'own' && (
+        <>
+          <div className="row" style={{ marginTop: 6 }}>
+            <input placeholder={ct === 'hired' ? '용차 업체·기사' : '화주 쪽 업체·기사 (모르면 비움)'} value={o.carrier_name ?? ''} onChange={(e) => set({ carrier_name: e.target.value })} />
+            <input placeholder="차량번호" style={{ width: 130 }} value={o.carrier_vehicle ?? ''} onChange={(e) => set({ carrier_vehicle: e.target.value })} />
+          </div>
+          <input type="tel" placeholder="연락처" style={{ marginTop: 6 }} value={o.carrier_phone ?? ''} onChange={(e) => set({ carrier_phone: e.target.value })} />
+          <div className="muted small" style={{ marginTop: 4 }}>{ct === 'hired' ? '외부 차량이라 배차 대기로 세지 않고 "용차·화주배차"에 따로 모입니다.' : '화주가 직접 차를 보내는 건입니다. 배차 대기로 세지 않습니다.'}</div>
+        </>
+      )}
+      {isLoad && (
+        <>
+          <div className="muted small" style={{ marginTop: 10 }}>선적</div>
+          <Seg value={o.shipment ?? 'vehicle'} onChange={(v: Shipment) => set(v === 'bulk' ? { shipment: v, same_day: false } : { shipment: v })}
+            options={[{ value: 'vehicle', label: '차량째 선적' }, { value: 'bulk', label: '벌크 (화물만)' }]} />
+          {bulk && <div className="muted small" style={{ marginTop: 4 }}>차량은 배를 타지 않고 남습니다. 반대편 하차는 <b>차량 없이</b> 들어가 도착지에서 다시 배차합니다.</div>}
+          <div className="muted small" style={{ marginTop: 10 }}>반대편 하차 날짜</div>
+          <div className="seg">
+            {([null, 0, 1, 2] as (number | null)[]).map((v) => (
+              <button key={String(v)} type="button" disabled={!!o.same_day}
+                className={(o.arrival_offset ?? null) === v && !o.same_day ? 'on' : ''}
+                onClick={() => set({ arrival_offset: v })}>
+                {v === null ? `기본 +${shipDays}일` : v === 0 ? '같은 날' : `+${v}일`}
+              </button>
+            ))}
+          </div>
+          <div className="muted small" style={{ marginTop: 4 }}>선박·벌크 마감으로 다음 배를 타면 +1일 더 늦게 고르세요.</div>
+          {!bulk && ct === 'own' && (
+            <label className="row" style={{ cursor: 'pointer', minHeight: 44, marginTop: 6 }}>
+              <input type="checkbox" checked={!!o.same_day} onChange={(e) => set({ same_day: e.target.checked })} style={{ width: 24, minHeight: 24 }} />
+              <span>당일 왕복 <span className="muted small">(차량이 올라가 상차하고 같은 날 돌아옴)</span></span>
+            </label>
+          )}
+        </>
+      )}
     </div>
   );
 }

@@ -8,7 +8,7 @@ import { store } from '../data/store.ts';
 import { useRole } from './hooks.ts';
 import { ZONE_LABEL, driverName, shipText, vehicleNo } from './labels.ts';
 import { OrderSheet, QuickQtySheet } from './OrderSheet.tsx';
-import { usePickers } from './pickers.tsx';
+import { EXTERNAL_HIRED, EXTERNAL_SHIPPER, usePickers } from './pickers.tsx';
 import { Sheet, useSheet } from './Sheet.tsx';
 
 export function useBoardActions(date: string, board: Board, onFocusVehicle?: (vehicleId: string) => void) {
@@ -124,7 +124,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
       <>
         <div><b>{row.vehicle.plate}</b> · {row.vehicle.vehicle_type} · {row.vehicle.ownership}</div>
         <div>위치: {row.zone ? ZONE_LABEL[row.zone] : '미정'}</div>
-        <div>기사: {driverName(snap, row.driverId) || '기사 미지정'} {row.vehicle.default_driver_id && <span className="muted">(기본 {driverName(snap, row.vehicle.default_driver_id)})</span>}</div>
+        <div>기사: {driverName(snap, row.driverId) || '기사 미지정'}</div>
         {row.driverId && <div>근무형태: {workLogOf(snap, row.driverId, date)?.work_types.join(', ') || <span className="muted">미입력</span>}</div>}
         {row.inRepair && <div style={{ color: 'var(--red)' }}>수리 중 {row.statusMemo}</div>}
       </>,
@@ -142,8 +142,14 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
   const assign = async (o: DailyOrder) => {
     if (!staff) return;
     const b = buildBoard(store.getState().snap, date);
-    const vid = await pick.vehicle(b, o.zone);
+    const vid = await pick.vehicle(b, o.zone, true);
     if (!vid) return;
+    if (vid === EXTERNAL_HIRED || vid === EXTERNAL_SHIPPER) {
+      // 용차·화주배차: 업체·차량번호·연락처를 바로 적도록 수정 화면을 연다
+      store.run((tx) => saveOrder(tx, { ...o, vehicle_id: null, carrier_type: vid === EXTERNAL_HIRED ? 'hired' : 'shipper' }));
+      openOrder(o, true);
+      return;
+    }
     const row = board.rows.find((r) => r.vehicle.id === vid);
     if (row?.inRepair && !confirm(`${row.vehicle.short_no} 차량은 수리 중입니다. 그래도 배차할까요?`)) return;
     store.run((tx) => assignVehicle(tx, o.id, vid, row?.driverId ?? null));

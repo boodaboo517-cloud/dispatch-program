@@ -1,17 +1,17 @@
 // PC 넓은 표: 하차일정 | 상차일정, 차량 기준 같은 줄, 차량별 빨간 구분선, 4글자 축약 + 클릭 시 전체 보기
 import { useState } from 'react';
-import { abbrev, assignVehicle, type BoardRow, type DailyOrder, type Zone } from '../../domain/index.ts';
+import { abbrev, assignVehicle, isExternal, type BoardRow, type DailyOrder, type Zone } from '../../domain/index.ts';
 import { store } from '../../data/store.ts';
 import { useRole, useSnap } from '../../ui/hooks.ts';
 import { Cell } from '../../ui/Cell.tsx';
 import { clientName, driverName, productName, qtyText } from '../../ui/labels.ts';
 import type { useBoardActions } from '../../ui/useBoardActions.tsx';
-import { OrderMarks, ShipCellText, StatusChip } from './parts.tsx';
+import { CarrierText, OrderMarks, ShipCellText, StatusChip } from './parts.tsx';
 
 type Actions = ReturnType<typeof useBoardActions>;
 const FIELDS = ['업체명', '지역', '품목', '수량', '비고'] as const;
 
-export function PcBoard(p: { zone: Zone; rows: BoardRow[]; waiting: DailyOrder[]; actions: Actions; focus: string | null }) {
+export function PcBoard(p: { zone: Zone; rows: BoardRow[]; waiting: DailyOrder[]; external?: DailyOrder[]; actions: Actions; focus: string | null }) {
   const { staff } = useRole();
   const left = p.zone === 'land' ? '하차일정' : '오전';
   const right = p.zone === 'land' ? '상차일정' : '오후';
@@ -35,6 +35,7 @@ export function PcBoard(p: { zone: Zone; rows: BoardRow[]; waiting: DailyOrder[]
       </thead>
       {p.rows.map((r) => <VehicleGroup key={r.vehicle.id} row={r} zone={p.zone} a={p.actions} staff={staff} focus={p.focus} />)}
       {p.waiting.map((o) => <WaitingGroup key={o.id} o={o} a={p.actions} />)}
+      {p.external?.map((o) => <WaitingGroup key={o.id} o={o} a={p.actions} />)}
     </table>
   );
 }
@@ -155,15 +156,19 @@ function WaitingGroup({ o, a }: { o: DailyOrder; a: Actions }) {
   const snap = useSnap();
   const { staff } = useRole();
   const isLoad = o.kind === 'load';
-  const yellow = <td><Cell className="yellow" onTap={() => a.assign(o)}>{staff ? '배차' : ''}</Cell></td>;
+  const ext = isExternal(o);
+  const vcell = ext
+    ? <Cell className="ext" onTap={() => a.openOrder(o, staff)}><CarrierText o={o} /></Cell>
+    : <Cell className="yellow" onTap={() => a.assign(o)}>{staff ? '배차' : ''}</Cell>;
+  const yellow = <td>{!isLoad && vcell}</td>;
   return (
-    <tbody className="vgroup waiting" id={`row-${o.id}`}>
+    <tbody className={`vgroup ${ext ? 'external' : 'waiting'}`} id={`row-${o.id}`}>
       <tr>
         <td>{!isLoad && <Cell className="ship" onTap={() => a.editWaitingShip(o)}><ShipCellText snap={snap} ship={o.arrival_ship} tag={o.arrival_ship_tag} /></Cell>}</td>
         {yellow}
         <td />
         {isLoad ? <EmptyFields /> : <OrderFields o={o} a={a} staff={staff} />}
-        <td className="sep">{isLoad && <Cell className="yellow" onTap={() => a.assign(o)}>{staff ? '배차' : ''}</Cell>}</td>
+        <td className="sep">{isLoad && vcell}</td>
         <td />
         {isLoad ? <OrderFields o={o} a={a} staff={staff} /> : <EmptyFields />}
         <td>{isLoad && <Cell className="ship" onTap={() => a.editWaitingShip(o)}><ShipCellText snap={snap} ship={o.departure_ship} tag={o.departure_ship_tag} /></Cell>}</td>

@@ -79,6 +79,7 @@ export function SchedulePage({ readOnlyHeader }: { readOnlyHeader?: boolean } = 
     return base;
   }, [board, zone, filter]);
   const waiting = zone ? board.waiting[zone] : [];
+  const external = zone && filter !== 'waiting' ? board.external[zone] : [];
   const s = board.summary;
   const linkPending = board.rows.filter((r) => r.linkPending || r.shipPending).length;
   const Chip = (p: { on: boolean; onClick: () => void; children: React.ReactNode; cls?: string }) => (
@@ -108,6 +109,7 @@ export function SchedulePage({ readOnlyHeader }: { readOnlyHeader?: boolean } = 
         <Chip on={filter === 'repair'} cls={s.repair ? 'alert' : ''} onClick={() => setFilter(filter === 'repair' ? 'all' : 'repair')}>수리 {s.repair}</Chip>
         <Chip on={filter === 'waiting'} cls={s.waiting ? 'warn' : ''} onClick={() => setFilter(filter === 'waiting' ? 'all' : 'waiting')}>배차대기 {s.waiting}</Chip>
         <Chip on={tab === 'field'} onClick={() => update({ zone: 'field' })}>현장 {s.field}</Chip>
+        {s.external > 0 && <span className="chip">용차·화주 {s.external}</span>}
         {s.noDriver > 0 && <Chip on={filter === 'nodriver'} cls="alert" onClick={() => setFilter(filter === 'nodriver' ? 'all' : 'nodriver')}>기사 미지정 {s.noDriver}</Chip>}
         <span className="chip">하차 {s.unloads} · 상차 {s.loads}</span>
         {staff && zone && <button className={`chip${reorder ? ' on' : ''}`} onClick={() => setReorder(!reorder)}>↕ 줄 순서</button>}
@@ -119,8 +121,8 @@ export function SchedulePage({ readOnlyHeader }: { readOnlyHeader?: boolean } = 
       {staff && linkPending > 0 && <div className="banner yellow">원본 상차·전날 선박이 바뀐 줄 {linkPending}건 — "!" / "변경?" 표시를 눌러 반영 또는 무시하세요.</div>}
 
       {zone && (wide
-        ? (reorder ? <ReorderPanel rows={rows} onDone={() => setReorder(false)} /> : <PcBoard zone={zone} rows={rows} waiting={waiting} actions={actions} focus={focus} />)
-        : (reorder ? <ReorderPanel rows={rows} onDone={() => setReorder(false)} /> : <MobileBoard date={date} zone={zone} rows={rows} waiting={waiting} actions={actions} focus={focus} />))}
+        ? (reorder ? <ReorderPanel rows={rows} onDone={() => setReorder(false)} /> : <PcBoard zone={zone} rows={rows} waiting={waiting} external={external} actions={actions} focus={focus} />)
+        : (reorder ? <ReorderPanel rows={rows} onDone={() => setReorder(false)} /> : <MobileBoard date={date} zone={zone} rows={rows} waiting={waiting} external={external} actions={actions} focus={focus} />))}
       {tab === 'field' && <FieldTab date={date} />}
       {tab === 'waiting' && (
         <>

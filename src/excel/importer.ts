@@ -9,7 +9,7 @@ import { download, header, newWorkbook } from './common.ts';
 export const TEMPLATES: Record<string, string[]> = {
   거래처: ['거래처명*', '담당자', '연락처', '기본선박', '메모'],
   품목: ['거래처명*', '품목명*', '기본지역', '기본수량', '단위(대/파렛트/m/박스)', '보관(상온/냉장/냉동)', '상차지주소', '하차지주소', '주의사항', '계산방식(파렛트당/대당/금액직접)', '기본단가'],
-  차량: ['차량번호*', '뒤4자리', '차종*(5톤/통윙/통윙2냉/1톤/승용)', '구분(배차/업무용)', '소속(자차/개인)', '기본기사', '상태(운행/정비/휴차)', '현재위치(육지/제주)'],
+  차량: ['차량번호*', '뒤4자리', '차종*(5톤/통윙/통윙2냉/1톤/승용)', '구분(배차/업무용)', '소속(자차/개인)', '상태(운행/정비/휴차)', '현재위치(육지/제주)'],
   기사: ['이름*', '연락처', '근무요일(예: 월수금)', '근무조(월수금/화목일/월수/토요일/주말/알바/부산상주/서울상주)', '소속', '직원구분(기사/현장/사무)', '비고'],
   오더: ['날짜*(YYYY-MM-DD)', '구역*(육지/제주)', '구분*(하차/상차/오전/오후)', '거래처', '품목', '지역', '수량', '단위', '비고', '차량(뒤4자리)', '기사', '선박', '선박표시(아침/예약/야간)'],
 };
@@ -17,7 +17,7 @@ export const TEMPLATES: Record<string, string[]> = {
 const EXAMPLES: Record<string, (string | number)[]> = {
   거래처: ['도민물류', '홍길동', '010-0000-0000', '제이엘', ''],
   품목: ['도민물류', '감귤', '서귀포', 10, '파렛트', '상온', '', '', '', '파렛트당', 90000],
-  차량: ['제주90바9915', '9915', '통윙', '배차', '자차', '', '운행', '육지'],
+  차량: ['제주90바9915', '9915', '통윙', '배차', '자차', '운행', '육지'],
   기사: ['김기사', '010-0000-0000', '월수금', '월수금', '경민물류', '기사', '대형면허'],
   오더: ['2026-10-21', '육지', '상차', '도민물류', '감귤', '서귀포', 10, '파렛트', '', '9915', '', '제이엘', ''],
 };
@@ -157,23 +157,22 @@ export function planUpload(snap: Snapshot, data: Record<string, { line: number; 
   }
 
   for (const { line, v } of data['차량'] ?? []) {
-    const [plate, short, type, usage, own, drv, status, zone] = v;
+    const [plate, short, type, usage, own, status, zone] = v;
     const errors: string[] = [];
     if (!plate) errors.push('차량번호 없음');
     if (!TYPES.includes(type)) errors.push('차종 오류');
     if (zone && !['육지', '제주'].includes(zone)) errors.push('위치 오류');
-    if (drv && !findDriver(drv)) errors.push(`기사 "${drv}" 없음`);
     const cur = t.list('vehicles').find((x) => x.plate === plate);
     preview.push({ sheet: '차량', line, values: v, errors, action: errors.length ? '' : cur ? '수정' : '추가' });
     if (errors.length) continue;
     const row = {
       plate, short_no: short || plate.replace(/\D/g, '').slice(-4), vehicle_type: type as VehicleType,
       usage: (usage === '업무용' ? '업무용' : '배차') as '배차' | '업무용', ownership: (own === '개인' ? '개인' : '자차') as '자차' | '개인',
-      default_driver_id: findDriver(drv)?.id ?? null, status: (['운행', '정비', '휴차'].includes(status) ? status : '운행') as '운행',
+      status: (['운행', '정비', '휴차'].includes(status) ? status : '운행') as '운행',
       home_zone: (zone === '제주' ? 'jeju' : zone === '육지' ? 'land' : null) as Zone | null,
     };
     if (cur) t.update('vehicles', cur.id, row);
-    else t.insert('vehicles', { id: newId(), ...row, sort_order: t.list('vehicles').length, oil_interval_km: null });
+    else t.insert('vehicles', { id: newId(), ...row, default_driver_id: null, sort_order: t.list('vehicles').length, oil_interval_km: null });
   }
 
   for (const { line, v } of data['오더'] ?? []) {

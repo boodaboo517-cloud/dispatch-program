@@ -2,6 +2,7 @@
 import { addDays } from './dates.ts';
 import { newId } from './ids.ts';
 import { findShip } from './ships.ts';
+import { CARRIER_LABEL } from './types.ts';
 import type { Tx } from './tx.ts';
 import type {
   DailyOrder, OrderSnapshot, ShipTag, VehicleDay, Zone, Kind, Snapshot,
@@ -37,6 +38,12 @@ export function blankOrder(p: { date: string; zone: Zone; kind: Kind } & Partial
     pickup_place: '',
     dropoff_place: '',
     same_day: false,
+    carrier_type: 'own',
+    carrier_name: '',
+    carrier_vehicle: '',
+    carrier_phone: '',
+    shipment: 'vehicle',
+    arrival_offset: null,
     ...p,
   };
 }
@@ -66,9 +73,22 @@ export function arrivalOffset(snap: Pick<Snapshot, 'ships'>, shipName: string | 
 }
 
 /** 상차 → 연결 하차로 복사되는 값 (기사는 복사하지 않음) */
+/** 상차 → 연결 하차까지 날 수: 당일 왕복 0, 직접 정한 값, 없으면 선박 설정(기본 1) */
+export function unloadDayOffset(snap: Pick<Snapshot, 'ships'>, load: DailyOrder): number {
+  if (load.same_day) return 0;
+  if (load.arrival_offset != null) return load.arrival_offset;
+  return arrivalOffset(snap, load.departure_ship);
+}
+
 export function linkedValues(tx: Tx, load: DailyOrder): OrderSnapshot {
+  // 벌크는 화물만 배를 타므로 도착지에서 차량을 다시 섭외 → 차량·운송업체 비움
+  const bulk = load.shipment === 'bulk';
   return {
-    vehicle_id: load.vehicle_id,
+    vehicle_id: bulk ? null : load.vehicle_id,
+    carrier_type: bulk ? 'own' : load.carrier_type ?? 'own',
+    carrier_name: bulk ? '' : load.carrier_name ?? '',
+    carrier_vehicle: bulk ? '' : load.carrier_vehicle ?? '',
+    carrier_phone: bulk ? '' : load.carrier_phone ?? '',
     client_id: load.client_id,
     client_text: load.client_text,
     product_id: load.product_id,
@@ -79,7 +99,7 @@ export function linkedValues(tx: Tx, load: DailyOrder): OrderSnapshot {
     memo: load.memo,
     arrival_ship: load.departure_ship,
     arrival_ship_tag: load.departure_ship_tag,
-    date: load.same_day ? load.date : addDays(load.date, arrivalOffset(tx.snap, load.departure_ship)),
+    date: addDays(load.date, unloadDayOffset(tx.snap, load)),
     pickup_place: load.pickup_place ?? '',
     dropoff_place: load.dropoff_place ?? '',
   };
@@ -88,13 +108,14 @@ export function linkedValues(tx: Tx, load: DailyOrder): OrderSnapshot {
 const SNAP_KEYS: (keyof OrderSnapshot)[] = [
   'vehicle_id', 'client_id', 'client_text', 'product_id', 'product_text', 'region',
   'quantity', 'unit', 'memo', 'arrival_ship', 'arrival_ship_tag', 'date', 'pickup_place', 'dropoff_place',
+  'carrier_type', 'carrier_name', 'carrier_vehicle', 'carrier_phone',
 ];
 
 function diffSnapshot(cur: DailyOrder, want: OrderSnapshot): Partial<OrderSnapshot> | null {
   const d: Partial<OrderSnapshot> = {};
   let any = false;
   for (const k of SNAP_KEYS) {
-    if ((cur[k] ?? '') !== (want[k] ?? '')) {
+    if ((cur[k] ?? (k === 'carrier_type' ? 'own' : '')) !== (want[k] ?? (k === 'carrier_type' ? 'own' : ''))) {
       (d as Record<string, unknown>)[k] = want[k];
       any = true;
     }
@@ -305,7 +326,8 @@ export function saveOrder(tx: Tx, order: DailyOrder, opts: { userEdit?: boolean 
   if (saved.vehicle_id) {
     const vd = placeVehicleDay(tx, saved);
     // 상차 선박을 차량 줄 출발 선박으로 (비어 있을 때만). 당일 왕복 상차는 그날 밤 위치를 바꾸지 않으므로 제외
-    if (vd && saved.kind === 'load' && saved.departure_ship && !vd.departure_ship && !saved.same_day) {
+    // 벌크는 차량이 배를 타지 않으므로 차량 줄 선박·위치에 영향 없음
+    if (vd && saved.kind === 'load' && saved.departure_ship && !vd.departure_ship && !saved.same_day && saved.shipment !== 'bulk') {
       tx.update('vehicle_days', vd.id, { departure_ship: saved.departure_ship, departure_ship_tag: saved.departure_ship_tag });
       syncShipCarryover(tx, vd.id);
     }
@@ -383,3 +405,18 @@ export function assignVehicle(tx: Tx, orderId: string, vehicleId: string | null,
   if (!o) return;
   saveOrder(tx, { ...o, vehicle_id: vehicleId, driver_id: driverId ?? o.driver_id });
 }
+
+/** 운송 방법 요약 (보기 화면·엑셀) */
+export function transportSummary(s: Pick<Snapshot, 'ships'>, o: DailyOrder): string {
+  const parts: string[] = [];
+  const ct = o.carrier_type ?? 'own';
+  if (ct !== 'own') parts.push([CARRIER_LABEL[ct], o.carrier_name, o.carrier_vehicle, o.carrier_phone].filter(Boolean).join(' '));
+  if (o.kind === 'load') {
+    if (o.shipment === 'bulk') parts.push('벌크(화물만 선적)');
+    if (o.same_day) parts.push('당일 왕복');
+    else if (o.arrival_offset != null) parts.push(`하차 ${o.arrival_offset === 0 ? '같은 날' : `${o.arrival_offset}일 뒤`}`);
+    else if (unloadDayOffset(s, o) !== 1) parts.push(`하차 ${unloadDayOffset(s, o)}일 뒤`);
+  }
+  return parts.join(' · ');
+}
+

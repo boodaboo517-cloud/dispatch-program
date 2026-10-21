@@ -54,8 +54,17 @@ export function DriverHome() {
   const board = useMemo(() => buildBoard(snap, date, idx), [snap, date, idx]);
   const tomorrow = useMemo(() => buildBoard(snap, addDays(date, 1), idx), [snap, date, idx]);
   const mine = (b: typeof board) => b.rows.filter((r) => r.driverId && r.driverId === driverId);
-  const myDefault = snap.vehicles.find((v) => v.default_driver_id === driverId && driverId);
-  const unassignedMine = board.rows.filter((r) => r.vehicle.id === myDefault?.id && !r.driverId && r.unloads.length + r.loads.length > 0);
+  // 주행거리 입력 차량: 기본 기사 지정이 없으므로 이 날 내가 배차된 차량, 없으면 최근에 탄 차량
+  const myVehicle = useMemo(() => {
+    if (!driverId) return undefined;
+    const today = mine(board)[0]?.vehicle;
+    if (today) return today;
+    const recent = snap.vehicle_days
+      .filter((v) => v.driver_id === driverId && v.date <= date)
+      .sort((a, b) => b.date.localeCompare(a.date))[0];
+    return snap.vehicles.find((v) => v.id === recent?.vehicle_id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snap, board, driverId, date]);
   const dispatcher = setting(snap, 'dispatcher_phone', '');
 
   useEffect(() => {
@@ -85,16 +94,15 @@ export function DriverHome() {
           <DateBar date={date} onChange={setDate} />
           {!driverId && <div className="banner yellow">이 계정에 기사가 연결되어 있지 않습니다. 관리자에게 "설정 → 사용자 권한"에서 연결을 요청하세요.</div>}
           {mine(board).map((r) => <DispatchCard key={r.vehicle.id} row={r} date={date} />)}
-          {unassignedMine.map((r) => <DispatchCard key={r.vehicle.id} row={r} date={date} title="내 기본 차량 · 기사 미지정 (배차 담당 확인 필요)" />)}
-          {driverId && !mine(board).length && !unassignedMine.length && <div className="card" style={{ textAlign: 'center' }}>이 날 배차가 없습니다</div>}
+          {driverId && !mine(board).length && <div className="card" style={{ textAlign: 'center' }}>이 날 배차가 없습니다</div>}
           {mine(tomorrow).map((r) => (
             <div key={r.vehicle.id} style={{ opacity: 0.8 }}><DispatchCard row={r} date={addDays(date, 1)} title="내일 배차 미리보기" /></div>
           ))}
-          {myDefault && (
+          {myVehicle && (
             <div className="card">
-              <b>내 차량 {myDefault.short_no} 주행거리 입력</b>
-              <OdometerInput vehicleId={myDefault.id} />
-              <div style={{ marginTop: 8 }}><OilBar v={myDefault} /></div>
+              <b>{myVehicle.short_no} 차량 주행거리 입력</b>
+              <OdometerInput vehicleId={myVehicle.id} />
+              <div style={{ marginTop: 8 }}><OilBar v={myVehicle} /></div>
             </div>
           )}
         </>

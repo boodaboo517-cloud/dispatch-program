@@ -1,7 +1,7 @@
 // 기존 "경민물류 일정표" 양식으로 내보내기 (하루 = 시트 1장). 엑셀에는 축약 없이 전체 내용.
 import type { Worksheet } from 'exceljs';
 import {
-  DAY_STATUS_LABEL, buildBoard, buildIndex, eachDay, isDriverWorking, sitesGrouped,
+  DAY_STATUS_LABEL, buildBoard, transportSummary, buildIndex, eachDay, isDriverWorking, sitesGrouped,
   type BoardRow, type DailyOrder, type Snapshot, type Zone,
 } from '../domain/index.ts';
 import { dayjs } from '../lib/time.ts';
@@ -13,10 +13,12 @@ const COLS = 16; // 상행선박 차량 기사 업체 지역 품목 수량 비�
 function orderVals(s: Snapshot, o: DailyOrder | undefined) {
   if (!o) return ['', '', '', '', ''];
   const places = o.pickup_place || o.dropoff_place ? `${o.pickup_place || ''}→${o.dropoff_place || ''}` : '';
-  return [clientName(s, o), o.region, productName(s, o), qtyText(o), [places, o.same_day ? '당일왕복' : '', o.memo].filter(Boolean).join(' ')];
+  const ext = o.carrier_type && o.carrier_type !== 'own' && o.vehicle_id ? transportSummary(s, o) : '';
+  const extra = o.kind === 'load' ? [o.shipment === 'bulk' ? '벌크' : '', o.same_day ? '당일왕복' : '', !o.same_day && o.arrival_offset != null ? `하차+${o.arrival_offset}일` : ''] : [];
+  return [clientName(s, o), o.region, productName(s, o), qtyText(o), [places, ...extra, ext, o.memo].filter(Boolean).join(' ')];
 }
 
-function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: BoardRow[], waiting: DailyOrder[]) {
+function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: BoardRow[], waiting: DailyOrder[], external: DailyOrder[] = []) {
   let r = start;
   const title = ws.getCell(r, 1);
   title.value = zone === 'land' ? '육지' : '제주';
@@ -61,8 +63,9 @@ function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: 
     boxBorder(ws, r, 1, r + n - 1, COLS);
     r += n;
   }
-  // 배차 대기: 차량번호 칸 비우고 노란 배경
-  for (const o of waiting) {
+  // 배차 대기: 차량번호 칸 비우고 노란 배경 / 용차·화주배차: 차량 칸에 업체·차량번호, 주황 배경
+  for (const o of [...waiting, ...external]) {
+    const ext = external.includes(o);
     const line = ws.getRow(r);
     const isLoad = o.kind === 'load';
     if (isLoad) {
@@ -72,8 +75,13 @@ function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: 
       orderVals(s, o).forEach((v, k) => (line.getCell(4 + k).value = v));
       line.getCell(1).value = shipText(o.arrival_ship, o.arrival_ship_tag);
     }
-    boxBorder(ws, r, 1, r, COLS, { style: 'medium', color: { argb: 'FFEAB308' } } as never);
-    fill(line.getCell(isLoad ? 9 : 2), YELLOW);
+    boxBorder(ws, r, 1, r, COLS, { style: 'medium', color: { argb: ext ? 'FFF97316' : 'FFEAB308' } } as never);
+    const vcell = line.getCell(isLoad ? 9 : 2);
+    if (ext) {
+      vcell.value = [o.carrier_type === 'shipper' ? '화주배차' : '용차', o.carrier_vehicle].filter(Boolean).join(' ');
+      line.getCell(isLoad ? 10 : 3).value = [o.carrier_name, o.carrier_phone].filter(Boolean).join(' ');
+      fill(vcell, 'FFFFEDD5');
+    } else fill(vcell, YELLOW);
     r++;
   }
   for (let i = start + 3; i < r; i++) {
@@ -112,8 +120,8 @@ export function fillDaySheet(ws: Worksheet, s: Snapshot, date: string) {
   ws.getCell(3, 1).font = { size: 10 };
 
   let r = 5;
-  r = zoneTable(ws, s, r, 'land', board.land, board.waiting.land);
-  r = zoneTable(ws, s, r, 'jeju', board.jeju, board.waiting.jeju);
+  r = zoneTable(ws, s, r, 'land', board.land, board.waiting.land, board.external.land);
+  r = zoneTable(ws, s, r, 'jeju', board.jeju, board.waiting.jeju, board.external.jeju);
 
   // 하단: 현장근무
   const { groups, off } = sitesGrouped(s, board.field);

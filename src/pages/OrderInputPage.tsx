@@ -9,7 +9,7 @@ import { store } from '../data/store.ts';
 import { fmtDate, seoulToday } from '../lib/time.ts';
 import { useSnap } from '../ui/hooks.ts';
 import { arrivalShipLabel, clientName, departureShipLabel, driverName, kindLabel, productName, shipText, vehicleNo } from '../ui/labels.ts';
-import { PlaceFields, defaultPlaces } from '../ui/OrderSheet.tsx';
+import { PlaceFields, TransportFields, defaultPlaces } from '../ui/OrderSheet.tsx';
 import { QtyInput } from '../ui/QtyInput.tsx';
 import { Seg, WeekdayChips } from '../ui/Picker.tsx';
 import { usePickers } from '../ui/pickers.tsx';
@@ -56,7 +56,7 @@ export function OrderInputPage() {
       store.toast(`매주 반복 등록 · ${res.created}건 생성`);
     } else {
       store.run((tx) => createOrder(tx, o));
-      store.toast(!isLoad ? '저장' : o.same_day ? '저장 · 당일 왕복: 반대 지역 하차도 같은 날짜로 자동 입력' : '저장 · 다음 날 반대 지역 하차도 자동 입력');
+      store.toast(!isLoad ? '저장' : `저장 · 반대 지역 하차도 ${o.same_day || o.arrival_offset === 0 ? '같은 날' : o.arrival_offset ? `${o.arrival_offset}일 뒤` : '다음 날'} 자동 입력${o.shipment === 'bulk' ? ' (벌크: 차량 없이 → 도착지에서 배차)' : ''}`);
     }
     nav(`/?date=${o.date}&zone=${o.zone}&focus=${o.id}`);
   };
@@ -86,14 +86,9 @@ export function OrderInputPage() {
       <div className="field"><span className="muted small">수량 (숫자 뒤에 단위를 써도 됩니다: 10파렛트, 3대, 5박스)</span>
         <QtyInput quantity={o.quantity} unit={o.unit} onChange={(quantity, unit) => set({ quantity, unit })} />
       </div>
-      {isLoad && (
-        <label className="card row" style={{ cursor: 'pointer' }}>
-          <input type="checkbox" checked={!!o.same_day} onChange={(e) => set({ same_day: e.target.checked })} style={{ width: 28, minHeight: 28 }} />
-          <span className="grow"><b>당일 왕복</b><br /><span className="muted small">{o.zone === 'land' ? '제주 차량이 올라와 상차하고 같은 날 내려감 → 제주 하차도 같은 날짜' : '육지 차량이 내려와 상차하고 같은 날 올라감 → 육지 하차도 같은 날짜'}</span></span>
-        </label>
-      )}
+      <TransportFields o={o} set={set} />
       <p className="muted">차량·기사·선박은 나중에 지정해도 됩니다 (비우면 배차 대기)</p>
-      <Row k="차량" v={vehicleNo(snap, o.vehicle_id)} ph="나중에 배차" onClick={async () => { const v = await pick.vehicle(buildBoard(snap, o.date), o.zone); if (v) set({ vehicle_id: v }); }} />
+      {(o.carrier_type ?? 'own') === 'own' && <Row k="차량" v={vehicleNo(snap, o.vehicle_id)} ph="나중에 배차" onClick={async () => { const v = await pick.vehicle(buildBoard(snap, o.date), o.zone); if (v) set({ vehicle_id: v }); }} />}
       <Row k="기사" v={driverName(snap, o.driver_id)} ph="나중에" onClick={async () => { const d = await pick.driver(o.date, o.driver_id); if (d !== undefined) set({ driver_id: d }); }} />
       <Row
         k={isLoad ? departureShipLabel(o.zone) : arrivalShipLabel(o.zone)}
@@ -110,7 +105,7 @@ export function OrderInputPage() {
         <span className="grow"><b>매주 반복으로 등록</b><br /><span className="muted">{fmtDate(o.date)}부터 앞으로 8주 자동 입력</span></span>
       </label>
       {repeat && <WeekdayChips value={weekdays} onChange={(v) => setWeekdays(v as Weekday[])} />}
-      {isLoad && <div className="banner blue">상차를 저장하면 {o.same_day ? '같은 날' : '다음 날'} {o.zone === 'land' ? '제주 오전 하차' : '육지 하차'}에 자동으로 들어갑니다 (기사는 비워 둠).</div>}
+      {isLoad && <div className="banner blue">상차를 저장하면 반대편 {o.zone === 'land' ? '제주 오전 하차' : '육지 하차'}에 자동으로 들어갑니다 (기사는 비워 둠{o.shipment === 'bulk' ? ', 벌크라 차량도 비워 둠' : ''}).</div>}
       <div className="row" style={{ marginTop: 16 }}>
         <button className="grow" onClick={() => nav(-1)}>취소</button>
         <button className="grow primary" onClick={save}>저장</button>

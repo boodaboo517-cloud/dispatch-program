@@ -71,7 +71,6 @@ function VehicleSheet({ v, close }: { v: Vehicle; close: () => void }) {
       <Editable label="차종" value={cur.vehicle_type} options={TYPES.map((t) => ({ value: t, label: t }))} onSave={s('vehicle_type')} />
       <Editable label="구분" value={cur.usage} options={[{ value: '배차', label: '배차' }, { value: '업무용', label: '업무용 (현장근무 지급)' }]} onSave={s('usage')} />
       <Editable label="소속" value={cur.ownership} options={[{ value: '자차', label: '자차' }, { value: '개인', label: '개인(용차)' }]} onSave={s('ownership')} />
-      <Editable label="기본 기사" value={cur.default_driver_id ?? ''} options={[{ value: '', label: '-' }, ...snap.drivers.map((d) => ({ value: d.id, label: d.name }))]} onSave={(x) => save({ default_driver_id: x || null })} />
       <Editable label="상태" value={cur.status} options={['운행', '정비', '휴차'].map((t) => ({ value: t, label: t }))} onSave={s('status')} />
       <Editable label="현재 위치" value={cur.home_zone ?? ''} options={[{ value: '', label: '미정' }, { value: 'land', label: '육지' }, { value: 'jeju', label: '제주' }]} onSave={(x) => save({ home_zone: (x || null) as Vehicle['home_zone'] })} />
       <Editable label="오일 주기 km" value={cur.oil_interval_km} type="number" placeholder="기본값 사용" onSave={s('oil_interval_km', true)} />
@@ -151,7 +150,7 @@ export function FleetPage() {
                   <span className="grow muted">{v.plate} · {v.vehicle_type} · {v.usage} · {v.ownership}</span>
                   <span className={`badge ${status === '운행' ? 'ok' : status === '정비' ? 'red' : 'warn'}`}>{status}</span>
                 </div>
-                <div className="muted small">기본 기사 {driverName(snap, v.default_driver_id) || '-'} · 등록 위치 {v.home_zone ? ZONE_LABEL[v.home_zone] : '미정'}{repair ? ` · ${repair.kind} ${repair.shop}` : ''}</div>
+                <div className="muted small">등록 위치 {v.home_zone ? ZONE_LABEL[v.home_zone] : '미정'}{repair ? ` · ${repair.kind} ${repair.shop}` : ''}</div>
                 {v.usage === '배차' && <OilBar v={v} />}
               </div>
             );

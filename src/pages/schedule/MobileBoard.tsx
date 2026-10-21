@@ -2,11 +2,12 @@ import type { BoardRow, DailyOrder, Zone } from '../../domain/index.ts';
 import { useRole, useSnap } from '../../ui/hooks.ts';
 import { Cell } from '../../ui/Cell.tsx';
 import type { useBoardActions } from '../../ui/useBoardActions.tsx';
-import { OrderCellText, OrderMarks, ShipCellText, StatusChip, VehicleCellText } from './parts.tsx';
+import { isExternal } from '../../domain/index.ts';
+import { CarrierText, OrderCellText, OrderMarks, ShipCellText, StatusChip, VehicleCellText } from './parts.tsx';
 
 type Actions = ReturnType<typeof useBoardActions>;
 
-export function MobileBoard(p: { date: string; zone: Zone; rows: BoardRow[]; waiting: DailyOrder[]; actions: Actions; focus: string | null }) {
+export function MobileBoard(p: { date: string; zone: Zone; rows: BoardRow[]; waiting: DailyOrder[]; external?: DailyOrder[]; actions: Actions; focus: string | null }) {
   const { zone, actions: a } = p;
   const L = zone === 'land' ? ['상행', '차량', '하차', '상차', '하행'] : ['도착', '차량', '오전', '오후', '오후선박'];
   return (
@@ -17,6 +18,12 @@ export function MobileBoard(p: { date: string; zone: Zone; rows: BoardRow[]; wai
         <>
           <div className="group-label">배차 대기 {p.waiting.length}건 · 노란 칸을 눌러 배차</div>
           {p.waiting.map((o) => <WaitingRow key={o.id} o={o} a={a} />)}
+        </>
+      )}
+      {!!p.external?.length && (
+        <>
+          <div className="group-label" style={{ color: '#9a3412' }}>용차·화주배차 {p.external.length}건</div>
+          {p.external.map((o) => <WaitingRow key={o.id} o={o} a={a} />)}
         </>
       )}
     </div>
@@ -84,11 +91,15 @@ function WaitingRow({ o, a }: { o: DailyOrder; a: Actions }) {
     </Cell>
   );
   return (
-    <div className="vrow waiting" id={`row-${o.id}`}>
+    <div className={`vrow ${isExternal(o) ? 'external' : 'waiting'}`} id={`row-${o.id}`}>
       <div className="col">
         {!isLoad && <Cell className="ship" onTap={() => a.editWaitingShip(o)}><ShipCellText snap={snap} ship={o.arrival_ship} tag={o.arrival_ship_tag} /></Cell>}
       </div>
-      <div className="col"><Cell className="yellow" onTap={() => a.assign(o)}>{staff ? '배차' : ''}</Cell></div>
+      <div className="col">
+        {isExternal(o)
+          ? <Cell className="ext" onTap={() => a.openOrder(o, staff)}><CarrierText o={o} /></Cell>
+          : <Cell className="yellow" onTap={() => a.assign(o)}>{staff ? '배차' : ''}</Cell>}
+      </div>
       <div className="col">{!isLoad && cell}</div>
       <div className="col">{isLoad && cell}</div>
       <div className="col">

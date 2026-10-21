@@ -18,6 +18,10 @@ do $$ begin
   assert (select updated_by from daily_orders where id = '33333333-3333-4333-8333-333333333333') = '11111111-1111-4111-8111-111111111111', 'updated_by recorded';
 end $$;
 update daily_orders set departure_ship = '제이엘' where id = '33333333-3333-4333-8333-333333333333';
+-- 기본 기사 대신 일정표에서 배차된 차량 (그 차량 주행거리는 기사가 입력 가능)
+delete from vehicle_days where date = (now() at time zone 'Asia/Seoul')::date and vehicle_id = '00000000-0000-4000-8000-000300000001';
+insert into vehicle_days (date, vehicle_id, zone, driver_id)
+  values ((now() at time zone 'Asia/Seoul')::date, '00000000-0000-4000-8000-000300000001', 'land', '00000000-0000-4000-8000-000200000001');
 
 -- 기사(조회): 읽기 O, 금액 X, 쓰기 X
 select set_config('request.jwt.claim.sub', '22222222-2222-4222-8222-222222222222', true);
@@ -43,7 +47,14 @@ do $$ begin
   exception when insufficient_privilege then null;
   end;
 end $$;
--- 본인 차량 주행거리는 입력 가능
+-- 배차된 차량 주행거리는 입력 가능, 다른 차량은 불가
+do $$ begin
+  begin
+    insert into odometer_logs (vehicle_id, date, km) values ('00000000-0000-4000-8000-000300000004', current_date, 1);
+    raise exception 'driver odometer for unassigned vehicle should fail';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
 insert into odometer_logs (vehicle_id, date, km) values ('00000000-0000-4000-8000-000300000001', current_date, 120000);
 
 reset role;

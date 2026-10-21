@@ -41,22 +41,23 @@ export function seedSnapshot(): Snapshot {
   }));
   const driver = (name: string) => s.drivers.find((d) => d.name === name)!.id;
 
-  type V = [string, string, Snapshot['vehicles'][number]['vehicle_type'], '배차' | '업무용', 'land' | 'jeju' | null, string | null];
+  // 기사는 매일 일정표에서 지정한다 (차량 기본 기사 없음)
+  type V = [string, string, Snapshot['vehicles'][number]['vehicle_type'], '배차' | '업무용', 'land' | 'jeju' | null];
   const vehicles: V[] = [
-    ['제주90바9915', '9915', '통윙', '배차', 'land', '기사(9915)'],
-    ['제주90바9914', '9914', '통윙', '배차', 'jeju', '기사(9914)'],
-    ['제주90바8948', '8948', '통윙2냉', '배차', 'jeju', '기사(8948)'],
-    ['제주90바8953', '8953', '5톤', '배차', 'land', '기사(8953)'],
-    ['1전7693', '7693', '1톤', '업무용', 'jeju', null],
-    ['1톤6899', '6899', '1톤', '업무용', 'jeju', null],
-    ['1전5521', '5521', '1톤', '업무용', 'jeju', null],
-    ['1톤7956', '7956', '1톤', '업무용', 'jeju', null],
-    ['K5 7694', '7694', '승용', '업무용', 'land', null],
-    ['QM 0160', '0160', '승용', '업무용', 'land', null],
+    ['제주90바9915', '9915', '통윙', '배차', 'land'],
+    ['제주90바9914', '9914', '통윙', '배차', 'jeju'],
+    ['제주90바8948', '8948', '통윙2냉', '배차', 'jeju'],
+    ['제주90바8953', '8953', '5톤', '배차', 'land'],
+    ['1전7693', '7693', '1톤', '업무용', 'jeju'],
+    ['1톤6899', '6899', '1톤', '업무용', 'jeju'],
+    ['1전5521', '5521', '1톤', '업무용', 'jeju'],
+    ['1톤7956', '7956', '1톤', '업무용', 'jeju'],
+    ['K5 7694', '7694', '승용', '업무용', 'land'],
+    ['QM 0160', '0160', '승용', '업무용', 'land'],
   ];
-  s.vehicles = vehicles.map(([plate, short_no, vehicle_type, usage, home_zone, drv], i) => ({
+  s.vehicles = vehicles.map(([plate, short_no, vehicle_type, usage, home_zone], i) => ({
     id: sid(3, i + 1), plate, short_no, vehicle_type, usage, ownership: '자차', home_zone,
-    default_driver_id: drv ? driver(drv) : null, status: '운행', sort_order: i, oil_interval_km: null,
+    default_driver_id: null, status: '운행', sort_order: i, oil_interval_km: null,
   }));
   const vehicle = (short: string) => s.vehicles.find((v) => v.short_no === short)!.id;
 

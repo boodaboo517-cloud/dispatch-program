@@ -56,3 +56,21 @@ export function shipChoices(ships: Ship[], zone: Zone | null, which: 'arrival' |
   }
   return out.sort((a, b) => (a.time || '99').localeCompare(b.time || '99') || a.label.localeCompare(b.label, 'ko'));
 }
+
+/**
+ * 선박 표시 글자: 기본 표시(아침/예약/야간) + 예약해 준 업체.
+ * 예) ('야간', '대한물류') → "야간 · 대한물류 예약", ('', '대한물류') → "대한물류 예약"
+ */
+export function composeShipTag(base: string, booker: string): string {
+  const b = booker.trim();
+  if (!b) return base;
+  const head = base && base !== '예약' ? `${base} · ` : '';
+  return `${head}${b} 예약`;
+}
+
+export function splitShipTag(tag: string | null | undefined): { base: string; booker: string } {
+  if (!tag) return { base: '', booker: '' };
+  const m = /^(?:(.+?) · )?(.+) 예약$/.exec(tag);
+  if (m && m[2] !== '') return { base: m[1] ?? '', booker: m[2] };
+  return { base: tag, booker: '' };
+}

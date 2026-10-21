@@ -4,8 +4,15 @@ export type Zone = 'land' | 'jeju';
 /** 육지: unload=하차 / load=상차, 제주: unload=오전(하차) / load=오후(상차) */
 export type Kind = 'unload' | 'load';
 export type Unit = '대' | '파렛트' | 'm' | '박스' | '';
-/** 선박 칸에 붙는 표시 ("아침 마린", "제주로지 예약" 등) */
-export type ShipTag = '' | '아침' | '예약' | '야간';
+/** 선박 칸에 붙는 표시 ("아침 마린", "야간", "대한물류 예약" 처럼 예약해 준 업체 이름도 들어갈 수 있음) */
+export type ShipTag = string;
+export const SHIP_TAG_PRESETS = ['아침', '예약', '야간'] as const;
+
+/** 운송 방법: 직영 차량 / 용차(외부 차량) / 화주가 직접 배차 */
+export type CarrierType = 'own' | 'hired' | 'shipper';
+export const CARRIER_LABEL: Record<CarrierType, string> = { own: '직영', hired: '용차', shipper: '화주배차' };
+/** 선적 방법: 차량째 선적 / 벌크(화물만 선적 → 도착지에서 다시 배차) */
+export type Shipment = 'vehicle' | 'bulk';
 export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0=일 … 6=토
 export type Role = 'admin' | 'dispatcher' | 'viewer';
 export type VehicleType = '5톤' | '통윙' | '통윙2냉' | '1톤' | '승용';
@@ -76,6 +83,7 @@ export interface Vehicle extends Base {
   vehicle_type: VehicleType;
   usage: VehicleUsage;
   ownership: Ownership;
+  /** 더 이상 쓰지 않음 (기사는 매일 일정표에서 지정) — 기존 데이터 호환용 */
   default_driver_id: string | null;
   status: VehicleStatus;
   home_zone: Zone | null; // 처음 등록 시 현재 위치 (null = 위치 미정)
@@ -147,6 +155,10 @@ export interface OrderSnapshot {
   date: string;
   pickup_place?: string;
   dropoff_place?: string;
+  carrier_type?: CarrierType;
+  carrier_name?: string;
+  carrier_vehicle?: string;
+  carrier_phone?: string;
 }
 
 export interface DailyOrder extends Base {
@@ -183,6 +195,15 @@ export interface DailyOrder extends Base {
   dropoff_place?: string;
   /** 당일 왕복: 올라가서 상차하고 같은 날 내려옴 → 연결 하차가 같은 날짜, 차량 위치는 안 바뀜 */
   same_day?: boolean;
+  /** 직영 / 용차 / 화주배차. 용차·화주배차는 차량번호 없이 아래 글자로 표시하고 배차 대기로 세지 않는다 */
+  carrier_type?: CarrierType;
+  carrier_name?: string;
+  carrier_vehicle?: string;
+  carrier_phone?: string;
+  /** 차량째 선적 / 벌크. 벌크는 차량이 배를 타지 않으므로 반대편 하차를 차량 없이 만든다 */
+  shipment?: Shipment;
+  /** 연결 하차까지 걸리는 날 (비우면 선박 설정, 마감으로 다음 배를 타면 +1) */
+  arrival_offset?: number | null;
 }
 
 /** 차량별 하루 한 줄 — 선박·상태·기사 등 차량 단위 정보 */

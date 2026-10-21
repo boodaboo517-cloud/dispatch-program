@@ -1,4 +1,4 @@
-import { DAY_STATUS_LABEL, WORK_TYPE_SHORT, abbrev, parseShip, workLogOf, type BoardRow, type DailyOrder, type Snapshot } from '../../domain/index.ts';
+import { CARRIER_LABEL, DAY_STATUS_LABEL, WORK_TYPE_SHORT, abbrev, parseShip, workLogOf, type BoardRow, type DailyOrder, type Snapshot } from '../../domain/index.ts';
 import { clientName, driverName, productName, productOf, qtyText, shipTimeOf } from '../../ui/labels.ts';
 
 export function hasMoney(snap: Snapshot, o: DailyOrder) {
@@ -9,9 +9,15 @@ export function OrderMarks({ snap, o, staff }: { snap: Snapshot; o: DailyOrder; 
   const p = productOf(snap, o);
   const noMoney = staff && o.source !== 'linked' && !hasMoney(snap, o);
   const cold = p && p.storage !== 'ambient';
-  if (!cold && !o.linked_from_id && o.link_status !== 'source_changed' && !noMoney) return null;
+  const ext = o.carrier_type && o.carrier_type !== 'own';
+  const bulk = o.kind === 'load' && o.shipment === 'bulk';
+  const late = o.kind === 'load' && !o.same_day && o.arrival_offset != null && o.arrival_offset > 1;
+  if (!cold && !o.linked_from_id && o.link_status !== 'source_changed' && !noMoney && !ext && !bulk && !late) return null;
   return (
     <span className="marks">
+      {ext && <span className="mk ext" title={CARRIER_LABEL[o.carrier_type!]}>{o.carrier_type === 'hired' ? '용차' : '화주'}</span>}
+      {bulk && <span className="mk bulk" title="벌크 (화물만 선적)">벌크</span>}
+      {late && <span className="mk warn" title="반대편 하차가 늦게 도착">+{o.arrival_offset}일</span>}
       {p && p.storage !== 'ambient' && <span className={`dot ${p.storage}`} title={p.storage === 'chilled' ? '냉장' : '냉동'} />}
       {o.linked_from_id && <span className="mk link" title="상차와 연결됨">🔗</span>}
       {o.link_status === 'source_changed' && <span className="mk warn">!</span>}
@@ -25,6 +31,7 @@ export function OrderCellText({ snap, o }: { snap: Snapshot; o: DailyOrder }) {
     <>
       <div className="l1">{abbrev(clientName(snap, o)) || '·'}</div>
       <div className="l2">{abbrev(productName(snap, o))} {qtyText(o)}</div>
+      {o.kind === 'load' && o.shipment === 'bulk' && o.departure_ship && <div className="l2" style={{ color: '#075985' }}>🚢{abbrev(parseShip(o.departure_ship).name)}</div>}
       {o.memo && <div className="l2 muted">{abbrev(o.memo)}</div>}
     </>
   );
@@ -35,7 +42,7 @@ export function ShipCellText({ snap, ship, tag }: { snap: Snapshot; ship: string
   const { name, port } = parseShip(ship);
   return (
     <>
-      {tag && <span className="tag">{tag}</span>}
+      {tag && <span className="tag" title={tag}>{abbrev(tag, 6)}</span>}
       <span>{abbrev(name)}</span>
       {port && <span className="small" style={{ color: '#0369a1' }}>{abbrev(port, 3)}</span>}
       <span className="muted small">{shipTimeOf(snap, ship)}</span>
@@ -60,4 +67,16 @@ export function VehicleCellText({ snap, row, date }: { snap: Snapshot; row: Boar
 export function StatusChip({ row }: { row: BoardRow }) {
   if (!row.status || row.status === 'field') return null;
   return <span className={`st ${row.status}`}>{DAY_STATUS_LABEL[row.status]}</span>;
+}
+
+/** 용차·화주배차 칸: "용차 / 3456" */
+export function CarrierText({ o }: { o: DailyOrder }) {
+  const label = o.carrier_type === 'shipper' ? '화주배차' : '용차';
+  const veh = o.carrier_vehicle ? o.carrier_vehicle.replace(/\s/g, '').slice(-4) : '';
+  return (
+    <>
+      <span>{label}</span>
+      {(veh || o.carrier_name) && <span className="small">{veh || abbrev(o.carrier_name ?? '', 4)}</span>}
+    </>
+  );
 }

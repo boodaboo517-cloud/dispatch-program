@@ -46,11 +46,18 @@ function explicitZone(idx: Index, vehicleId: string, date: string): Zone | null 
   return os?.[0]?.zone ?? null;
 }
 
+/** 이 상차로 차량이 배를 타는지 */
+export const vehicleSails = (o: DailyOrder) => o.kind === 'load' && !!o.departure_ship && !o.same_day && o.shipment !== 'bulk';
+
+/** 용차·화주배차 오더 (직영 차량 배차 대상 아님) */
+export const isExternal = (o: DailyOrder) => !!o.carrier_type && o.carrier_type !== 'own';
+
 function departsOn(idx: Index, vehicleId: string, date: string): boolean {
   const vd = idx.vd.get(`${date}|${vehicleId}`);
   if (vd?.departure_ship) return true;
   // 당일 왕복 상차는 그날 밤 위치를 바꾸지 않는다
-  return (idx.ordersByVehicleDate.get(`${date}|${vehicleId}`) ?? []).some((o) => o.kind === 'load' && !!o.departure_ship && !o.same_day);
+  // 당일 왕복 상차, 벌크(화물만 선적) 상차는 그날 밤 차량 위치를 바꾸지 않는다
+  return (idx.ordersByVehicleDate.get(`${date}|${vehicleId}`) ?? []).some((o) => vehicleSails(o));
 }
 
 /**
@@ -101,12 +108,14 @@ export interface Board {
   land: BoardRow[];
   jeju: BoardRow[];
   waiting: { land: DailyOrder[]; jeju: DailyOrder[] };
+  /** 용차·화주배차 오더 */
+  external: { land: DailyOrder[]; jeju: DailyOrder[] };
   field: FieldAssignment[];
   fieldVehicleIds: Set<string>;
   unknownLocation: Vehicle[];
   summary: {
     land: number; jeju: number; empty: number; repair: number; field: number;
-    waiting: number; unloads: number; loads: number; registered: number; noDriver: number;
+    waiting: number; external: number; unloads: number; loads: number; registered: number; noDriver: number;
   };
 }
 
@@ -156,8 +165,8 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
       driverId,
       arrivalShip: vd?.arrival_ship ?? unloads.find((o) => o.arrival_ship)?.arrival_ship ?? null,
       arrivalTag: vd?.arrival_ship ? vd.arrival_ship_tag : unloads.find((o) => o.arrival_ship)?.arrival_ship_tag ?? '',
-      departureShip: vd?.departure_ship ?? loads.find((o) => o.departure_ship && !o.same_day)?.departure_ship ?? null,
-      departureTag: vd?.departure_ship ? vd.departure_ship_tag : loads.find((o) => o.departure_ship && !o.same_day)?.departure_ship_tag ?? '',
+      departureShip: vd?.departure_ship ?? loads.find(vehicleSails)?.departure_ship ?? null,
+      departureTag: vd?.departure_ship ? vd.departure_ship_tag : loads.find(vehicleSails)?.departure_ship_tag ?? '',
       status,
       statusMemo,
       inRepair: !!repair || v.status === '정비',
@@ -191,13 +200,14 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
     }
   }
 
+  const byShip = (a: DailyOrder, b: DailyOrder) =>
+    shipTime(snap, a.departure_ship ?? a.arrival_ship).localeCompare(shipTime(snap, b.departure_ship ?? b.arrival_ship)) || a.sort_order - b.sort_order;
+  const externalOf = (z: Zone) => dayOrders.filter((o) => o.zone === z && !o.vehicle_id && isExternal(o)).sort(byShip);
+  const external = { land: externalOf('land'), jeju: externalOf('jeju') };
   const waitingOf = (z: Zone) =>
     dayOrders
-      .filter((o) => o.zone === z && !o.vehicle_id)
-      .sort((a, b) =>
-        shipTime(snap, a.departure_ship ?? a.arrival_ship).localeCompare(shipTime(snap, b.departure_ship ?? b.arrival_ship)) ||
-        a.sort_order - b.sort_order,
-      );
+      .filter((o) => o.zone === z && !o.vehicle_id && !isExternal(o))
+      .sort(byShip);
   const waiting = { land: waitingOf('land'), jeju: waitingOf('jeju') };
   const land = rows.filter((r) => r.zone === 'land');
   const jeju = rows.filter((r) => r.zone === 'jeju');
@@ -208,6 +218,7 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
     land,
     jeju,
     waiting,
+    external,
     field,
     fieldVehicleIds,
     unknownLocation,
@@ -218,6 +229,7 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
       repair: main.filter((r) => r.status === 'repair').length,
       field: fieldVehicleIds.size,
       waiting: waiting.land.length + waiting.jeju.length,
+      external: external.land.length + external.jeju.length,
       unloads: dayOrders.filter((o) => o.kind === 'unload').length,
       loads: dayOrders.filter((o) => o.kind === 'load').length,
       registered: snap.vehicles.filter((v) => v.usage === '배차').length,

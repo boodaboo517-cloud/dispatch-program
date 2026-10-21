@@ -215,3 +215,9 @@ tr.err td { background: var(--red-soft); }
 .reorder-item.picked { background: #dbeafe; border-color: var(--blue); box-shadow: 0 0 0 3px #93c5fd; }
 .reorder-item.target { border-style: dashed; }
 .reorder-item .no { font-size: 20px; font-weight: 800; width: 64px; }
+
+.mk.ext { background: #ffedd5; color: #9a3412; }
+.mk.bulk { background: #e0f2fe; color: #075985; }
+.cell.ext { background: #ffedd5; color: #9a3412; font-weight: 700; align-items: center; text-align: center; font-size: 13px; }
+.vrow.external { border: 2px dashed #f97316; }
+.pc-table tbody.vgroup.external { border: 3px dashed #f97316; }

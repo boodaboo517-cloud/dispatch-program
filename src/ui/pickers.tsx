@@ -1,7 +1,7 @@
 // 빈칸 탭 → 그 칸에 맞는 등록 목록 (아래에서 올라오는 시트). 모두 Promise 로 결과를 돌려준다.
 import { useState } from 'react';
 import {
-  DAY_STATUS_LABEL, MAINTENANCE_KINDS, ON_CALL_SHIFT, addDays, shipChoices, isDriverWorking, newId, vehicleChoices,
+  DAY_STATUS_LABEL, MAINTENANCE_KINDS, ON_CALL_SHIFT, SHIP_TAG_PRESETS, addDays, composeShipTag, shipChoices, splitShipTag, isDriverWorking, newId, vehicleChoices,
   type Board, type DayStatus, type MaintenanceKind, type Product, type ShipTag, type Snapshot, type Zone,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
@@ -32,9 +32,9 @@ function frequentClients(s: Snapshot, vehicleId: string | null) {
   return { frequent, recent };
 }
 
-function ClientProductSheet(p: { vehicleId: string | null; close: () => void; done: (r: ClientPick | null) => void }) {
+function ClientProductSheet(p: { vehicleId: string | null; startClient?: { id: string; text: string }; close: () => void; done: (r: ClientPick | null) => void }) {
   const s = snap();
-  const [client, setClient] = useState<{ id: string | null; text: string } | null>(null);
+  const [client, setClient] = useState<{ id: string | null; text: string } | null>(p.startClient ?? null);
   const finish = (r: ClientPick | null) => {
     p.done(r);
     p.close();
@@ -111,7 +111,10 @@ function ClientProductSheet(p: { vehicleId: string | null; close: () => void; do
 
 function ShipSheet(p: { zone: Zone | null; which: 'arrival' | 'departure'; current: { ship: string | null; tag: ShipTag }; close: () => void; done: (r: { ship: string | null; tag: ShipTag } | null) => void }) {
   const s = snap();
-  const [tag, setTag] = useState<ShipTag>(p.current.tag);
+  const init = splitShipTag(p.current.tag);
+  const [base, setBase] = useState<string>((SHIP_TAG_PRESETS as readonly string[]).includes(init.base) ? init.base : '');
+  const [booker, setBooker] = useState(init.booker);
+  const tag: ShipTag = composeShipTag(base, booker);
   const finish = (r: { ship: string | null; tag: ShipTag } | null) => {
     p.done(r);
     p.close();
@@ -121,7 +124,9 @@ function ShipSheet(p: { zone: Zone | null; which: 'arrival' | 'departure'; curre
   return (
     <Sheet title="선박 선택" onClose={() => finish(null)} flush>
       <div style={{ padding: '8px 12px' }}>
-        <Seg value={tag} onChange={setTag} options={[{ value: '', label: '표시 없음' }, { value: '아침', label: '아침' }, { value: '예약', label: '예약' }, { value: '야간', label: '야간' }]} />
+        <Seg value={base} onChange={setBase} options={[{ value: '', label: '표시 없음' }, ...SHIP_TAG_PRESETS.map((t) => ({ value: t, label: t }))]} />
+        <input style={{ marginTop: 6 }} value={booker} onChange={(e) => setBooker(e.target.value)} placeholder="다른 물류업체가 예약해 준 배면 업체 이름 (예: 대한물류)" />
+        {booker.trim() && <div className="small" style={{ marginTop: 4 }}>표시: <b>{tag}</b></div>}
       </div>
       <PickerList
         sections={[{
@@ -217,14 +222,18 @@ function StatusSheet(p: { date: string; zone: Zone | null; current: { status: Da
   );
 }
 
+export const EXTERNAL_HIRED = '__hired__';
+export const EXTERNAL_SHIPPER = '__shipper__';
+
 export function usePickers() {
   const sheet = useSheet();
   const ask = <T,>(render: (close: () => void, done: (v: T) => void) => React.ReactNode) =>
     new Promise<T>((resolve) => sheet.open((close) => render(close, resolve)));
 
   return {
-    clientProduct: (vehicleId: string | null) =>
-      ask<ClientPick | null>((close, done) => <ClientProductSheet vehicleId={vehicleId} close={close} done={done} />),
+    /** startClient 를 주면 품목 고르기부터 (등록된 오더의 품목만 바꿀 때) */
+    clientProduct: (vehicleId: string | null, startClient?: { id: string; text: string }) =>
+      ask<ClientPick | null>((close, done) => <ClientProductSheet vehicleId={vehicleId} startClient={startClient} close={close} done={done} />),
 
     ship: (zone: Zone | null, current: { ship: string | null; tag: ShipTag }, which: 'arrival' | 'departure' = 'departure') =>
       ask<{ ship: string | null; tag: ShipTag } | null>((close, done) => <ShipSheet zone={zone} which={which} current={current} close={close} done={done} />),
@@ -236,14 +245,15 @@ export function usePickers() {
       ask<StatusResult | null>((close, done) => <StatusSheet date={date} zone={zone} current={current} staff={staff} close={close} done={done} />),
 
     /** 그날 그 지역 차량 — 공차·상차 없는 차량 먼저, 수리 차량은 경고, 현장근무 지급 차량 제외 */
-    vehicle: (board: Board, zone: Zone | null) =>
+    /** withExternal: 맨 위에 "용차로 · 화주 배차로" (값 EXTERNAL_HIRED / EXTERNAL_SHIPPER) */
+    vehicle: (board: Board, zone: Zone | null, withExternal = false) =>
       ask<string | null>((close, done) => {
         const s = snap();
         const choices = vehicleChoices(board, zone);
         const item = (c: (typeof choices)[number]) => ({
           id: c.row.vehicle.id,
           label: `${c.row.vehicle.short_no}  ${c.row.vehicle.vehicle_type}`,
-          sub: [c.row.zone ? ZONE_LABEL[c.row.zone] : '위치 미정', c.free ? '상차 없음' : `상차 ${c.row.loads.length}`, s.drivers.find((d) => d.id === (c.row.driverId ?? c.row.vehicle.default_driver_id))?.name].filter(Boolean).join(' · '),
+          sub: [c.row.zone ? ZONE_LABEL[c.row.zone] : '위치 미정', c.free ? '상차 없음' : `상차 ${c.row.loads.length}`, s.drivers.find((d) => d.id === c.row.driverId)?.name].filter(Boolean).join(' · '),
           warn: c.warn || undefined,
           faded: !c.sameZone,
         });
@@ -255,6 +265,12 @@ export function usePickers() {
                 { label: '다른 지역', items: choices.filter((c) => !c.sameZone).map(item) },
               ]}
               onPick={(it) => { done(it.id); close(); }}
+              top={withExternal ? (
+                <div className="row" style={{ padding: '8px 12px' }}>
+                  <button className="grow" onClick={() => { done(EXTERNAL_HIRED); close(); }}>🚚 용차로</button>
+                  <button className="grow" onClick={() => { done(EXTERNAL_SHIPPER); close(); }}>🏭 화주 배차로</button>
+                </div>
+              ) : undefined}
             />
           </Sheet>
         );
