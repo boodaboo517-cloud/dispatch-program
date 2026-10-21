@@ -12,6 +12,7 @@ import { dayjs, fmtStamp, seoulToday } from '../lib/time.ts';
 import { Editable } from '../ui/Editable.tsx';
 import { useRole, useSnap, useStore } from '../ui/hooks.ts';
 import { setting } from '../ui/labels.ts';
+import { InstallCard } from '../ui/InstallCard.tsx';
 import { Sheet, useSheet } from '../ui/Sheet.tsx';
 
 function saveSetting(key: string, value: unknown) {
@@ -246,6 +247,8 @@ export function SettingsPage() {
         {staff && <button className="grow" onClick={() => nav('/revenue')}>💰 매출</button>}
         <button className="grow" onClick={() => nav('/driver')}>📱 기사 화면 보기</button>
       </div>
+
+      <InstallCard />
 
       {staff && alerts.length > 0 && (
         <div className="card"><h3>알림</h3>{alerts.map((a, i) => <div key={i} className={`banner ${a.level === 'over' ? 'red' : 'yellow'}`}>{a.message}</div>)}</div>
