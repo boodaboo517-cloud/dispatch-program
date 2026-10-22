@@ -1,6 +1,6 @@
 // PC 넓은 표: 하차일정 | 상차일정, 차량 기준 같은 줄, 차량별 빨간 구분선, 4글자 축약 + 클릭 시 전체 보기
 import { useState } from 'react';
-import { abbrev, assignVehicle, isExternal, type BoardRow, type DailyOrder, type Zone } from '../../domain/index.ts';
+import { abbrev, assignVehicle, isExternal, rowDriver, seqMark, type BoardRow, type DriverSide, type DailyOrder, type Zone } from '../../domain/index.ts';
 import { store } from '../../data/store.ts';
 import { useRole, useSnap } from '../../ui/hooks.ts';
 import { Cell } from '../../ui/Cell.tsx';
@@ -72,7 +72,6 @@ function VehicleGroup({ row, zone, a, staff, focus }: { row: BoardRow; zone: Zon
   const [over, setOver] = useState(false);
   const hasOrders = row.unloads.length + row.loads.length > 0;
   const n = hasOrders ? Math.max(row.unloads.length, row.loads.length) + (staff ? 1 : 0) : 1;
-  const drv = driverName(snap, row.driverId);
   const focused = !!focus && (focus === row.vehicle.id || [...row.unloads, ...row.loads].some((o) => o.id === focus));
   const vehicleCell = (
     <td rowSpan={n}>
@@ -82,20 +81,25 @@ function VehicleGroup({ row, zone, a, staff, focus }: { row: BoardRow; zone: Zon
       </Cell>
     </td>
   );
-  const driverCell = (
-    <td rowSpan={n}>
-      <Cell onTap={() => (drv || !staff ? a.tapVehicle(row) : a.editDriver(row))} onLong={staff ? () => a.editDriver(row) : undefined}>
-        <span style={{ color: !drv && hasOrders ? 'var(--red)' : undefined, fontSize: 13 }}>{drv ? abbrev(drv) : hasOrders ? '미지정' : ''}</span>
-      </Cell>
-    </td>
-  );
+  const driverCell = (side: DriverSide) => {
+    const drv = driverName(snap, side === 'unload' ? row.driverId : row.loadDriverId);
+    const seq = side === 'unload' ? row.unloadSeq : row.loadSeq;
+    return (
+      <td rowSpan={n}>
+        <Cell onTap={() => (drv || !staff ? a.tapVehicle(row) : a.editDriver(row, side))} onLong={staff ? () => a.editDriver(row, side) : undefined}>
+          <span style={{ color: !drv && hasOrders ? 'var(--red)' : undefined, fontSize: 13 }}>{drv ? `${abbrev(drv)}${seqMark(seq)}` : hasOrders ? '미지정' : ''}</span>
+        </Cell>
+      </td>
+    );
+  };
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setOver(false);
     const id = e.dataTransfer.getData('text/order');
     if (!id || !staff) return;
     if (row.inRepair && !confirm(`${row.vehicle.short_no} 차량은 수리 중입니다. 그래도 배차할까요?`)) return;
-    store.run((tx) => assignVehicle(tx, id, row.vehicle.id, row.driverId));
+    const kind = snap.daily_orders.find((o) => o.id === id)?.kind ?? 'unload';
+    store.run((tx) => assignVehicle(tx, id, row.vehicle.id, rowDriver(row, kind)));
   };
   const rows = [];
   for (let i = 0; i < n; i++) {
@@ -112,12 +116,12 @@ function VehicleGroup({ row, zone, a, staff, focus }: { row: BoardRow; zone: Zon
           </td>
         )}
         {i === 0 && vehicleCell}
-        {i === 0 && driverCell}
+        {i === 0 && driverCell('unload')}
         {hasOrders ? (
           <>
             {u ? <OrderFields o={u} a={a} staff={staff} /> : <EmptyFields onAdd={staff ? () => a.addOrder(zone, 'unload', row) : undefined} />}
             {i === 0 && <td rowSpan={n} className="sep"><Cell className="vehicle" onTap={() => a.tapVehicle(row)}>{row.vehicle.short_no}</Cell></td>}
-            {i === 0 && driverCell}
+            {i === 0 && driverCell('load')}
             {l ? <OrderFields o={l} a={a} staff={staff} /> : <EmptyFields onAdd={staff ? () => a.addOrder(zone, 'load', row) : undefined} />}
           </>
         ) : (

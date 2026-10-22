@@ -1,6 +1,6 @@
 // 종이 일정표 모양 (확인용, 누르기 없음): 차량 한 대 = 한 줄. 선박 | 차량 | 기사 | 하차 | 차량 | 기사 | 상차 | 선박 (제주는 오전·오후)
 import {
-  DAY_STATUS_LABEL, isExternal, parseShip, sitesGrouped,
+  DAY_STATUS_LABEL, isExternal, parseShip, seqMark, sitesGrouped,
   type BoardRow, type DailyOrder, type FieldAssignment, type Snapshot, type Zone,
 } from '../../domain/index.ts';
 import { useSnap } from '../../ui/hooks.ts';
@@ -50,7 +50,8 @@ function Orders({ snap, list }: { snap: Snapshot; list: DailyOrder[] }) {
 
 function VehicleRow({ snap, row }: { snap: Snapshot; row: BoardRow }) {
   const status = row.status && row.status !== 'field' ? row.status : '';
-  const name = driverName(snap, row.driverId);
+  const name = `${driverName(snap, row.driverId)}${seqMark(row.unloadSeq)}`;
+  const loadName = `${driverName(snap, row.loadDriverId)}${seqMark(row.loadSeq)}`;
   const statusText = status || row.statusMemo
     ? <>{status && <span className={`st ${status}`}>{DAY_STATUS_LABEL[status]}</span>}{row.statusMemo && <span className="ps-red"> {row.statusMemo}</span>}</>
     : null;
@@ -62,7 +63,7 @@ function VehicleRow({ snap, row }: { snap: Snapshot; row: BoardRow }) {
       <td className="drv">{name}</td>
       <td className="body">{row.unloads.length ? <Orders snap={snap} list={row.unloads} /> : statusText}</td>
       {veh}
-      <td className="drv">{name}</td>
+      <td className="drv">{loadName}</td>
       <td className="body">{row.loads.length ? <Orders snap={snap} list={row.loads} /> : row.unloads.length ? statusText : null}</td>
       <td className="ship"><ShipText snap={snap} ship={row.departureShip} tag={row.departureTag} /></td>
     </tr>

@@ -7,7 +7,7 @@ import { shipTimeOf } from './ships.ts';
 import type { Tx } from './tx.ts';
 import { ON_CALL_SHIFT } from './types.ts';
 import type {
-  DailyOrder, DayStatus, Driver, FieldAssignment, MaintenanceKind, ShipTag, Snapshot, Vehicle, VehicleDay, Zone,
+  DailyOrder, DayStatus, Driver, FieldAssignment, Kind, MaintenanceKind, ShipTag, Snapshot, Vehicle, VehicleDay, Zone,
 } from './types.ts';
 
 export const DAY_STATUS_LABEL: Record<Exclude<DayStatus, ''>, string> = {
@@ -88,7 +88,13 @@ export interface BoardRow {
   vd: VehicleDay | undefined;
   unloads: DailyOrder[];
   loads: DailyOrder[];
+  /** 오전(하차) 기사 */
   driverId: string | null;
+  /** 오후(상차) 기사 (따로 없으면 오전 기사) */
+  loadDriverId: string | null;
+  /** 기사의 그날 처리 순서 (없으면 null) */
+  unloadSeq: number | null;
+  loadSeq: number | null;
   arrivalShip: string | null;
   arrivalTag: ShipTag;
   departureShip: string | null;
@@ -163,6 +169,9 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
       unloads,
       loads,
       driverId,
+      loadDriverId: vd?.load_driver_id || driverId,
+      unloadSeq: vd?.unload_seq ?? null,
+      loadSeq: vd?.load_seq ?? (vd?.load_driver_id ? null : vd?.unload_seq ?? null),
       arrivalShip: vd?.arrival_ship ?? unloads.find((o) => o.arrival_ship)?.arrival_ship ?? null,
       arrivalTag: vd?.arrival_ship ? vd.arrival_ship_tag : unloads.find((o) => o.arrival_ship)?.arrival_ship_tag ?? '',
       departureShip: vd?.departure_ship ?? loads.find(vehicleSails)?.departure_ship ?? null,
@@ -186,6 +195,9 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
         unloads: u,
         loads: l,
         driverId,
+        loadDriverId: vd?.load_driver_id || driverId,
+        unloadSeq: null,
+        loadSeq: null,
         arrivalShip: arr?.arrival_ship ?? null,
         arrivalTag: arr?.arrival_ship_tag ?? '',
         departureShip: dep?.departure_ship ?? null,
@@ -308,13 +320,81 @@ export function setVehicleDayStatus(
   }
 }
 
-export function setRowDriver(tx: Tx, p: { date: string; vehicle_id: string; zone: Zone | null; driver_id: string | null }) {
-  const vd = ensureVehicleDay(tx, p.date, p.vehicle_id, p.zone);
-  tx.update('vehicle_days', vd.id, { driver_id: p.driver_id });
-  for (const o of tx.list('daily_orders').filter((o) => o.date === p.date && o.vehicle_id === p.vehicle_id)) {
-    tx.update('daily_orders', o.id, { driver_id: p.driver_id });
+export type DriverSide = 'unload' | 'load';
+
+/** 그 줄에서 오더 종류(하차/상차)를 맡는 기사 */
+export const rowDriver = (row: Pick<BoardRow, 'driverId' | 'loadDriverId'>, kind: Kind) => (kind === 'load' ? row.loadDriverId : row.driverId);
+
+const seqField = (side: DriverSide) => (side === 'unload' ? 'unload_seq' : 'load_seq');
+
+/** 그날 기사가 맡은 일(차량 × 오전/오후), 차량 순서대로. 오후 기사가 따로 없으면 오전·오후를 한 일로 본다 */
+function driverJobs(tx: Tx, date: string, driverId: string): { vd: VehicleDay; side: DriverSide }[] {
+  const order = new Map(tx.list('vehicles').map((v) => [v.id, v.sort_order]));
+  const vds = tx.list('vehicle_days').filter((v) => v.date === date)
+    .sort((a, b) => (order.get(a.vehicle_id) ?? 0) - (order.get(b.vehicle_id) ?? 0));
+  const jobs: { vd: VehicleDay; side: DriverSide }[] = [];
+  for (const vd of vds) {
+    if (vd.driver_id === driverId) jobs.push({ vd, side: 'unload' });
+    if (vd.load_driver_id && vd.load_driver_id !== vd.driver_id && vd.load_driver_id === driverId) jobs.push({ vd, side: 'load' });
   }
+  return jobs;
 }
+
+/** 기사가 그날 두 번째 이상 일을 맡으면 순서를 매긴다: 번호 없는 앞 일부터 1, 2… 새 일은 맨 뒤 */
+function numberJobs(tx: Tx, date: string, driverId: string, vdId: string, side: DriverSide) {
+  const jobs = driverJobs(tx, date, driverId);
+  if (jobs.length <= 1) {
+    for (const j of jobs) tx.update('vehicle_days', j.vd.id, { [seqField(j.side)]: null });
+    return;
+  }
+  const others = jobs.filter((j) => !(j.vd.id === vdId && j.side === side));
+  let n = Math.max(0, ...others.map((j) => j.vd[seqField(j.side)] ?? 0));
+  for (const j of others) if (j.vd[seqField(j.side)] == null) tx.update('vehicle_days', j.vd.id, { [seqField(j.side)]: ++n });
+  tx.update('vehicle_days', vdId, { [seqField(side)]: n + 1 });
+}
+
+/** 기사가 빠진 뒤 일이 하나만 남으면 순서 표시를 지운다 */
+function tidyJobs(tx: Tx, date: string, driverId: string) {
+  const jobs = driverJobs(tx, date, driverId);
+  if (jobs.length === 1) tx.update('vehicle_days', jobs[0].vd.id, { [seqField(jobs[0].side)]: null });
+}
+
+/**
+ * 기사 지정. side='unload'(기본): 오전(하차) 기사 — 오후 기사가 따로 없으면 오후도 같은 기사.
+ * side='load': 오후(상차) 기사 — 오전 기사와 같거나 비우면 "오전과 같음"으로 되돌린다.
+ */
+export function setRowDriver(tx: Tx, p: { date: string; vehicle_id: string; zone: Zone | null; driver_id: string | null; side?: DriverSide }) {
+  const side = p.side ?? 'unload';
+  const vd = ensureVehicleDay(tx, p.date, p.vehicle_id, p.zone);
+  const d = p.driver_id;
+  let old: string | null;
+  if (side === 'unload') {
+    old = vd.driver_id;
+    const merged = !vd.load_driver_id || vd.load_driver_id === d;
+    tx.update('vehicle_days', vd.id, { driver_id: d, unload_seq: null, ...(merged ? { load_driver_id: null, load_seq: null } : {}) });
+  } else {
+    old = vd.load_driver_id || null;
+    const ld = d === vd.driver_id ? null : d;
+    tx.update('vehicle_days', vd.id, { load_driver_id: ld, load_seq: null });
+  }
+  const now = tx.get('vehicle_days', vd.id)!;
+  for (const o of tx.list('daily_orders').filter((o) => o.date === p.date && o.vehicle_id === p.vehicle_id)) {
+    const drv = o.kind === 'load' ? now.load_driver_id || now.driver_id : now.driver_id;
+    if (o.driver_id !== drv) tx.update('daily_orders', o.id, { driver_id: drv });
+  }
+  if (side === 'unload' && d) numberJobs(tx, p.date, d, vd.id, 'unload');
+  if (side === 'load' && now.load_driver_id) numberJobs(tx, p.date, now.load_driver_id, vd.id, 'load');
+  if (old && old !== d) tidyJobs(tx, p.date, old);
+}
+
+/** 처리 순서 직접 지정 (null = 표시 안 함) */
+export function setDriverSeq(tx: Tx, p: { date: string; vehicle_id: string; zone: Zone | null; side: DriverSide; seq: number | null }) {
+  const vd = ensureVehicleDay(tx, p.date, p.vehicle_id, p.zone);
+  tx.update('vehicle_days', vd.id, { [seqField(p.side)]: p.seq });
+}
+
+/** ① ② ③ … */
+export const seqMark = (n: number | null | undefined) => (n ? (n <= 20 ? String.fromCodePoint(0x2460 + n - 1) : `(${n})`) : '');
 
 /** 차량 위치 수동 변경 */
 export function setVehicleZone(tx: Tx, p: { date: string; vehicle_id: string; zone: Zone }) {

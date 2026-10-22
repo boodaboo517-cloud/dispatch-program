@@ -1,7 +1,7 @@
 // 기존 "경민물류 일정표" 양식으로 내보내기 (하루 = 시트 1장). 엑셀에는 축약 없이 전체 내용.
 import type { Worksheet } from 'exceljs';
 import {
-  DAY_STATUS_LABEL, buildBoard, transportSummary, buildIndex, eachDay, isDriverWorking, sitesGrouped,
+  DAY_STATUS_LABEL, seqMark, buildBoard, transportSummary, buildIndex, eachDay, isDriverWorking, sitesGrouped,
   type BoardRow, type DailyOrder, type Snapshot, type Zone,
 } from '../domain/index.ts';
 import { dayjs } from '../lib/time.ts';
@@ -37,7 +37,9 @@ function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: 
   for (const row of rows) {
     const n = Math.max(row.unloads.length, row.loads.length, 1);
     const hasOrders = row.unloads.length + row.loads.length > 0;
-    const drv = driverName(s, row.driverId) || (hasOrders ? '기사 미지정' : '');
+    const seq = (n: number | null) => (n ? ` ${seqMark(n)}` : '');
+    const drv = driverName(s, row.driverId) ? driverName(s, row.driverId) + seq(row.unloadSeq) : hasOrders ? '기사 미지정' : '';
+    const loadDrv = driverName(s, row.loadDriverId) ? driverName(s, row.loadDriverId) + seq(row.loadSeq) : hasOrders ? '기사 미지정' : '';
     for (let i = 0; i < n; i++) {
       const line = ws.getRow(r + i);
       if (hasOrders) {
@@ -52,7 +54,7 @@ function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: 
     first.getCell(16).value = shipText(row.departureShip, row.departureTag);
     if (hasOrders) {
       first.getCell(9).value = row.vehicle.short_no;
-      first.getCell(10).value = drv;
+      first.getCell(10).value = loadDrv;
     } else {
       ws.mergeCells(r, 4, r, 15);
       first.getCell(4).value = [row.status && row.status !== 'field' ? DAY_STATUS_LABEL[row.status] : '', row.statusMemo].filter(Boolean).join(' · ');

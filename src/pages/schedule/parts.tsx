@@ -1,4 +1,4 @@
-import { CARRIER_LABEL, DAY_STATUS_LABEL, WORK_TYPE_SHORT, abbrev, parseShip, workLogOf, type BoardRow, type DailyOrder, type Snapshot } from '../../domain/index.ts';
+import { CARRIER_LABEL, DAY_STATUS_LABEL, WORK_TYPE_SHORT, abbrev, parseShip, seqMark, workLogOf, type BoardRow, type DailyOrder, type Snapshot } from '../../domain/index.ts';
 import { clientName, driverName, productName, productOf, qtyText, shipTimeOf } from '../../ui/labels.ts';
 
 export function hasMoney(snap: Snapshot, o: DailyOrder) {
@@ -57,7 +57,11 @@ export function VehicleCellText({ snap, row, date }: { snap: Snapshot; row: Boar
   return (
     <>
       <span>{row.vehicle.short_no}</span>
-      <span className={`drv${!name && hasWork ? ' none' : ''}`}>{name ? abbrev(name, 4) : hasWork ? '기사 미지정' : ''}</span>
+      <span className={`drv${!name && hasWork ? ' none' : ''}`}>{name ? `${abbrev(name, 4)}${seqMark(row.unloadSeq)}` : hasWork ? '기사 미지정' : ''}</span>
+      {row.loadDriverId && row.loadDriverId !== row.driverId && (
+        <span className="drv" title="오후(상차) 기사">→ {abbrev(driverName(snap, row.loadDriverId), 4)}{seqMark(row.loadSeq)}</span>
+      )}
+      {(!row.loadDriverId || row.loadDriverId === row.driverId) && row.loadSeq !== row.unloadSeq && row.loadSeq && <span className="drv">오후{seqMark(row.loadSeq)}</span>}
       {log && log.work_types.length > 0 && <span className="drv" style={{ color: '#1d4ed8' }}>{log.work_types.map((t) => WORK_TYPE_SHORT[t]).join('·')}</span>}
       {row.secondary && <span className="mk link" title="당일 왕복 등 다른 구역 일정">왕복</span>}
     </>

@@ -1,11 +1,11 @@
 // 일정표 칸 동작 (휴대폰·PC 공통)
 import {
   ON_CALL_SHIFT, abbrev, acceptShipPending, nudgeVehicle, workLogOf, assignVehicle, blankOrder, buildBoard, createOrder, ignoreShipPending, opposite, saveOrder,
-  setRowDriver, setRowShip, setVehicleDayStatus, setVehicleZone, shipTime,
-  type Board, type BoardRow, type DailyOrder, type Kind, type Zone,
+  rowDriver, seqMark, setDriverSeq, setRowDriver, setRowShip, setVehicleDayStatus, setVehicleZone, shipTime,
+  type Board, type BoardRow, type DailyOrder, type DriverSide, type Kind, type Zone,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
-import { useRole } from './hooks.ts';
+import { useRole, useSnap } from './hooks.ts';
 import { ZONE_LABEL, driverName, shipText, vehicleNo } from './labels.ts';
 import { OrderSheet, QuickQtySheet } from './OrderSheet.tsx';
 import { EXTERNAL_HIRED, EXTERNAL_SHIPPER, usePickers } from './pickers.tsx';
@@ -36,7 +36,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
       client_id: c.client_id, client_text: c.client_text,
       product_id: c.product?.id ?? null, product_text: c.product_text,
       region: c.product?.default_region ?? '', quantity: c.product?.default_quantity ?? null, unit: c.product?.default_unit ?? '',
-      vehicle_id: row?.vehicle.id ?? null, driver_id: row?.driverId ?? null,
+      vehicle_id: row?.vehicle.id ?? null, driver_id: row ? rowDriver(row, kind) : null,
       sort_order: same.length,
       ...ship,
     });
@@ -92,11 +92,14 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     );
   };
 
-  const editDriver = async (row: BoardRow) => {
+  /** 오전/오후(육지: 하차/상차) 이름 */
+  const sideLabel = (row: BoardRow, side: DriverSide) => (row.zone === 'jeju' ? (side === 'unload' ? '오전' : '오후') : side === 'unload' ? '하차' : '상차');
+
+  const editDriver = async (row: BoardRow, side: DriverSide = 'unload') => {
     if (!staff) return;
-    const d = await pick.driver(date, row.driverId);
+    const d = await pick.driver(date, side === 'unload' ? row.driverId : row.loadDriverId);
     if (d === undefined) return;
-    store.run((tx) => setRowDriver(tx, { date, vehicle_id: row.vehicle.id, zone: row.zone, driver_id: d }));
+    store.run((tx) => setRowDriver(tx, { date, vehicle_id: row.vehicle.id, zone: row.zone, driver_id: d, side }));
     // 알바는 출근한 날 근무형태를 바로 입력
     const snap = store.getState().snap;
     const drv = snap.drivers.find((x) => x.id === d);
@@ -117,6 +120,24 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     store.run((tx) => setVehicleDayStatus(tx, { date, vehicle_id: row.vehicle.id, zone: row.zone, status: r.status, memo: r.memo, maintenance: r.maintenance }));
   };
 
+  /** 처리 순서 (1번차·2번차…) 직접 고치기 */
+  const editSeq = (row: BoardRow) => {
+    const pickSeq = (side: DriverSide, cur: number | null) => (
+      <div className="field" key={side}>
+        <span>{sideLabel(row, side)} 기사 {driverName(store.getState().snap, side === 'unload' ? row.driverId : row.loadDriverId) || '미지정'}</span>
+        <div className="chips" style={{ flexWrap: 'wrap', overflow: 'visible' }}>
+          {[null, 1, 2, 3, 4, 5, 6].map((n) => (
+            <button key={n ?? 0} className={`chip ${cur === n ? 'on' : ''}`}
+              onClick={() => store.run((tx) => setDriverSeq(tx, { date, vehicle_id: row.vehicle.id, zone: row.zone, side, seq: n }))}>
+              {n ? seqMark(n) : '없음'}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+    sheet.open((close) => <SeqSheet date={date} row={row} close={close} render={pickSeq} />);
+  };
+
   /** 같은 구역 화면에 보이는 차량 순서 (위로/아래로는 화면에 보이는 이웃 기준) */
   const zoneRowIds = (row: BoardRow) => board.rows.filter((r) => r.zone === row.zone && !r.secondary).map((r) => r.vehicle.id);
 
@@ -127,13 +148,16 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
       <>
         <div><b>{row.vehicle.plate}</b> · {row.vehicle.vehicle_type} · {row.vehicle.ownership}</div>
         <div>위치: {row.zone ? ZONE_LABEL[row.zone] : '미정'}</div>
-        <div>기사: {driverName(snap, row.driverId) || '기사 미지정'}</div>
+        <div>{sideLabel(row, 'unload')} 기사: {driverName(snap, row.driverId) || '미지정'} {seqMark(row.unloadSeq)}</div>
+        <div>{sideLabel(row, 'load')} 기사: {row.loadDriverId !== row.driverId ? driverName(snap, row.loadDriverId) : <span className="muted">{sideLabel(row, 'unload')}과 같음</span>} {seqMark(row.loadSeq)}</div>
         {row.driverId && <div>근무형태: {workLogOf(snap, row.driverId, date)?.work_types.join(', ') || <span className="muted">미입력</span>}</div>}
         {row.inRepair && <div style={{ color: 'var(--red)' }}>수리 중 {row.statusMemo}</div>}
       </>,
       staff
         ? [
-            { label: '기사 지정', run: () => void editDriver(row) },
+            { label: `${sideLabel(row, 'unload')} 기사`, run: () => void editDriver(row, 'unload') },
+            { label: `${sideLabel(row, 'load')} 기사`, run: () => void editDriver(row, 'load') },
+            { label: '순서 ①②', run: () => editSeq(row) },
             ...(row.driverId ? [{ label: '근무형태', run: () => void pick.workType(date, row.driverId!) }] : []),
             { label: '상태·위치', run: () => void editStatus(row) },
             { label: '▲ 위로', run: () => store.run((tx) => nudgeVehicle(tx, row.vehicle.id, -1, zoneRowIds(row))) },
@@ -157,7 +181,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     }
     const row = board.rows.find((r) => r.vehicle.id === vid);
     if (row?.inRepair && !confirm(`${row.vehicle.short_no} 차량은 수리 중입니다. 그래도 배차할까요?`)) return;
-    store.run((tx) => assignVehicle(tx, o.id, vid, row?.driverId ?? null));
+    store.run((tx) => assignVehicle(tx, o.id, vid, row ? rowDriver(row, o.kind) : null));
     store.toast(`${vehicleNo(store.getState().snap, vid)} 차량에 배차했습니다`);
     onFocusVehicle?.(vid);
   };
@@ -169,5 +193,18 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     if (r) store.run((tx) => saveOrder(tx, { ...o, ...(isLoad ? { departure_ship: r.ship, departure_ship_tag: r.tag } : { arrival_ship: r.ship, arrival_ship_tag: r.tag }) }));
   };
 
-  return { addOrder, openOrder, editShip, tapShip, editDriver, editStatus, tapVehicle, assign, editWaitingShip, showText, abbrev };
+  return { addOrder, openOrder, editShip, tapShip, editDriver, editSeq, editStatus, tapVehicle, assign, editWaitingShip, showText, abbrev };
+}
+
+/** 순서 고치기 시트: 저장할 때마다 다시 그려지도록 최신 줄을 읽는다 */
+function SeqSheet({ date, row, close, render }: { date: string; row: BoardRow; close: () => void; render: (side: DriverSide, cur: number | null) => React.ReactNode }) {
+  const snap = useSnap();
+  const cur = buildBoard(snap, date).rows.find((r) => r.vehicle.id === row.vehicle.id && !r.secondary) ?? row;
+  return (
+    <Sheet title={`${row.vehicle.short_no} 기사 처리 순서`} onClose={close} footer={<button className="primary" onClick={close}>닫기</button>}>
+      <p className="muted">한 기사가 여러 차량을 맡을 때 몇 번째로 처리하는지 표시합니다. 같은 기사를 두 번째 차량에 지정하면 자동으로 매겨집니다.</p>
+      {render('unload', cur.unloadSeq)}
+      {render('load', cur.loadSeq)}
+    </Sheet>
+  );
 }

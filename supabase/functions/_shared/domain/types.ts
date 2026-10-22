@@ -216,7 +216,13 @@ export interface VehicleDay extends Base {
   date: string;
   vehicle_id: string;
   zone: Zone | null;
+  /** 오전(육지: 하차) 기사 */
   driver_id: string | null;
+  /** 오후(육지: 상차) 기사 — 비우면 오전 기사와 같음 */
+  load_driver_id?: string | null;
+  /** 기사의 그날 처리 순서 (1번차·2번차…). 오후 기사가 따로 없으면 오후는 오전 순서를 따름 */
+  unload_seq?: number | null;
+  load_seq?: number | null;
   arrival_ship: string | null;
   arrival_ship_tag: ShipTag;
   departure_ship: string | null;

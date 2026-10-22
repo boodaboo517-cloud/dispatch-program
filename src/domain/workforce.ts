@@ -25,7 +25,11 @@ export function setWorkLog(tx: Tx, p: { date: string; driver_id: string; work_ty
 /** 그날 차량 줄·오더에 배차된 기사 */
 export function assignedDriverIds(snap: Snapshot, date: string): Set<string> {
   const ids = new Set<string>();
-  for (const v of snap.vehicle_days) if (v.date === date && v.driver_id) ids.add(v.driver_id);
+  for (const v of snap.vehicle_days) {
+    if (v.date !== date) continue;
+    if (v.driver_id) ids.add(v.driver_id);
+    if (v.load_driver_id) ids.add(v.load_driver_id);
+  }
   for (const o of snap.daily_orders) if (o.date === date && o.driver_id) ids.add(o.driver_id);
   return ids;
 }
