@@ -241,10 +241,13 @@ tr.err td { background: var(--red-soft); }
 .paper th.zone { color: #fff; font-size: 13px; padding: 3px 0; }
 .paper.land th.zone { background: #1e3a8a; }
 .paper.jeju th.zone { background: #b45309; }
-.paper .c-ship { width: 11%; } .paper .c-veh { width: 10%; } .paper .c-drv { width: 10%; } .paper .c-body { width: 19%; }
+.paper .c-ship { width: 10%; } .paper .c-veh { width: 9%; } .paper .c-drv { width: 9%; } .paper .c-body { width: 22%; }
+@media (min-width: 1024px) { .paper .c-ship { width: 10%; } .paper .c-veh { width: 7%; } .paper .c-drv { width: 8%; } .paper .c-body { width: 25%; } }
 .paper td.veh, .paper td.drv, .paper td.ship { font-size: 10px; word-break: keep-all; }
 .paper td.ship .ps-pill { padding: 0 2px; }
-.paper td.body { word-break: keep-all; }
+.paper td.body { white-space: nowrap; text-overflow: clip; }
+.paper .fit { display: inline-block; white-space: nowrap; transform-origin: left center; }
+.paper td.drv .fit, .paper td.veh .fit, .paper td.ship .fit, .paper td.site .fit { transform-origin: center; }
 .paper td.veh .ps-pill { padding: 0 2px; }
 .paper td.body { text-align: left; padding: 2px 3px; }
 .paper .ps-pill { display: inline-block; max-width: 100%; background: #fbd5dc; border-radius: 7px; padding: 0 3px; font-weight: 700; }
@@ -273,3 +276,10 @@ tr.err td { background: var(--red-soft); }
 .port-row b.port-name { font-size: 17px; padding-left: 4px; }
 .port-row input[type=time] { width: 150px; flex: none; padding-left: 8px; padding-right: 4px; }
 .port-row .port-x { width: 36px; flex: none; text-align: center; padding: 0; }
+
+/* 고정 휴무일 표 */
+.offdays { width: 100%; table-layout: fixed; }
+.offdays th:first-child, .offdays td:first-child { width: 30%; text-align: left; }
+.offdays th, .offdays td { text-align: center; padding: 6px 2px; }
+.offdays td[role=button] { cursor: pointer; border-left: 1px solid #eee; height: 44px; font-weight: 800; }
+.offdays td.off { background: var(--red-soft); color: var(--red); }

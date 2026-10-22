@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { buildBoard, setDriverSeq, setRowDriver } from '../board.ts';
 import { blankOrder, saveOrder } from '../orders.ts';
 import { Tx } from '../tx.ts';
+import { ON_CALL_SHIFT, type Driver } from '../types.ts';
+import { fixedOffDays, weeklyOffOn, workDaysFromOff } from '../workforce.ts';
 import { baseSnapshot, resetIds } from './fixtures.ts';
 
 beforeEach(resetIds);
@@ -95,5 +97,27 @@ describe('기사 처리 순서 (1번차·2번차…)', () => {
     setDriverSeq(tx, { date: D, vehicle_id: 'v9915', zone: 'jeju', side: 'unload', seq: 2 });
     setDriverSeq(tx, { date: D, vehicle_id: 'v9914', zone: 'jeju', side: 'unload', seq: 1 });
     expect([row(tx, 'v9915').unloadSeq, row(tx, 'v9914').unloadSeq]).toEqual([2, 1]);
+  });
+});
+
+describe('고정 휴무일 (매주)', () => {
+  const drv = (p: Partial<Driver>): Driver => ({ id: 'dA', name: '김기사', phone: '', work_days: [], shift: '', affiliation: '', staff_type: '기사', memo: '', ...p });
+  it('근무 요일의 나머지가 휴무, 매일 근무·알바는 휴무 없음', () => {
+    expect(fixedOffDays(drv({ work_days: [1, 2, 3, 4, 5, 6] }))).toEqual([0]);
+    expect(fixedOffDays(drv({ work_days: [] }))).toEqual([]);
+    expect(fixedOffDays(drv({ shift: ON_CALL_SHIFT, work_days: [1] }))).toEqual([]);
+  });
+  it('휴무 요일 → 근무 요일, 휴무 없음 = 매일 근무', () => {
+    expect(workDaysFromOff([0, 6])).toEqual([1, 2, 3, 4, 5]);
+    expect(workDaysFromOff([])).toEqual([]);
+  });
+  it('일정표 휴무 목록: 고정 휴무 요일이고 그날 배차·근무 기록이 없는 사람', () => {
+    const s = baseSnapshot();
+    s.drivers = [drv({ id: 'dA', work_days: [1, 2, 3, 4, 5, 6] }), drv({ id: 'dB', name: '박기사', work_days: [1, 2, 3, 4, 5, 6] })];
+    const sunday = '2026-10-25';
+    const tx = new Tx(s);
+    setRowDriver(tx, { date: sunday, vehicle_id: 'v9915', zone: 'land', driver_id: 'dB' });
+    expect(weeklyOffOn(tx.result(), sunday).map((d) => d.id)).toEqual(['dA']);
+    expect(weeklyOffOn(tx.result(), '2026-10-26')).toEqual([]);
   });
 });

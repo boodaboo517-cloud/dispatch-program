@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   activeRepair, checkOdometer, newId, oilStatus, planCreateFieldRecurring, planFieldRecurringChange, planFieldRecurringEnd,
-  setDayOff, versionOn, weekdaysLabel,
+  setDayOff, versionOn, weekdaysLabel, fixedOffDays, workDaysFromOff,
   ON_CALL_SHIFT, SHIFT_PRESETS, driverGroup, type Driver, type Ship, type Vehicle, type VehicleType, type Weekday, type Zone,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
@@ -106,6 +106,58 @@ function TeamField({ value, onSave }: { value: string; onSave: (v: string) => vo
   );
 }
 
+/** 고정 휴무일 (매주): 누른 요일 = 휴무. 저장은 근무 요일(나머지)로 */
+function OffDaysField({ d, onSave }: { d: Driver; onSave: (workDays: Weekday[]) => void }) {
+  const off = fixedOffDays(d);
+  return (
+    <label className="field">
+      <span>고정 휴무일 (매주) {off.length ? <b style={{ color: 'var(--red)' }}>{weekdaysLabel(off)}</b> : <span className="muted">없음 · 매일 근무</span>}</span>
+      <WeekdayChips value={off} onChange={(w) => {
+        if (w.length >= 7) return store.toast('모든 요일을 휴무로 할 수 없습니다. 원할 때만 나오면 근무조를 "알바"로 하세요.', 'warn');
+        onSave(workDaysFromOff(w as Weekday[]));
+      }} />
+    </label>
+  );
+}
+
+/** 직원·기사 전체 고정 휴무일 한 표에서 고치기 */
+function OffDaysTable({ close }: { close: () => void }) {
+  const snap = useSnap();
+  const order: Weekday[] = [1, 2, 3, 4, 5, 6, 0];
+  const L = ['일', '월', '화', '수', '목', '금', '토'];
+  const list = [...snap.drivers].filter((d) => d.shift !== ON_CALL_SHIFT)
+    .sort((a, b) => a.staff_type.localeCompare(b.staff_type, 'ko') || driverGroup(a).localeCompare(driverGroup(b), 'ko', { numeric: true }) || a.name.localeCompare(b.name, 'ko'));
+  const toggle = (d: Driver, w: Weekday) => {
+    const off = fixedOffDays(d);
+    const next = off.includes(w) ? off.filter((x) => x !== w) : [...off, w];
+    if (next.length >= 7) return store.toast('모든 요일을 휴무로 할 수 없습니다', 'warn');
+    store.run((tx) => tx.update('drivers', d.id, { work_days: workDaysFromOff(next) }));
+  };
+  return (
+    <Sheet title="고정 휴무일 (매주)" onClose={close} footer={<button className="primary" onClick={close}>닫기</button>}>
+      <p className="muted small">칸을 누르면 그 요일이 매주 휴무(빨강)로 바뀝니다. 바로 저장됩니다. 알바는 정해진 근무일이 없어 빠져 있습니다.</p>
+      <table className="simple offdays">
+        <thead><tr><th>이름</th>{order.map((w) => <th key={w} style={{ color: w === 0 ? 'var(--red)' : w === 6 ? 'var(--blue)' : undefined }}>{L[w]}</th>)}</tr></thead>
+        <tbody>
+          {list.map((d) => {
+            const off = fixedOffDays(d);
+            return (
+              <tr key={d.id}>
+                <td><b>{d.name}</b><div className="muted" style={{ fontSize: 11 }}>{d.staff_type === '기사' ? driverGroup(d) : d.staff_type}</div></td>
+                {order.map((w) => (
+                  <td key={w} className={off.includes(w) ? 'off' : ''} role="button" aria-label={`${d.name} ${L[w]}요일`} onClick={() => toggle(d, w)}>
+                    {off.includes(w) ? '휴' : ''}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </Sheet>
+  );
+}
+
 function DriverSheet({ d, close }: { d: Driver; close: () => void }) {
   const snap = useSnap();
   const cur = snap.drivers.find((x) => x.id === d.id) ?? d;
@@ -123,7 +175,7 @@ function DriverSheet({ d, close }: { d: Driver; close: () => void }) {
       {cur.shift === ON_CALL_SHIFT ? (
         <p className="muted small">알바는 정해진 근무일이 없습니다. 출근하는 날 일정표의 기사 칸이나 근무현황에서 근무형태를 넣으면 그날 근무로 잡힙니다.</p>
       ) : (
-        <label className="field"><span>근무 요일</span><WeekdayChips value={cur.work_days} onChange={(w) => save({ work_days: w as Weekday[] })} /></label>
+        <OffDaysField d={cur} onSave={(w) => save({ work_days: w })} />
       )}
       <TeamField value={cur.team ?? ''} onSave={(v) => save({ team: v })} />
       <Editable label="소속" value={cur.affiliation} onSave={(v) => save({ affiliation: v })} />
@@ -192,6 +244,7 @@ export function FleetPage() {
             store.run((tx) => tx.insert('drivers', d));
             sheet.open((c) => <DriverSheet d={d} close={c} />);
           }}>＋ 기사·직원 등록</button>}
+          {staff && <button style={{ width: '100%', marginTop: 8 }} onClick={() => sheet.open((c) => <OffDaysTable close={c} />)}>📅 고정 휴무일 한번에 보기·수정</button>}
           {(['기사', '현장', '사무'] as const).map((type) => {
             const list = snap.drivers.filter((d) => d.staff_type === type);
             const groups = type === '기사' ? [...new Set(list.map(driverGroup))].sort((a, b) => (a === '팀 없음' ? 1 : b === '팀 없음' ? -1 : a.localeCompare(b, 'ko', { numeric: true }))) : [''];
@@ -207,7 +260,7 @@ export function FleetPage() {
                         return (
                           <div key={d.id} className="list-item" onClick={() => staff && sheet.open((c) => <DriverSheet d={d} close={c} />)}>
                             <div className="grow"><b>{d.name}</b> <span className="muted">{d.shift} {d.affiliation}</span>
-                              <div className="muted small">{d.shift === ON_CALL_SHIFT ? '원할 때만 출근' : weekdaysLabel(d.work_days)} {d.phone}</div>
+                              <div className="muted small">{d.shift === ON_CALL_SHIFT ? '원할 때만 출근' : fixedOffDays(d).length ? <>휴무 <b style={{ color: 'var(--red)' }}>{weekdaysLabel(fixedOffDays(d))}</b></> : '매일 근무'} {d.phone}</div>
                               {d.memo && <div className="small" style={{ color: '#92400e' }}>📝 {d.memo}</div>}
                             </div>
                             {off && <span className="badge warn">오늘 휴무</span>}

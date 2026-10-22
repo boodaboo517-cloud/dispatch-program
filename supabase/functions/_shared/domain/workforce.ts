@@ -1,9 +1,30 @@
 // 기사 근무 기록: 근무형태 선택, 알바 출근, 월간 근무현황
-import { eachDay } from './dates.ts';
+import { eachDay, weekdayOf } from './dates.ts';
 import { newId } from './ids.ts';
 import { isDriverWorking } from './board.ts';
 import type { Tx } from './tx.ts';
-import { WORK_TYPES, type Driver, type DriverWorkLog, type Snapshot, type WorkType } from './types.ts';
+import { ON_CALL_SHIFT, WORK_TYPES, type Driver, type DriverWorkLog, type Snapshot, type Weekday, type WorkType } from './types.ts';
+
+const ALL_WEEKDAYS: Weekday[] = [0, 1, 2, 3, 4, 5, 6];
+
+/** 고정 휴무 요일 (매주). 근무 요일의 나머지. 알바·근무 요일 미지정(매일 근무)은 없음 */
+export function fixedOffDays(d: Pick<Driver, 'work_days' | 'shift'>): Weekday[] {
+  if (d.shift === ON_CALL_SHIFT || !d.work_days.length) return [];
+  return ALL_WEEKDAYS.filter((w) => !d.work_days.includes(w));
+}
+
+/** 고정 휴무 요일 → 근무 요일 (휴무 없음 = 매일 근무 = 빈 목록) */
+export function workDaysFromOff(off: Weekday[]): Weekday[] {
+  return off.length ? ALL_WEEKDAYS.filter((w) => !off.includes(w)) : [];
+}
+
+/** 그날 고정 휴무인 사람 (그날 배차되었거나 근무 기록이 있으면 제외) */
+export function weeklyOffOn(snap: Snapshot, date: string): Driver[] {
+  const wd = weekdayOf(date) as Weekday;
+  const working = assignedDriverIds(snap, date);
+  for (const f of snap.field_assignments) if (f.date === date && !f.is_off && f.staff_id) working.add(f.staff_id);
+  return snap.drivers.filter((d) => fixedOffDays(d).includes(wd) && !working.has(d.id) && !workLogOf(snap, d.id, date));
+}
 
 export function workLogOf(snap: Pick<Snapshot, 'driver_work_logs'>, driverId: string, date: string): DriverWorkLog | undefined {
   return (snap.driver_work_logs ?? []).find((l) => l.driver_id === driverId && l.date === date);

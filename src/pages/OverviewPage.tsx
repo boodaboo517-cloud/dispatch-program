@@ -24,7 +24,7 @@ export function OverviewPage({ embedded }: { embedded?: boolean } = {}) {
       <DateBar date={date} onChange={setDate} />
       <SheetBoard zone="land" rows={board.land} waiting={board.waiting.land} external={board.external.land} field={board.field} />
       <SheetBoard zone="jeju" rows={board.jeju} waiting={board.waiting.jeju} external={board.external.jeju} field={board.field} />
-      <SheetExtras field={board.field} />
+      <SheetExtras date={date} field={board.field} />
       {wide && staff && (
         <div className="row" style={{ justifyContent: 'flex-end', marginTop: 8 }}>
           <button className="chip" onClick={() => exportSchedule(snap, date, date)}>⬇ 엑셀</button>

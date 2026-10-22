@@ -1,8 +1,9 @@
 // 종이 일정표 모양 (확인용, 누르기 없음): 차량 한 대 = 한 줄. 선박 | 차량 | 기사 | 하차 | 차량 | 기사 | 상차 | 선박 (제주는 오전·오후)
 import {
-  DAY_STATUS_LABEL, isExternal, parseShip, seqMark, sitesGrouped,
+  DAY_STATUS_LABEL, isExternal, parseShip, seqMark, sitesGrouped, weeklyOffOn,
   type BoardRow, type DailyOrder, type FieldAssignment, type Snapshot, type Zone,
 } from '../../domain/index.ts';
+import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { useSnap } from '../../ui/hooks.ts';
 import { clientName, driverName, productName, qtyText, shipTimeOf, vehicleNo } from '../../ui/labels.ts';
 
@@ -21,13 +22,42 @@ function Cols() {
   );
 }
 
+/** 칸 안에서 줄을 바꾸지 않고, 길면 글자를 줄여 한 줄에 맞춘다 (최소 6px, 그래도 길면 옆으로 눌러서) */
+function Fit({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const cell = el?.parentElement;
+    if (!el || !cell) return;
+    const fit = () => {
+      el.style.fontSize = '';
+      el.style.transform = '';
+      const cs = getComputedStyle(cell);
+      const avail = cell.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      const need = el.scrollWidth;
+      if (avail > 0 && need > avail) {
+        const base = parseFloat(getComputedStyle(el).fontSize);
+        el.style.fontSize = `${Math.max(6, Math.floor((base * avail / need) * 10) / 10)}px`;
+        // 최소 크기에서도 넘치면 옆으로 살짝 눌러서 맞춘다
+        const still = el.scrollWidth;
+        if (still > avail) el.style.transform = `scaleX(${(avail / still).toFixed(3)})`;
+      }
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(cell);
+    return () => ro.disconnect();
+  });
+  return <span ref={ref} className="fit">{children}</span>;
+}
+
 function ShipText({ snap, ship, tag }: { snap: Snapshot; ship: string | null; tag: string }) {
   if (!ship) return null;
   const { name, port } = parseShip(ship);
   return (
     <>
       {tag && <span className="ps-tag">{tag}</span>}
-      <span className="ps-pill">{name}{port && <small> {port}</small>}</span>
+      <Fit><span className="ps-pill">{name}{port && <small> {port}</small>}</span></Fit>
       <span className="ps-time">{shipTimeOf(snap, ship)}</span>
     </>
   );
@@ -55,16 +85,16 @@ function VehicleRow({ snap, row }: { snap: Snapshot; row: BoardRow }) {
   const statusText = status || row.statusMemo
     ? <>{status && <span className={`st ${status}`}>{DAY_STATUS_LABEL[status]}</span>}{row.statusMemo && <span className="ps-red"> {row.statusMemo}</span>}</>
     : null;
-  const veh = <td className="veh"><span className={`ps-pill veh ${row.inRepair ? 'repair' : ''}`}>{row.vehicle.short_no}</span></td>;
+  const veh = <td className="veh"><Fit><span className={`ps-pill veh ${row.inRepair ? 'repair' : ''}`}>{row.vehicle.short_no}</span></Fit></td>;
   return (
     <tr className={row.secondary ? 'secondary' : ''}>
       <td className="ship"><ShipText snap={snap} ship={row.arrivalShip} tag={row.arrivalTag} /></td>
       {veh}
-      <td className="drv">{name}</td>
-      <td className="body">{row.unloads.length ? <Orders snap={snap} list={row.unloads} /> : statusText}</td>
+      <td className="drv"><Fit>{name}</Fit></td>
+      <td className="body"><Fit>{row.unloads.length ? <Orders snap={snap} list={row.unloads} /> : statusText}</Fit></td>
       {veh}
-      <td className="drv">{loadName}</td>
-      <td className="body">{row.loads.length ? <Orders snap={snap} list={row.loads} /> : row.unloads.length ? statusText : null}</td>
+      <td className="drv"><Fit>{loadName}</Fit></td>
+      <td className="body"><Fit>{row.loads.length ? <Orders snap={snap} list={row.loads} /> : row.unloads.length ? statusText : null}</Fit></td>
       <td className="ship"><ShipText snap={snap} ship={row.departureShip} tag={row.departureTag} /></td>
     </tr>
   );
@@ -76,16 +106,16 @@ function WaitingRow({ snap, o }: { snap: Snapshot; o: DailyOrder }) {
   const load = o.kind === 'load';
   const veh = ext
     ? <td className="veh"><span className="ps-ext">{o.carrier_name || (o.carrier_type === 'shipper' ? '화주' : '용차')}</span></td>
-    : <td className="veh wait">미배차</td>;
+    : <td className="veh wait"><Fit>미배차</Fit></td>;
   return (
     <tr className={ext ? 'external' : 'waiting'}>
       <td className="ship">{!load && <ShipText snap={snap} ship={o.arrival_ship} tag={o.arrival_ship_tag} />}</td>
       {load ? <td className="veh" /> : veh}
       <td className="drv" />
-      <td className="body">{!load && <Orders snap={snap} list={[o]} />}</td>
+      <td className="body">{!load && <Fit><Orders snap={snap} list={[o]} /></Fit>}</td>
       {load ? veh : <td className="veh" />}
       <td className="drv" />
-      <td className="body">{load && <Orders snap={snap} list={[o]} />}</td>
+      <td className="body">{load && <Fit><Orders snap={snap} list={[o]} /></Fit>}</td>
       <td className="ship">{load && <ShipText snap={snap} ship={o.departure_ship} tag={o.departure_ship_tag} />}</td>
     </tr>
   );
@@ -98,10 +128,10 @@ function FieldRows({ snap, rows }: { snap: Snapshot; rows: FieldAssignment[] }) 
     <>
       {rows.map((f, i) => (
         <tr key={f.id} className={`fieldrow ${i === 0 ? 'first' : ''}`}>
-          <td className="site">{i === 0 || siteName(rows[i - 1]) !== siteName(f) ? siteName(f) : ''}</td>
-          <td className="veh">{f.vehicle_id && <span className="ps-pill veh">{vehicleNo(snap, f.vehicle_id)}</span>}</td>
-          <td className="drv">{driverName(snap, f.staff_id)}</td>
-          <td className="body">{f.task}</td>
+          <td className="site"><Fit>{i === 0 || siteName(rows[i - 1]) !== siteName(f) ? siteName(f) : ''}</Fit></td>
+          <td className="veh">{f.vehicle_id && <Fit><span className="ps-pill veh">{vehicleNo(snap, f.vehicle_id)}</span></Fit>}</td>
+          <td className="drv"><Fit>{driverName(snap, f.staff_id)}</Fit></td>
+          <td className="body"><Fit>{f.task}</Fit></td>
           <td className="veh" /><td className="drv" /><td className="body" /><td className="ship" />
         </tr>
       ))}
@@ -130,11 +160,12 @@ export function SheetBoard(p: { zone: Zone; rows: BoardRow[]; waiting: DailyOrde
 }
 
 /** 육지·제주 어느 표에도 속하지 않은 근무지와 휴무자 */
-export function SheetExtras({ field }: { field: FieldAssignment[] }) {
+export function SheetExtras({ date, field }: { date: string; field: FieldAssignment[] }) {
   const snap = useSnap();
   const { groups, off } = sitesGrouped(snap, field);
   const rest = groups.filter((g) => !g.site.zone).flatMap((g) => g.rows);
-  const offNames = off.map((f) => driverName(snap, f.staff_id)).filter(Boolean);
+  // 그날 휴무 지정 + 매주 고정 휴무
+  const offNames = [...new Set([...off.map((f) => driverName(snap, f.staff_id)), ...weeklyOffOn(snap, date).map((d) => d.name)])].filter(Boolean);
   if (!rest.length && !offNames.length) return null;
   return (
     <table className="paper extra">
