@@ -51,12 +51,12 @@ insert into vehicles (id, plate, short_no, vehicle_type, usage, ownership, home_
 insert into vehicles (id, plate, short_no, vehicle_type, usage, ownership, home_zone, default_driver_id, status, sort_order, oil_interval_km) values ('00000000-0000-4000-8000-000300000008', '1톤7956', '7956', '1톤', '업무용', '자차', 'jeju', null, '운행', 7, null) on conflict (id) do nothing;
 insert into vehicles (id, plate, short_no, vehicle_type, usage, ownership, home_zone, default_driver_id, status, sort_order, oil_interval_km) values ('00000000-0000-4000-8000-000300000009', 'K5 7694', '7694', '승용', '업무용', '자차', 'land', null, '운행', 8, null) on conflict (id) do nothing;
 insert into vehicles (id, plate, short_no, vehicle_type, usage, ownership, home_zone, default_driver_id, status, sort_order, oil_interval_km) values ('00000000-0000-4000-8000-000300000010', 'QM 0160', '0160', '승용', '업무용', '자차', 'land', null, '운행', 9, null) on conflict (id) do nothing;
-insert into field_sites (id, name, sort_order) values ('00000000-0000-4000-8000-000700000001', '본사', 0) on conflict (id) do nothing;
-insert into field_sites (id, name, sort_order) values ('00000000-0000-4000-8000-000700000002', '함덕센터', 1) on conflict (id) do nothing;
-insert into field_sites (id, name, sort_order) values ('00000000-0000-4000-8000-000700000003', '제품출고', 2) on conflict (id) do nothing;
-insert into field_sites (id, name, sort_order) values ('00000000-0000-4000-8000-000700000004', '고산농협', 3) on conflict (id) do nothing;
-insert into field_sites (id, name, sort_order) values ('00000000-0000-4000-8000-000700000005', '목포센터', 4) on conflict (id) do nothing;
-insert into field_sites (id, name, sort_order) values ('00000000-0000-4000-8000-000700000006', '정비실', 5) on conflict (id) do nothing;
+insert into field_sites (id, name, sort_order, zone) values ('00000000-0000-4000-8000-000700000001', '본사', 0, 'jeju') on conflict (id) do nothing;
+insert into field_sites (id, name, sort_order, zone) values ('00000000-0000-4000-8000-000700000002', '함덕센터', 1, 'jeju') on conflict (id) do nothing;
+insert into field_sites (id, name, sort_order, zone) values ('00000000-0000-4000-8000-000700000003', '제품출고', 2, 'jeju') on conflict (id) do nothing;
+insert into field_sites (id, name, sort_order, zone) values ('00000000-0000-4000-8000-000700000004', '고산농협', 3, 'jeju') on conflict (id) do nothing;
+insert into field_sites (id, name, sort_order, zone) values ('00000000-0000-4000-8000-000700000005', '목포센터', 4, 'land') on conflict (id) do nothing;
+insert into field_sites (id, name, sort_order, zone) values ('00000000-0000-4000-8000-000700000006', '정비실', 5, 'jeju') on conflict (id) do nothing;
 insert into recurring_field_work (id, staff_id, active, generated_until) values ('00000000-0000-4000-8000-000800000001', '00000000-0000-4000-8000-000200000006', true, null) on conflict (id) do nothing;
 insert into recurring_field_work (id, staff_id, active, generated_until) values ('00000000-0000-4000-8000-000800000002', '00000000-0000-4000-8000-000200000007', true, null) on conflict (id) do nothing;
 insert into recurring_field_work (id, staff_id, active, generated_until) values ('00000000-0000-4000-8000-000800000003', '00000000-0000-4000-8000-000200000008', true, null) on conflict (id) do nothing;

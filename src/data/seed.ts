@@ -83,7 +83,7 @@ export function seedSnapshot(): Snapshot {
   s.product_pricing = [{ id: sid(6, 1), product_id: sid(5, 4), calc_method: 'per_pallet', unit_price: 90000 }];
 
   const sites = ['본사', '함덕센터', '제품출고', '고산농협', '목포센터', '정비실'];
-  s.field_sites = sites.map((name, i) => ({ id: sid(7, i + 1), name, sort_order: i }));
+  s.field_sites = sites.map((name, i) => ({ id: sid(7, i + 1), name, sort_order: i, zone: name === '목포센터' ? 'land' : 'jeju' }));
   const site = (name: string) => s.field_sites.find((x) => x.name === name)!.id;
 
   const fixed: [string, string, string, string | null][] = [

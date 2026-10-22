@@ -269,6 +269,8 @@ export interface OrderRevenue extends Base {
 export interface FieldSite extends Base {
   name: string;
   sort_order: number;
+  /** 일정표에서 육지 / 제주 어느 표 아래에 보일지 (없으면 따로 표시) */
+  zone?: Zone | null;
 }
 
 export interface FieldAssignment extends Base {

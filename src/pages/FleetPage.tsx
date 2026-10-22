@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   activeRepair, checkOdometer, newId, oilStatus, planCreateFieldRecurring, planFieldRecurringChange, planFieldRecurringEnd,
   setDayOff, versionOn, weekdaysLabel,
-  ON_CALL_SHIFT, SHIFT_PRESETS, driverGroup, type Driver, type Ship, type Vehicle, type VehicleType, type Weekday,
+  ON_CALL_SHIFT, SHIFT_PRESETS, driverGroup, type Driver, type Ship, type Vehicle, type VehicleType, type Weekday, type Zone,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
 import { fmtDate, seoulToday } from '../lib/time.ts';
@@ -339,10 +339,14 @@ function FieldSetupPanel() {
         {snap.field_sites.map((s) => (
           <div key={s.id} className="row">
             <div className="grow"><Editable label="근무지" value={s.name} onSave={staff ? (v) => store.run((tx) => tx.update('field_sites', s.id, { name: v })) : undefined} /></div>
+            <select aria-label="일정표 위치" value={s.zone ?? ''} disabled={!staff} style={{ width: 'auto' }}
+              onChange={(e) => store.run((tx) => tx.update('field_sites', s.id, { zone: (e.target.value || null) as Zone | null }))}>
+              <option value="">표시 위치 없음</option><option value="land">육지 표</option><option value="jeju">제주 표</option>
+            </select>
             {staff && <button className="ghost" onClick={() => confirm('삭제할까요?') && store.run((tx) => tx.remove('field_sites', s.id))}>✕</button>}
           </div>
         ))}
-        {staff && <button onClick={() => { const n = prompt('근무지 이름')?.trim(); if (n) store.run((tx) => tx.insert('field_sites', { id: newId(), name: n, sort_order: snap.field_sites.length })); }}>＋ 근무지</button>}
+        {staff && <button onClick={() => { const n = prompt('근무지 이름')?.trim(); if (n) store.run((tx) => tx.insert('field_sites', { id: newId(), name: n, sort_order: snap.field_sites.length, zone: 'jeju' })); }}>＋ 근무지</button>}
       </div>
       <h3>고정 근무 (매일 자동 표시 · 변경 시 지난 날짜는 그대로)</h3>
       {snap.recurring_field_work.map((r) => {
