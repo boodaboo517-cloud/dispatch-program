@@ -39,7 +39,8 @@ function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: 
     const hasOrders = row.unloads.length + row.loads.length > 0;
     const seq = (n: number | null) => (n ? ` ${seqMark(n)}` : '');
     const drv = driverName(s, row.driverId) ? driverName(s, row.driverId) + seq(row.unloadSeq) : hasOrders ? '기사 미지정' : '';
-    const loadDrv = driverName(s, row.loadDriverId) ? driverName(s, row.loadDriverId) + seq(row.loadSeq) : hasOrders ? '기사 미지정' : '';
+    const helper = row.helperId ? ` +${driverName(s, row.helperId)}${row.helperRole ? `(${row.helperRole})` : ''}` : '';
+    const loadDrv = (driverName(s, row.loadDriverId) ? driverName(s, row.loadDriverId) + seq(row.loadSeq) : hasOrders ? '기사 미지정' : '') + helper;
     for (let i = 0; i < n; i++) {
       const line = ws.getRow(r + i);
       if (hasOrders) {
@@ -50,7 +51,7 @@ function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: 
     const first = ws.getRow(r);
     first.getCell(1).value = shipText(row.arrivalShip, row.arrivalTag);
     first.getCell(2).value = row.vehicle.short_no;
-    first.getCell(3).value = drv;
+    first.getCell(3).value = drv + helper;
     first.getCell(16).value = shipText(row.departureShip, row.departureTag);
     if (hasOrders) {
       first.getCell(9).value = row.vehicle.short_no;

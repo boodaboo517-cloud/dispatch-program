@@ -212,6 +212,10 @@ export interface DailyOrder extends Base {
 }
 
 /** 차량별 하루 한 줄 — 선박·상태·기사 등 차량 단위 정보 */
+/** 동승 기사 역할: 선탑(교육) / 지원 */
+export type HelperRole = '선탑' | '지원';
+export const HELPER_ROLE_LABEL: Record<HelperRole, string> = { 선탑: '선탑(교육)', 지원: '지원' };
+
 export interface VehicleDay extends Base {
   date: string;
   vehicle_id: string;
@@ -223,6 +227,9 @@ export interface VehicleDay extends Base {
   /** 기사의 그날 처리 순서 (1번차·2번차…). 오후 기사가 따로 없으면 오후는 오전 순서를 따름 */
   unload_seq?: number | null;
   load_seq?: number | null;
+  /** 함께 타는 두 번째 기사 (선탑·교육 / 지원) */
+  helper_driver_id?: string | null;
+  helper_role?: HelperRole | '';
   arrival_ship: string | null;
   arrival_ship_tag: ShipTag;
   departure_ship: string | null;

@@ -64,25 +64,43 @@ function ShipText({ snap, ship, tag }: { snap: Snapshot; ship: string | null; ta
   );
 }
 
+/** 오더 칸: 거래처별로 묶어 "업체 품목 수량, 품목 수량". 바로 위에 상차지(하차는 하차지)·비고·품목 주의사항을 빨간 작은 글씨로 */
 function Orders({ snap, list }: { snap: Snapshot; list: DailyOrder[] }) {
+  const groups: DailyOrder[][] = [];
+  for (const o of list) {
+    const last = groups[groups.length - 1];
+    if (last && clientName(snap, last[0]) === clientName(snap, o)) last.push(o);
+    else groups.push([o]);
+  }
   return (
     <>
-      {list.map((o, i) => (
-        <span key={o.id}>
-          {i > 0 && <span className="ps-sep"> / </span>}
-          {[clientName(snap, o), productName(snap, o), qtyText(o)].filter(Boolean).join(' ')}
-          {o.kind === 'load' && o.shipment === 'bulk' && <span className="ps-red"> 벌크</span>}
-          {o.memo && <span className="ps-red"> {o.memo}</span>}
-        </span>
-      ))}
+      {groups.map((g) => {
+        const notes = [...new Set(g.flatMap((o) => {
+          const product = snap.products.find((x) => x.id === o.product_id);
+          return [
+            o.kind === 'load' ? o.pickup_place : o.dropoff_place,
+            o.kind === 'load' && o.shipment === 'bulk' ? '벌크' : '',
+            o.memo,
+            product?.caution?.split('\n')[0],
+          ].map((x) => x?.trim() ?? '');
+        }).filter(Boolean))];
+        const items = g.map((o) => [productName(snap, o), qtyText(o)].filter(Boolean).join(' ')).filter(Boolean);
+        return (
+          <div key={g[0].id} className="ps-ord">
+            {notes.length > 0 && <div className="ps-oline"><Fit><span className="ps-note">{notes.join(' · ')}</span></Fit></div>}
+            <div className="ps-oline"><Fit>{[clientName(snap, g[0]), items.join(', ')].filter(Boolean).join(' ') || '·'}</Fit></div>
+          </div>
+        );
+      })}
     </>
   );
 }
 
 function VehicleRow({ snap, row }: { snap: Snapshot; row: BoardRow }) {
   const status = row.status && row.status !== 'field' ? row.status : '';
-  const name = `${driverName(snap, row.driverId)}${seqMark(row.unloadSeq)}`;
-  const loadName = `${driverName(snap, row.loadDriverId)}${seqMark(row.loadSeq)}`;
+  const helper = row.helperId ? <div className="ps-oline center"><Fit><span className="ps-helper">+{driverName(snap, row.helperId)} {row.helperRole}</span></Fit></div> : null;
+  const name = <><div className="ps-oline center"><Fit>{driverName(snap, row.driverId)}{seqMark(row.unloadSeq)}</Fit></div>{helper}</>;
+  const loadName = <><div className="ps-oline center"><Fit>{driverName(snap, row.loadDriverId)}{seqMark(row.loadSeq)}</Fit></div>{helper}</>;
   const statusText = status || row.statusMemo
     ? <>{status && <span className={`st ${status}`}>{DAY_STATUS_LABEL[status]}</span>}{row.statusMemo && <span className="ps-red"> {row.statusMemo}</span>}</>
     : null;
@@ -91,11 +109,11 @@ function VehicleRow({ snap, row }: { snap: Snapshot; row: BoardRow }) {
     <tr className={row.secondary ? 'secondary' : ''}>
       <td className="ship"><ShipText snap={snap} ship={row.arrivalShip} tag={row.arrivalTag} /></td>
       {veh}
-      <td className="drv"><Fit>{name}</Fit></td>
-      <td className="body"><Fit>{row.unloads.length ? <Orders snap={snap} list={row.unloads} /> : statusText}</Fit></td>
+      <td className="drv">{name}</td>
+      <td className="body">{row.unloads.length ? <Orders snap={snap} list={row.unloads} /> : <Fit>{statusText}</Fit>}</td>
       {veh}
-      <td className="drv"><Fit>{loadName}</Fit></td>
-      <td className="body"><Fit>{row.loads.length ? <Orders snap={snap} list={row.loads} /> : row.unloads.length ? statusText : null}</Fit></td>
+      <td className="drv">{loadName}</td>
+      <td className="body">{row.loads.length ? <Orders snap={snap} list={row.loads} /> : row.unloads.length ? <Fit>{statusText}</Fit> : null}</td>
       <td className="ship"><ShipText snap={snap} ship={row.departureShip} tag={row.departureTag} /></td>
     </tr>
   );
@@ -113,10 +131,10 @@ function WaitingRow({ snap, o }: { snap: Snapshot; o: DailyOrder }) {
       <td className="ship">{!load && <ShipText snap={snap} ship={o.arrival_ship} tag={o.arrival_ship_tag} />}</td>
       {load ? <td className="veh" /> : veh}
       <td className="drv" />
-      <td className="body">{!load && <Fit><Orders snap={snap} list={[o]} /></Fit>}</td>
+      <td className="body">{!load && <Orders snap={snap} list={[o]} />}</td>
       {load ? veh : <td className="veh" />}
       <td className="drv" />
-      <td className="body">{load && <Fit><Orders snap={snap} list={[o]} /></Fit>}</td>
+      <td className="body">{load && <Orders snap={snap} list={[o]} />}</td>
       <td className="ship">{load && <ShipText snap={snap} ship={o.departure_ship} tag={o.departure_ship_tag} />}</td>
     </tr>
   );

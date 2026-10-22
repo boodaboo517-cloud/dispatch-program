@@ -7,7 +7,7 @@ import { shipTimeOf } from './ships.ts';
 import type { Tx } from './tx.ts';
 import { ON_CALL_SHIFT } from './types.ts';
 import type {
-  DailyOrder, DayStatus, Driver, FieldAssignment, Kind, MaintenanceKind, ShipTag, Snapshot, Vehicle, VehicleDay, Zone,
+  DailyOrder, DayStatus, Driver, FieldAssignment, HelperRole, Kind, MaintenanceKind, ShipTag, Snapshot, Vehicle, VehicleDay, Zone,
 } from './types.ts';
 
 export const DAY_STATUS_LABEL: Record<Exclude<DayStatus, ''>, string> = {
@@ -95,6 +95,9 @@ export interface BoardRow {
   /** 기사의 그날 처리 순서 (없으면 null) */
   unloadSeq: number | null;
   loadSeq: number | null;
+  /** 동승 기사 (선탑·지원) */
+  helperId: string | null;
+  helperRole: HelperRole | '';
   arrivalShip: string | null;
   arrivalTag: ShipTag;
   departureShip: string | null;
@@ -172,6 +175,8 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
       loadDriverId: vd?.load_driver_id || driverId,
       unloadSeq: vd?.unload_seq ?? null,
       loadSeq: vd?.load_seq ?? (vd?.load_driver_id ? null : vd?.unload_seq ?? null),
+      helperId: vd?.helper_driver_id ?? null,
+      helperRole: vd?.helper_role ?? '',
       arrivalShip: vd?.arrival_ship ?? unloads.find((o) => o.arrival_ship)?.arrival_ship ?? null,
       arrivalTag: vd?.arrival_ship ? vd.arrival_ship_tag : unloads.find((o) => o.arrival_ship)?.arrival_ship_tag ?? '',
       departureShip: vd?.departure_ship ?? loads.find(vehicleSails)?.departure_ship ?? null,
@@ -198,6 +203,8 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
         loadDriverId: vd?.load_driver_id || driverId,
         unloadSeq: null,
         loadSeq: null,
+        helperId: vd?.helper_driver_id ?? null,
+        helperRole: vd?.helper_role ?? '',
         arrivalShip: arr?.arrival_ship ?? null,
         arrivalTag: arr?.arrival_ship_tag ?? '',
         departureShip: dep?.departure_ship ?? null,
@@ -385,6 +392,12 @@ export function setRowDriver(tx: Tx, p: { date: string; vehicle_id: string; zone
   if (side === 'unload' && d) numberJobs(tx, p.date, d, vd.id, 'unload');
   if (side === 'load' && now.load_driver_id) numberJobs(tx, p.date, now.load_driver_id, vd.id, 'load');
   if (old && old !== d) tidyJobs(tx, p.date, old);
+}
+
+/** 동승 기사 (선탑·교육 / 지원) 지정. driver_id = null 이면 해제 */
+export function setRowHelper(tx: Tx, p: { date: string; vehicle_id: string; zone: Zone | null; driver_id: string | null; role: HelperRole | '' }) {
+  const vd = ensureVehicleDay(tx, p.date, p.vehicle_id, p.zone);
+  tx.update('vehicle_days', vd.id, { helper_driver_id: p.driver_id, helper_role: p.driver_id ? p.role : '' });
 }
 
 /** 처리 순서 직접 지정 (null = 표시 안 함) */

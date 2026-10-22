@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  activeRepair, checkOdometer, newId, oilStatus, planCreateFieldRecurring, planFieldRecurringChange, planFieldRecurringEnd,
+  activeRepair, newId, planCreateFieldRecurring, planFieldRecurringChange, planFieldRecurringEnd,
   setDayOff, versionOn, weekdaysLabel, fixedOffDays, workDaysFromOff,
   ON_CALL_SHIFT, SHIFT_PRESETS, driverGroup, type Driver, type Ship, type Vehicle, type VehicleType, type Weekday, type Zone,
 } from '../domain/index.ts';
@@ -21,45 +21,6 @@ import { MaintenancePanel } from './MaintenancePanel.tsx';
 type Tab = 'vehicles' | 'drivers' | 'attendance' | 'ships' | 'maintenance' | 'field';
 const TYPES: VehicleType[] = ['5톤', '통윙', '통윙2냉', '1톤', '승용'];
 
-export function OilBar({ v }: { v: Vehicle }) {
-  const snap = useSnap();
-  const o = oilStatus(snap, v, seoulToday());
-  if (o.level === 'unknown') return <div className="muted small">엔진오일: 교환 기록·주행거리 없음</div>;
-  return (
-    <div>
-      <div className="row small"><span className="grow">엔진오일 {o.usedKm!.toLocaleString()} / {o.intervalKm.toLocaleString()}km</span>
-        <span style={{ color: o.level === 'over' ? 'var(--red)' : undefined, fontWeight: 700 }}>{o.remainingKm! >= 0 ? `${o.remainingKm!.toLocaleString()}km 남음` : `${(-o.remainingKm!).toLocaleString()}km 초과`}</span></div>
-      <div className={`bar ${o.level}`}><i style={{ width: `${Math.min(100, o.ratio! * 100)}%` }} /></div>
-      {o.expectedDate && <div className="muted small">예상 교환일 {fmtDate(o.expectedDate)}</div>}
-    </div>
-  );
-}
-
-export function OdometerInput({ vehicleId }: { vehicleId: string }) {
-  const snap = useSnap();
-  const [km, setKm] = useState('');
-  const last = snap.odometer_logs.filter((l) => l.vehicle_id === vehicleId).sort((a, b) => a.date.localeCompare(b.date)).pop();
-  const submit = () => {
-    const n = Number(km.replace(/,/g, ''));
-    if (!n) return;
-    const today = seoulToday();
-    const warn = checkOdometer(snap.odometer_logs, vehicleId, today, n);
-    if (warn.length && !confirm(`확인해 주세요:\n${warn.join('\n')}\n\n그래도 저장할까요?`)) return;
-    const existing = snap.odometer_logs.find((l) => l.vehicle_id === vehicleId && l.date === today);
-    store.run((tx) => (existing ? tx.update('odometer_logs', existing.id, { km: n }) : tx.insert('odometer_logs', { id: newId(), vehicle_id: vehicleId, date: today, km: n })));
-    setKm('');
-    store.toast('주행거리 저장');
-  };
-  return (
-    <div>
-      <div className="row">
-        <input inputMode="numeric" placeholder={last ? `마지막 ${last.km.toLocaleString()}km (${fmtDate(last.date)})` : '현재 주행거리 km'} value={km} onChange={(e) => setKm(e.target.value)} />
-        <button className="primary" onClick={submit}>입력</button>
-      </div>
-    </div>
-  );
-}
-
 function VehicleSheet({ v, close }: { v: Vehicle; close: () => void }) {
   const snap = useSnap();
   const cur = snap.vehicles.find((x) => x.id === v.id) ?? v;
@@ -74,9 +35,7 @@ function VehicleSheet({ v, close }: { v: Vehicle; close: () => void }) {
       <Editable label="소속" value={cur.ownership} options={[{ value: '자차', label: '자차' }, { value: '개인', label: '개인(용차)' }]} onSave={s('ownership')} />
       <Editable label="상태" value={cur.status} options={['운행', '정비', '휴차'].map((t) => ({ value: t, label: t }))} onSave={s('status')} />
       <Editable label="현재 위치" value={cur.home_zone ?? ''} options={[{ value: '', label: '미정' }, { value: 'land', label: '육지' }, { value: 'jeju', label: '제주' }]} onSave={(x) => save({ home_zone: (x || null) as Vehicle['home_zone'] })} />
-      <Editable label="오일 주기 km" value={cur.oil_interval_km} type="number" placeholder="기본값 사용" onSave={s('oil_interval_km', true)} />
       <Editable label="정렬 순서" value={cur.sort_order} type="number" onSave={s('sort_order', true)} />
-      <div className="card"><b>주행거리</b><OdometerInput vehicleId={v.id} /><div style={{ marginTop: 8 }}><OilBar v={cur} /></div></div>
       <p className="muted small">정비 기간은 "정비" 탭에서 등록하면 그 기간 동안 일정표에 수리로 자동 표시됩니다. 현재 위치는 처음 등록할 때만 쓰이고, 이후는 선박 이동으로 자동 결정됩니다.</p>
       <button className="danger" style={{ width: '100%' }} onClick={() => { if (confirm('차량을 삭제할까요?')) { store.run((tx) => tx.remove('vehicles', v.id)); close(); } }}>차량 삭제</button>
     </Sheet>
@@ -228,7 +187,6 @@ export function FleetPage() {
                   <span className={`badge ${status === '운행' ? 'ok' : status === '정비' ? 'red' : 'warn'}`}>{status}</span>
                 </div>
                 <div className="muted small">등록 위치 {v.home_zone ? ZONE_LABEL[v.home_zone] : '미정'}{repair ? ` · ${repair.kind} ${repair.shop}` : ''}</div>
-                {v.usage === '배차' && <OilBar v={v} />}
               </div>
             );
           })}

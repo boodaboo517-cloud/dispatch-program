@@ -31,7 +31,6 @@ function RecordSheet({ rec, close }: { rec: MaintenanceRecord; close: () => void
         <label className="field grow"><span>종료일 (비우면 정비 중)</span><input type="date" value={r.end_date ?? ''} onChange={(e) => set({ end_date: e.target.value || null })} /></label>
       </div>
       <div className="row">
-        <label className="field grow"><span>주행거리 km</span><input inputMode="numeric" value={r.odometer_km ?? ''} onChange={(e) => set({ odometer_km: e.target.value ? Number(e.target.value) : null })} /></label>
         <label className="field grow"><span>금액</span><input inputMode="numeric" value={r.cost ?? ''} onChange={(e) => set({ cost: e.target.value ? Number(e.target.value.replace(/,/g, '')) : null })} /></label>
       </div>
       <label className="field"><span>담당 직원 (정비실 입고 처리 시 현장근무에 자동 표시)</span>
@@ -128,12 +127,12 @@ export function MaintenancePanel() {
         <button onClick={() => exportMaintenance(snap, addDays(today, -365), today, vfilter || undefined)}>⬇ 엑셀</button>
       </div>
       <table className="simple">
-        <thead><tr><th>차량</th><th>종류</th><th>기간</th><th>업체</th><th className="num">km</th><th className="num">금액</th></tr></thead>
+        <thead><tr><th>차량</th><th>종류</th><th>기간</th><th>업체</th><th className="num">금액</th></tr></thead>
         <tbody>
           {history.map((r) => (
             <tr key={r.id} onClick={() => staff && sheet.open((c) => <RecordSheet rec={r} close={c} />)} style={{ cursor: 'pointer' }}>
               <td>{vehicleNo(snap, r.vehicle_id)}</td><td>{r.kind}</td><td>{fmtDate(r.start_date)}{r.end_date && r.end_date !== r.start_date ? `~${fmtDate(r.end_date)}` : !r.end_date ? '~' : ''}</td>
-              <td>{r.shop} {r.staff_id && <span className="muted">{driverName(snap, r.staff_id)}</span>}</td><td className="num">{r.odometer_km?.toLocaleString()}</td><td className="num">{r.cost?.toLocaleString()}</td>
+              <td>{r.shop} {r.staff_id && <span className="muted">{driverName(snap, r.staff_id)}</span>}</td><td className="num">{r.cost?.toLocaleString()}</td>
             </tr>
           ))}
         </tbody>

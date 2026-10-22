@@ -340,7 +340,7 @@ export function defaultPlaces(s: { clients: { id: string; pickup_address?: strin
 }
 
 /** 목록에서 고른 직후: "입력됨" + 수량만 빠르게 수정 */
-export function QuickQtySheet({ orderId, close }: { orderId: string; close: () => void }) {
+export function QuickQtySheet({ orderId, close, onAddMore }: { orderId: string; close: () => void; onAddMore?: () => void }) {
   const snap = useSnap();
   const o = snap.daily_orders.find((x) => x.id === orderId);
   const product = o?.product_id ? snap.products.find((x) => x.id === o.product_id) : undefined;
@@ -355,7 +355,10 @@ export function QuickQtySheet({ orderId, close }: { orderId: string; close: () =
     close();
   };
   return (
-    <Sheet title="✓ 입력됨" onClose={done} footer={<button className="primary" onClick={done}>완료</button>}>
+    <Sheet title="✓ 입력됨" onClose={done} footer={<>
+      {onAddMore && <button onClick={() => { done(); onAddMore(); }}>＋ 같은 거래처 다른 품목</button>}
+      <button className="primary" onClick={done}>완료</button>
+    </>}>
       <p style={{ fontSize: 18 }}><b>{clientName(snap, o)}</b> {productName(snap, o)} {o.region && `· ${o.region}`}</p>
       <QtyInput big quantity={o.quantity} unit={o.unit} onChange={setQty} />
       {product && (

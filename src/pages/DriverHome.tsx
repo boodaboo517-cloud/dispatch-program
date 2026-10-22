@@ -1,23 +1,23 @@
 // 기사 조회 전용 화면: 내 배차 카드 / 전체 일정 보기 (수정 버튼 없음)
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { addDays, buildBoard, buildIndex, type BoardRow } from '../domain/index.ts';
+import { HELPER_ROLE_LABEL, addDays, buildBoard, buildIndex, type BoardRow } from '../domain/index.ts';
 
 /** 내가 맡은 쪽(오전/오후)과 그날 처리 순서 */
 function myPart(row: BoardRow, me: string | null) {
-  const unload = !!me && row.driverId === me;
-  const load = !!me && row.loadDriverId === me;
+  const helper = !!me && row.helperId === me;
+  const unload = !!me && (row.driverId === me || helper);
+  const load = !!me && (row.loadDriverId === me || helper);
   const seqs = [unload ? row.unloadSeq : null, load ? row.loadSeq : null].filter((n): n is number => !!n);
-  return { unload, load, seq: seqs.length ? Math.min(...seqs) : null };
+  return { unload, load, helper, seq: helper ? null : seqs.length ? Math.min(...seqs) : null };
 }
 import { store } from '../data/store.ts';
 import { fmtDate, fmtStamp, seoulToday } from '../lib/time.ts';
 import { useSession, useSnap } from '../ui/hooks.ts';
-import { clientName, productName, productOf, qtyText, setting, shipText, shipTimeOf, ZONE_LABEL } from '../ui/labels.ts';
+import { clientName, driverName, productName, productOf, qtyText, setting, shipText, shipTimeOf, ZONE_LABEL } from '../ui/labels.ts';
 import { StorageBadge, tempText } from '../ui/OrderSheet.tsx';
 import { OverviewPage } from './OverviewPage.tsx';
 import { DateBar } from './SchedulePage.tsx';
-import { OdometerInput, OilBar } from './FleetPage.tsx';
 
 function DispatchCard({ row, date, title, me }: { row: BoardRow; date: string; title?: string; me: string | null }) {
   const snap = useSnap();
@@ -45,6 +45,7 @@ function DispatchCard({ row, date, title, me }: { row: BoardRow; date: string; t
     <div className="drv-card" style={{ margin: '10px 0' }}>
       {title && <div className="muted">{title}</div>}
       {part.seq && <div className="badge warn" style={{ fontSize: 16 }}>{part.seq}번째 차량</div>}
+      {part.helper && <div className="badge warn" style={{ fontSize: 16 }}>동승 · {row.helperRole ? HELPER_ROLE_LABEL[row.helperRole] : '동승'} (기사 {driverName(snap, row.driverId) || '미지정'})</div>}
       <div className="plate">{row.vehicle.short_no}</div>
       <div style={{ textAlign: 'center' }} className="muted">{fmtDate(date)} · {ZONE_LABEL[z]} · {row.vehicle.plate}</div>
       {showUnload && <><h3>{z === 'land' ? '하차' : '오전'} {row.unloads.length}건 {row.arrivalShip && <span className="badge ok">{z === 'land' ? '상행' : '도착'} {shipText(row.arrivalShip, row.arrivalTag)}</span>}</h3>
@@ -68,19 +69,8 @@ export function DriverHome() {
   const board = useMemo(() => buildBoard(snap, date, idx), [snap, date, idx]);
   const tomorrow = useMemo(() => buildBoard(snap, addDays(date, 1), idx), [snap, date, idx]);
   const mine = (b: typeof board) => b.rows
-    .filter((r) => !!driverId && (r.driverId === driverId || r.loadDriverId === driverId))
+    .filter((r) => !!driverId && (r.driverId === driverId || r.loadDriverId === driverId || r.helperId === driverId))
     .sort((a, b) => (myPart(a, driverId).seq ?? 99) - (myPart(b, driverId).seq ?? 99));
-  // 주행거리 입력 차량: 기본 기사 지정이 없으므로 이 날 내가 배차된 차량, 없으면 최근에 탄 차량
-  const myVehicle = useMemo(() => {
-    if (!driverId) return undefined;
-    const today = mine(board)[0]?.vehicle;
-    if (today) return today;
-    const recent = snap.vehicle_days
-      .filter((v) => (v.driver_id === driverId || v.load_driver_id === driverId) && v.date <= date)
-      .sort((a, b) => b.date.localeCompare(a.date))[0];
-    return snap.vehicles.find((v) => v.id === recent?.vehicle_id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snap, board, driverId, date]);
   const dispatcher = setting(snap, 'dispatcher_phone', '');
 
   useEffect(() => {
@@ -114,13 +104,6 @@ export function DriverHome() {
           {mine(tomorrow).map((r) => (
             <div key={r.vehicle.id} style={{ opacity: 0.8 }}><DispatchCard row={r} date={addDays(date, 1)} title="내일 배차 미리보기" me={driverId} /></div>
           ))}
-          {myVehicle && (
-            <div className="card">
-              <b>{myVehicle.short_no} 차량 주행거리 입력</b>
-              <OdometerInput vehicleId={myVehicle.id} />
-              <div style={{ marginTop: 8 }}><OilBar v={myVehicle} /></div>
-            </div>
-          )}
         </>
       ) : (
         <OverviewPage embedded />

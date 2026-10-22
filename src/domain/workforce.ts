@@ -50,6 +50,7 @@ export function assignedDriverIds(snap: Snapshot, date: string): Set<string> {
     if (v.date !== date) continue;
     if (v.driver_id) ids.add(v.driver_id);
     if (v.load_driver_id) ids.add(v.load_driver_id);
+    if (v.helper_driver_id) ids.add(v.helper_driver_id);
   }
   for (const o of snap.daily_orders) if (o.date === date && o.driver_id) ids.add(o.driver_id);
   return ids;

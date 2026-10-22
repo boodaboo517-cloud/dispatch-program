@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { buildBoard, setDriverSeq, setRowDriver } from '../board.ts';
+import { buildBoard, setDriverSeq, setRowDriver, setRowHelper } from '../board.ts';
 import { blankOrder, saveOrder } from '../orders.ts';
 import { Tx } from '../tx.ts';
 import { ON_CALL_SHIFT, type Driver } from '../types.ts';
-import { fixedOffDays, weeklyOffOn, workDaysFromOff } from '../workforce.ts';
+import { assignedDriverIds, fixedOffDays, weeklyOffOn, workDaysFromOff } from '../workforce.ts';
 import { baseSnapshot, resetIds } from './fixtures.ts';
 
 beforeEach(resetIds);
@@ -119,5 +119,24 @@ describe('고정 휴무일 (매주)', () => {
     setRowDriver(tx, { date: sunday, vehicle_id: 'v9915', zone: 'land', driver_id: 'dB' });
     expect(weeklyOffOn(tx.result(), sunday).map((d) => d.id)).toEqual(['dA']);
     expect(weeklyOffOn(tx.result(), '2026-10-26')).toEqual([]);
+  });
+});
+
+describe('한 차량 기사 2명 (선탑·지원)', () => {
+  it('동승 기사와 역할이 줄에 나오고, 그날 배차된 사람으로 잡힌다', () => {
+    const tx = setup();
+    set(tx, 'v9915', 'dA');
+    setRowHelper(tx, { date: D, vehicle_id: 'v9915', zone: 'jeju', driver_id: 'dB', role: '선탑' });
+    const r = row(tx, 'v9915');
+    expect([r.driverId, r.helperId, r.helperRole]).toEqual(['dA', 'dB', '선탑']);
+    expect(assignedDriverIds(tx.result(), D).has('dB')).toBe(true);
+    // 동승은 처리 순서 번호를 만들지 않는다
+    expect(r.unloadSeq).toBeNull();
+  });
+  it('해제하면 역할도 지운다', () => {
+    const tx = setup();
+    setRowHelper(tx, { date: D, vehicle_id: 'v9915', zone: 'jeju', driver_id: 'dB', role: '지원' });
+    setRowHelper(tx, { date: D, vehicle_id: 'v9915', zone: 'jeju', driver_id: null, role: '' });
+    expect([row(tx, 'v9915').helperId, row(tx, 'v9915').helperRole]).toEqual([null, '']);
   });
 });

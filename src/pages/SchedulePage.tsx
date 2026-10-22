@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { addDays, type Zone } from '../domain/index.ts';
 import { exportSchedule } from '../excel/exportSchedule.ts';
 import { fmtLong, fmtStamp, seoulToday } from '../lib/time.ts';
@@ -32,7 +32,6 @@ export function DateBar({ date, onChange }: { date: string; onChange: (d: string
 
 export function SchedulePage() {
   const [params, setParams] = useSearchParams();
-  const nav = useNavigate();
   const date = params.get('date') ?? seoulToday();
   const tab = (params.get('zone') as Tab) ?? 'land';
   const focusParam = params.get('focus');
@@ -143,7 +142,6 @@ export function SchedulePage() {
           <p className="muted">노란 차량 칸을 누르면 그날 그 지역 차량 목록이 뜹니다. PC에서는 육지·제주 탭에서 끌어다 차량 줄에 놓을 수도 있습니다.</p>
         </>
       )}
-      {staff && <button className="fab" aria-label="오더 추가" onClick={() => nav(`/order?date=${date}&zone=${zone ?? 'land'}`)}>＋</button>}
     </div>
   );
 }
