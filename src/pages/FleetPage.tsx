@@ -245,14 +245,13 @@ function ShipsPanel() {
         <div key={s.id} className="card" onClick={() => open(s)} style={{ cursor: staff ? 'pointer' : 'default' }}>
           <div className="row">
             <b className="grow" style={{ fontSize: 19 }}>{s.name}</b>
-            {s.route !== 'both' && <span className="badge">{s.route === 'up' ? '상행만' : '하행만'}</span>}
+            {s.route !== 'both' && <span className="badge">{s.route === 'up' ? '제주 출발만' : '육지 출발만'}</span>}
             {s.arrival_day_offset !== 1 && <span className="badge warn">+{s.arrival_day_offset}일 도착</span>}
             {staff && <span className="muted">수정 ›</span>}
           </div>
-          <div className="small">제주 출발(상행) <b>{s.departs_at || '-'}</b></div>
-          {(s.port_times ?? []).length > 0 && (
-            <div className="small">하행: {(s.port_times ?? []).map((p) => `${p.port} ${p.time || '-'}`).join(' · ')}</div>
-          )}
+          <div className="small">출발: 제주 <b>{s.departs_at || '-'}</b>
+            {(s.port_times ?? []).map((p) => <span key={p.port}> · {p.port} <b>{p.time || '-'}</b></span>)}
+          </div>
         </div>
       ))}
     </>

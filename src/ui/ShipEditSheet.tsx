@@ -4,6 +4,9 @@ import { newId, type Ship } from '../domain/index.ts';
 import { store } from '../data/store.ts';
 import { Sheet } from './Sheet.tsx';
 
+/** 육지 출발 항구 바로 넣기 버튼 */
+const LAND_PORTS = ['목포', '부산', '완도', '삼천포', '녹동', '여수', '진도', '인천', '고흥'];
+
 export const blankShip = (sortOrder: number): Ship =>
   ({ id: newId(), name: '', departs_at: '', route: 'both', arrival_day_offset: 1, sort_order: sortOrder, port_times: [] });
 
@@ -25,27 +28,36 @@ export function ShipEditSheet({ ship, close }: { ship: Ship; close: () => void }
       <button className="primary" onClick={save}>저장</button>
     </>}>
       <label className="field"><span>선박명</span><input value={x.name} onChange={(e) => set({ name: e.target.value })} /></label>
-      <label className="field"><span>제주 출발 (상행) 시간</span><input type="time" value={x.departs_at} onChange={(e) => set({ departs_at: e.target.value })} /></label>
       <div className="field">
-        <span className="muted small">기항지별 하행 (육지 → 제주) 출발 시간</span>
+        <span>출발 시간 (출발 항구별)</span>
+        <div className="port-row">
+          <b className="port-name">제주</b>
+          <input type="time" aria-label="제주 출발 시간" value={x.departs_at} onChange={(e) => set({ departs_at: e.target.value })} />
+          <span className="port-x" />
+        </div>
         {ports.map((p, i) => (
-          <div className="row" key={i} style={{ margin: '6px 0' }}>
-            <input placeholder="기항지 (예: 목포)" value={p.port} onChange={(e) => setPort(i, { port: e.target.value })} />
-            <input type="time" style={{ width: 130 }} value={p.time} onChange={(e) => setPort(i, { time: e.target.value })} />
-            <button className="ghost" aria-label="기항지 삭제" onClick={() => set({ port_times: ports.filter((_, j) => j !== i) })}>✕</button>
+          <div className="port-row" key={i}>
+            <input className="port-name" placeholder="항구" aria-label="출발 항구" value={p.port} onChange={(e) => setPort(i, { port: e.target.value })} />
+              <input type="time" aria-label={`${p.port || '항구'} 출발 시간`} value={p.time} onChange={(e) => setPort(i, { time: e.target.value })} />
+            <button className="ghost port-x" aria-label={`${p.port || '항구'} 삭제`} onClick={() => set({ port_times: ports.filter((_, j) => j !== i) })}>✕</button>
           </div>
         ))}
-        <button onClick={() => set({ port_times: [...ports, { port: '', time: '' }] })}>＋ 기항지 추가</button>
+        <div className="chips" style={{ flexWrap: 'wrap', overflow: 'visible', marginTop: 6 }}>
+          {LAND_PORTS.filter((n) => !ports.some((p) => p.port.trim() === n)).map((n) => (
+            <button key={n} className="chip" onClick={() => set({ port_times: [...ports, { port: n, time: '' }] })}>＋ {n}</button>
+          ))}
+          <button className="chip" onClick={() => set({ port_times: [...ports, { port: '', time: '' }] })}>＋ 직접 입력</button>
+        </div>
+        <span className="muted small">육지 항구 버튼을 누르면 줄이 생깁니다. 시간을 넣으세요. 배차에서 하행 선박을 고를 때 "선박 · 목포 01:00"처럼 항구별로 나옵니다.</span>
       </div>
       <label className="field"><span>항로</span>
         <select value={x.route} onChange={(e) => set({ route: e.target.value as Ship['route'] })}>
-          <option value="both">양방향</option><option value="up">상행만 (제주 → 육지)</option><option value="down">하행만 (육지 → 제주)</option>
+          <option value="both">양방향</option><option value="up">제주 출발만 (제주 → 육지)</option><option value="down">육지 출발만 (육지 → 제주)</option>
         </select>
       </label>
       <label className="field"><span>도착일 차이 (상차 다음 며칠 뒤 하차, 기본 1)</span>
         <input inputMode="numeric" value={x.arrival_day_offset} onChange={(e) => set({ arrival_day_offset: Number(e.target.value) || 0 })} />
       </label>
-      <p className="muted small">기항지를 넣으면 육지 하행선박을 고를 때 "퀸메리 · 목포 01:00"처럼 기항지별로 나옵니다. 기항지가 없으면 선박명 하나로 나옵니다.</p>
     </Sheet>
   );
 }

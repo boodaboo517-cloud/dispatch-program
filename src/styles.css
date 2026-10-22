@@ -266,3 +266,10 @@ tr.err td { background: var(--red-soft); }
 .paper-page .datebar { margin-bottom: 0; }
 @media (max-width: 380px) { .paper { font-size: 10px; } .paper td.veh, .paper td.drv, .paper td.ship { font-size: 9px; } }
 @media (min-width: 1024px) { .paper { font-size: 14px; } .paper td.veh, .paper td.drv, .paper td.ship { font-size: 14px; } .paper th, .paper td { padding: 4px 4px; } .paper th.zone { font-size: 16px; } }
+
+/* 선박 수정: 출발 항구별 시간 줄 */
+.port-row { display: flex; align-items: center; gap: 6px; margin: 6px 0; }
+.port-row .port-name { flex: 1 1 auto; min-width: 0; }
+.port-row b.port-name { font-size: 17px; padding-left: 4px; }
+.port-row input[type=time] { width: 150px; flex: none; padding-left: 8px; padding-right: 4px; }
+.port-row .port-x { width: 36px; flex: none; text-align: center; padding: 0; }
