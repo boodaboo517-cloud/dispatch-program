@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   CALC_LABEL, CARRIER_LABEL, EXTRA_PRESETS, Tx, acceptLinkPending, arrivalOffset, buildBoard, transportSummary,
   type CarrierType, type Shipment, computeRevenue, deleteOrder, findLinkedUnload, ignoreLinkPending, newId,
-  saveOrder, saveRevenue, setProductDefaultPrice, won,
+  createOrder, saveOrder, saveRevenue, setProductDefaultPrice, won,
   type BillingStatus, type CalcMethod, type DailyOrder, type OrderRevenue, type Unit,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
@@ -53,6 +53,26 @@ export function OrderSheet({ orderId, close, startEditing = false }: { orderId: 
   const shipLabel = o.kind === 'load' ? departureShipLabel(o.zone) : arrivalShipLabel(o.zone);
   const editing = !!draft;
   const set = (p: Partial<DailyOrder>) => setDraft({ ...(draft ?? order), ...p });
+
+  /** 같은 거래처의 다른 품목을 같은 차량·기사·선박으로 한 건 더 */
+  const addSameClient = async () => {
+    const c = await pick.clientProduct(order.vehicle_id, { id: order.client_id!, text: order.client_text });
+    if (!c || (!c.product && !c.product_text)) return;
+    const s = store.getState().snap;
+    const same = s.daily_orders.filter((x) => x.date === order.date && x.zone === order.zone && x.kind === order.kind);
+    const next: DailyOrder = {
+      ...order, id: newId(),
+      product_id: c.product?.id ?? null, product_text: c.product_text,
+      quantity: c.product?.default_quantity ?? null, unit: c.product?.default_unit ?? '',
+      region: c.product?.default_region || order.region,
+      ...defaultPlaces(s, order.client_id, c.product),
+      source: 'manual', recurring_order_id: null, recurring_version_id: null, edited_manually: false,
+      linked_from_id: null, link_status: 'none', link_pending: null, sort_order: same.length,
+    };
+    store.run((tx) => createOrder(tx, next));
+    close();
+    sheet.open((c2) => <QuickQtySheet orderId={next.id} close={c2} />);
+  };
 
   const r: OrderRevenue = rev ?? rev0 ?? {
     id: newId(), order_id: order.id, calc_method: 'per_pallet', unit_price: null, quantity: order.quantity, extras: [],
@@ -109,6 +129,7 @@ export function OrderSheet({ orderId, close, startEditing = false }: { orderId: 
           ) : (
             <>
               <button className="danger" onClick={remove}>삭제</button>
+              {order.client_id && order.source !== 'linked' && <button onClick={() => void addSameClient()}>＋ 같은 거래처 품목</button>}
               <button className="primary" onClick={() => setDraft({ ...order })}>수정</button>
             </>
           )}

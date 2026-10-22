@@ -77,7 +77,7 @@ function ClientProductSheet(p: { vehicleId: string | null; startClient?: { id: s
 
   const products = s.products.filter((x) => x.client_id === client.id);
   return (
-    <Sheet title={`${client.text} · 품목`} onClose={() => finish(null)} flush right={<button className="ghost" onClick={() => setClient(null)}>◀ 거래처</button>}>
+    <Sheet title={`${client.text || s.clients.find((x) => x.id === client.id)?.name || ""} · 품목`} onClose={() => finish(null)} flush right={<button className="ghost" onClick={() => setClient(null)}>◀ 거래처</button>}>
       <PickerList
         key={client.id ?? client.text}
         sections={[{

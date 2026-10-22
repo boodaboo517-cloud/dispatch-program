@@ -2,8 +2,8 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  blankOrder, buildBoard, createOrder, planCreateRecurring, weekdayOf,
-  type DailyOrder, type Kind, type Weekday, type Zone,
+  blankOrder, buildBoard, createOrder, newId, planCreateRecurring, weekdayOf,
+  type DailyOrder, type Kind, type Product, type Unit, type Weekday, type Zone,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
 import { fmtDate, seoulToday } from '../lib/time.ts';
@@ -13,6 +13,8 @@ import { PlaceFields, TransportFields, defaultPlaces } from '../ui/OrderSheet.ts
 import { QtyInput } from '../ui/QtyInput.tsx';
 import { Seg, WeekdayChips } from '../ui/Picker.tsx';
 import { usePickers } from '../ui/pickers.tsx';
+
+interface Extra { key: string; product: Product | null; product_text: string; quantity: number | null; unit: Unit }
 
 export function OrderInputPage() {
   const [params] = useSearchParams();
@@ -25,6 +27,8 @@ export function OrderInputPage() {
     kind: 'unload',
   }));
   const [repeat, setRepeat] = useState(false);
+  /** 같은 거래처에서 함께 나가는 다른 품목들 (저장하면 품목마다 오더 1건) */
+  const [extras, setExtras] = useState<Extra[]>([]);
   const [weekdays, setWeekdays] = useState<Weekday[]>([weekdayOf(o.date)]);
   const set = (p: Partial<DailyOrder>) => setO({ ...o, ...p });
   const isLoad = o.kind === 'load';
@@ -32,6 +36,7 @@ export function OrderInputPage() {
   const chooseClient = async () => {
     const c = await pick.clientProduct(o.vehicle_id);
     if (!c) return;
+    if (c.client_id !== o.client_id) setExtras([]);
     set({
       client_id: c.client_id, client_text: c.client_text, product_id: c.product?.id ?? null, product_text: c.product_text,
       region: c.product?.default_region ?? o.region, quantity: c.product?.default_quantity ?? o.quantity, unit: c.product?.default_unit ?? o.unit,
@@ -40,22 +45,48 @@ export function OrderInputPage() {
     });
   };
 
+  const addExtra = async () => {
+    if (!o.client_id) return store.toast('먼저 등록된 거래처를 고르세요', 'warn');
+    const c = await pick.clientProduct(o.vehicle_id, { id: o.client_id, text: o.client_text });
+    if (!c || (!c.product && !c.product_text)) return;
+    setExtras([...extras, { key: crypto.randomUUID?.() ?? String(Date.now()), product: c.product, product_text: c.product_text, quantity: c.product?.default_quantity ?? null, unit: c.product?.default_unit ?? '' }]);
+  };
+  const setExtra = (i: number, p: Partial<Extra>) => setExtras(extras.map((x, j) => (j === i ? { ...x, ...p } : x)));
+  /** 추가 품목 → 같은 차량·기사·선박·비고로 오더 한 건씩 */
+  const extraOrders = (): DailyOrder[] => extras.map((x, i) => ({
+    ...o,
+    id: newId(),
+    product_id: x.product?.id ?? null,
+    product_text: x.product_text,
+    quantity: x.quantity,
+    unit: x.unit,
+    region: x.product?.default_region || o.region,
+    ...defaultPlaces(snap, o.client_id, x.product),
+    sort_order: o.sort_order + i + 1,
+  }));
+
   const save = () => {
     if (!o.client_id && !o.client_text) return store.toast('거래처를 고르세요', 'warn');
     if (repeat) {
       if (!o.client_id) return store.toast('반복 발주는 등록된 거래처만 가능합니다', 'warn');
       if (o.date < seoulToday()) return store.toast('반복 시작일은 오늘 이후만 가능합니다', 'warn');
-      const res = planCreateRecurring(snap, {
-        client_id: o.client_id, product_id: o.product_id, zone: o.zone, kind: o.kind, startDate: o.date, today: seoulToday(),
-        fields: {
-          weekdays, quantity: o.quantity, unit: o.unit, region: o.region, memo: o.memo, vehicle_id: o.vehicle_id,
-          ship: isLoad ? o.departure_ship : o.arrival_ship, ship_tag: isLoad ? o.departure_ship_tag : o.arrival_ship_tag,
-        },
-      });
-      store.commit(res.mutations);
-      store.toast(`매주 반복 등록 · ${res.created}건 생성`);
+      let created = 0;
+      for (const x of [o, ...extraOrders()]) {
+        const res = planCreateRecurring(store.getState().snap, {
+          client_id: o.client_id, product_id: x.product_id, zone: o.zone, kind: o.kind, startDate: o.date, today: seoulToday(),
+          fields: {
+            weekdays, quantity: x.quantity, unit: x.unit, region: x.region, memo: o.memo, vehicle_id: o.vehicle_id,
+            ship: isLoad ? o.departure_ship : o.arrival_ship, ship_tag: isLoad ? o.departure_ship_tag : o.arrival_ship_tag,
+          },
+        });
+        store.commit(res.mutations);
+        created += res.created;
+      }
+      store.toast(`매주 반복 등록 · ${created}건 생성`);
     } else {
-      store.run((tx) => createOrder(tx, o));
+      const all = [o, ...extraOrders()];
+      store.run((tx) => { for (const x of all) createOrder(tx, x); });
+      if (all.length > 1) store.toast(`${all.length}개 품목 저장`);
       store.toast(!isLoad ? '저장' : `저장 · 반대 지역 하차도 ${o.same_day || o.arrival_offset === 0 ? '같은 날' : o.arrival_offset ? `${o.arrival_offset}일 뒤` : '다음 날'} 자동 입력${o.shipment === 'bulk' ? ' (벌크: 차량 없이 → 도착지에서 배차)' : ''}`);
     }
     nav(`/?date=${o.date}&zone=${o.zone}&focus=${o.id}`);
@@ -81,11 +112,21 @@ export function OrderInputPage() {
       </label>
       <Row k="거래처" v={clientName(snap, o)} onClick={chooseClient} ph="검색 · 최근 · 자주 쓰는" />
       <Row k="품목" v={productName(snap, o)} onClick={chooseClient} />
-      <label className="field"><span>지역</span><input value={o.region} onChange={(e) => set({ region: e.target.value })} /></label>
-      <PlaceFields pickup={o.pickup_place ?? ''} dropoff={o.dropoff_place ?? ''} onChange={(p) => set(p)} />
-      <div className="field"><span className="muted small">수량 (숫자 뒤에 단위를 써도 됩니다: 10파렛트, 3대, 5박스)</span>
+      <div className="field"><span className="muted small">수량{extras.length ? ` (${productName(snap, o) || '첫 품목'})` : ''} (숫자 뒤에 단위를 써도 됩니다: 10파렛트, 3대, 5박스)</span>
         <QtyInput quantity={o.quantity} unit={o.unit} onChange={(quantity, unit) => set({ quantity, unit })} />
       </div>
+      {extras.map((x, i) => (
+        <div key={x.key} className="card" style={{ margin: '6px 0' }}>
+          <div className="row">
+            <b className="grow">＋ {x.product?.name ?? x.product_text}</b>
+            <button className="ghost" aria-label="추가 품목 삭제" onClick={() => setExtras(extras.filter((_, j) => j !== i))}>✕</button>
+          </div>
+          <QtyInput quantity={x.quantity} unit={x.unit} onChange={(quantity, unit) => setExtra(i, { quantity, unit })} />
+        </div>
+      ))}
+      {o.client_id && <button style={{ width: '100%', margin: '4px 0' }} onClick={addExtra}>＋ 같은 거래처 품목 추가</button>}
+      <label className="field"><span>지역</span><input value={o.region} onChange={(e) => set({ region: e.target.value })} /></label>
+      <PlaceFields pickup={o.pickup_place ?? ''} dropoff={o.dropoff_place ?? ''} onChange={(p) => set(p)} />
       <TransportFields o={o} set={set} />
       <p className="muted">차량·기사·선박은 나중에 지정해도 됩니다 (비우면 배차 대기)</p>
       {(o.carrier_type ?? 'own') === 'own' && <Row k="차량" v={vehicleNo(snap, o.vehicle_id)} ph="나중에 배차" onClick={async () => { const v = await pick.vehicle(buildBoard(snap, o.date), o.zone); if (v) set({ vehicle_id: v }); }} />}
