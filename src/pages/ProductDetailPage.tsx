@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   CALC_LABEL, newId, setProductDefaultPrice,
-  type CalcMethod, type Product, type ProductSuggestion, type Storage, type Unit,
+  type CalcMethod, type Product, type ProductSuggestion, type Storage,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
 import { supabase } from '../data/supabase.ts';
@@ -12,9 +12,10 @@ import { Editable } from '../ui/Editable.tsx';
 import { useRole, useSession, useSnap, useWatch } from '../ui/hooks.ts';
 import { STORAGE_LABEL, setting } from '../ui/labels.ts';
 import { CallButton, NavButtons, Photo, compressAndUpload, currentLocation, geocode, searchAddress } from '../ui/media.tsx';
-import { StorageBadge, tempText, UNITS } from '../ui/OrderSheet.tsx';
+import { StorageBadge, tempText } from '../ui/OrderSheet.tsx';
 import { RecurringList, RecurringSheet } from '../ui/RecurringSheet.tsx';
 import { Sheet, useSheet } from '../ui/Sheet.tsx';
+import { QtyInput } from '../ui/QtyInput.tsx';
 
 export function ProductDetailPage() {
   const { id } = useParams();
@@ -119,8 +120,14 @@ export function ProductDetailPage() {
       <div className="card">
         <Editable label="품목명" value={p.name} onSave={saver('name')} />
         <Editable label="기본 지역" value={p.default_region} onSave={saver('default_region')} />
-        <Editable label="기본 수량" value={p.default_quantity} onSave={saver('default_quantity', 'number')} type="number" />
-        <Editable label="단위" value={p.default_unit} onSave={edit ? (v) => save({ default_unit: v as Unit }) : undefined} options={UNITS.map((u) => ({ value: u, label: u || '-' }))} />
+        {edit ? (
+          <div className="field">
+            <span>기본 수량·단위 <span className="muted small">(예: 1대, 10파렛트 — 배차할 때 바로 들어감)</span></span>
+            <QtyInput quantity={p.default_quantity} unit={p.default_unit} onChange={(q, u) => save({ default_quantity: q, default_unit: u })} />
+          </div>
+        ) : (
+          <Editable label="기본 수량" value={p.default_quantity != null ? `${p.default_quantity}${p.default_unit}` : p.default_unit} />
+        )}
         <Editable label="보관" value={p.storage} onSave={edit ? (v) => save({ storage: v as Storage }) : undefined} options={(['ambient', 'chilled', 'frozen'] as Storage[]).map((s) => ({ value: s, label: STORAGE_LABEL[s] }))} />
         {p.storage !== 'ambient' && (
           <div className="row">

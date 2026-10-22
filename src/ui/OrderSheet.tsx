@@ -343,12 +343,27 @@ export function defaultPlaces(s: { clients: { id: string; pickup_address?: strin
 export function QuickQtySheet({ orderId, close }: { orderId: string; close: () => void }) {
   const snap = useSnap();
   const o = snap.daily_orders.find((x) => x.id === orderId);
+  const product = o?.product_id ? snap.products.find((x) => x.id === o.product_id) : undefined;
+  // 품목에 기본 수량·단위가 아직 없으면, 여기서 넣은 값을 다음부터 쓰도록 기본값으로 저장 (기본 체크)
+  const [remember, setRemember] = useState(() => !!product && product.default_quantity == null && !product.default_unit);
   if (!o) return null;
   const setQty = (quantity: number | null, unit: Unit) => store.run((tx) => saveOrder(tx, { ...o, quantity, unit }, { userEdit: false }));
+  const done = () => {
+    if (remember && product && (o.quantity != null || o.unit)) {
+      store.run((tx) => tx.update('products', product.id, { default_quantity: o.quantity, default_unit: o.unit }));
+    }
+    close();
+  };
   return (
-    <Sheet title="✓ 입력됨" onClose={close} footer={<button className="primary" onClick={close}>완료</button>}>
+    <Sheet title="✓ 입력됨" onClose={done} footer={<button className="primary" onClick={done}>완료</button>}>
       <p style={{ fontSize: 18 }}><b>{clientName(snap, o)}</b> {productName(snap, o)} {o.region && `· ${o.region}`}</p>
       <QtyInput big quantity={o.quantity} unit={o.unit} onChange={setQty} />
+      {product && (
+        <label className="row" style={{ marginTop: 8, gap: 8 }}>
+          <input type="checkbox" style={{ width: 22, height: 22 }} checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+          <span>다음에도 이 수량·단위로 ({product.name} 기본값 저장)</span>
+        </label>
+      )}
       <p className="muted">수량이 맞으면 완료를 누르세요. 칸을 길게 누르면 다시 수정할 수 있습니다.</p>
     </Sheet>
   );

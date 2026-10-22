@@ -51,15 +51,16 @@ function Fit({ children }: { children: ReactNode }) {
   return <span ref={ref} className="fit">{children}</span>;
 }
 
+/** 선박 칸: (예약업체·표시 작게 한 줄) / 선박명 / 시간(작게). 지역(기항지)은 표시하지 않음 */
 function ShipText({ snap, ship, tag }: { snap: Snapshot; ship: string | null; tag: string }) {
   if (!ship) return null;
-  const { name, port } = parseShip(ship);
+  const time = shipTimeOf(snap, ship);
   return (
-    <>
-      {tag && <span className="ps-tag">{tag}</span>}
-      <Fit><span className="ps-pill">{name}{port && <small> {port}</small>}</span></Fit>
-      <span className="ps-time">{shipTimeOf(snap, ship)}</span>
-    </>
+    <div className="ps-ship">
+      {tag && <div className="ps-line"><Fit><span className="ps-tag">{tag}</span></Fit></div>}
+      <div className="ps-line"><Fit><span className="ps-name">{parseShip(ship).name}</span></Fit></div>
+      {time && <div className="ps-time">{time}</div>}
+    </div>
   );
 }
 

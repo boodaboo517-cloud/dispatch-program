@@ -8,7 +8,8 @@ import { useRole, useSnap } from '../ui/hooks.ts';
 import { ZONE_LABEL, kindLabel, orderText, vehicleNo } from '../ui/labels.ts';
 import { StorageBadge, tempText } from '../ui/OrderSheet.tsx';
 import { RecurringList, RecurringSheet } from '../ui/RecurringSheet.tsx';
-import { useSheet } from '../ui/Sheet.tsx';
+import { QtyInput } from '../ui/QtyInput.tsx';
+import { Sheet, useSheet } from '../ui/Sheet.tsx';
 import { History } from './ProductDetailPage.tsx';
 
 export function newProduct(clientId: string, name: string): Product {
@@ -18,6 +19,28 @@ export function newProduct(clientId: string, name: string): Product {
     dropoff_lng: null, dropoff_note: '', pickup_contact_name: '', pickup_contact_phone: '', dropoff_contact_name: '',
     dropoff_contact_phone: '', storage: 'ambient', temp_min: null, temp_max: null, caution: '',
   };
+}
+
+/** 품목 등록: 이름 + 기본 수량·단위 (예: 1대) 를 한 번에 */
+function NewProductSheet({ clientId, close, onSaved }: { clientId: string; close: () => void; onSaved: (id: string) => void }) {
+  const [p, setP] = useState(() => newProduct(clientId, ''));
+  const save = () => {
+    if (!p.name.trim()) return store.toast('품목 이름을 입력하세요', 'warn');
+    store.run((tx) => tx.insert('products', { ...p, name: p.name.trim() }));
+    close();
+    onSaved(p.id);
+  };
+  return (
+    <Sheet title="품목 등록" onClose={close} footer={<button className="primary" onClick={save}>저장</button>}>
+      <label className="field"><span>품목 이름</span><input autoFocus value={p.name} onChange={(e) => setP({ ...p, name: e.target.value })} placeholder="예: 산지 감귤" /></label>
+      <div className="field">
+        <span>기본 수량·단위 <span className="muted small">(배차할 때 바로 들어감)</span></span>
+        <QtyInput big quantity={p.default_quantity} unit={p.default_unit} onChange={(q, u) => setP({ ...p, default_quantity: q, default_unit: u })} />
+      </div>
+      <label className="field"><span>기본 지역</span><input value={p.default_region} onChange={(e) => setP({ ...p, default_region: e.target.value })} placeholder="예: 서귀포" /></label>
+      <p className="muted small">주소·연락처·보관 온도 등은 저장 후 품목 화면에서 넣으세요.</p>
+    </Sheet>
+  );
 }
 
 export function ClientsPage() {
@@ -72,13 +95,7 @@ export function ClientDetailPage() {
   const products = snap.products.filter((p) => p.client_id === c.id);
   const recent = snap.daily_orders.filter((o) => o.client_id === c.id).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 40);
 
-  const addProduct = () => {
-    const name = prompt('품목 이름')?.trim();
-    if (!name) return;
-    const p = newProduct(c.id, name);
-    store.run((tx) => tx.insert('products', p));
-    nav(`/products/${p.id}`);
-  };
+  const addProduct = () => sheet.open((close) => <NewProductSheet clientId={c.id} close={close} onSaved={(id) => nav(`/products/${id}`)} />);
 
   return (
     <div className="page" style={{ maxWidth: 820 }}>

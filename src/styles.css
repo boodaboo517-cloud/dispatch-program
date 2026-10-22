@@ -244,7 +244,6 @@ tr.err td { background: var(--red-soft); }
 .paper .c-ship { width: 10%; } .paper .c-veh { width: 9%; } .paper .c-drv { width: 9%; } .paper .c-body { width: 22%; }
 @media (min-width: 1024px) { .paper .c-ship { width: 10%; } .paper .c-veh { width: 7%; } .paper .c-drv { width: 8%; } .paper .c-body { width: 25%; } }
 .paper td.veh, .paper td.drv, .paper td.ship { font-size: 10px; word-break: keep-all; }
-.paper td.ship .ps-pill { padding: 0 2px; }
 .paper td.body { white-space: nowrap; text-overflow: clip; }
 .paper .fit { display: inline-block; white-space: nowrap; transform-origin: left center; }
 .paper td.drv .fit, .paper td.veh .fit, .paper td.ship .fit, .paper td.site .fit { transform-origin: center; }
@@ -254,8 +253,6 @@ tr.err td { background: var(--red-soft); }
 .paper .ps-pill small { font-weight: 500; color: #6b2130; }
 .paper .ps-pill.veh.repair { background: #fecaca; outline: 2px solid var(--red); }
 .paper td.veh.wait { background: #fde047; font-weight: 700; }
-.paper .ps-tag { display: block; color: #dc2626; font-size: .85em; font-weight: 700; line-height: 1.1; }
-.paper .ps-time { display: block; color: #555; font-size: .85em; }
 .paper .ps-red { color: #dc2626; }
 .paper .ps-sep { color: #999; }
 .paper .ps-ext { color: #dc2626; font-weight: 800; }
@@ -283,3 +280,10 @@ tr.err td { background: var(--red-soft); }
 .offdays th, .offdays td { text-align: center; padding: 6px 2px; }
 .offdays td[role=button] { cursor: pointer; border-left: 1px solid #eee; height: 44px; font-weight: 800; }
 .offdays td.off { background: var(--red-soft); color: var(--red); }
+
+/* 일정표 선박 칸 */
+.paper .ps-ship { display: flex; flex-direction: column; align-items: center; gap: 1px; line-height: 1.15; }
+.paper .ps-line { width: 100%; display: flex; justify-content: center; overflow: hidden; }
+.paper .ps-name { display: inline-block; background: #fbd5dc; border-radius: 6px; padding: 1px 3px; font-weight: 800; font-size: 1.1em; white-space: nowrap; }
+.paper .ps-tag { color: #dc2626; font-weight: 700; font-size: .8em; white-space: nowrap; }
+.paper .ps-time { color: #555; font-size: .8em; }
