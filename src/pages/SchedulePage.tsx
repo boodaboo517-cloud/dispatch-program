@@ -30,7 +30,7 @@ export function DateBar({ date, onChange }: { date: string; onChange: (d: string
   );
 }
 
-export function SchedulePage({ readOnlyHeader }: { readOnlyHeader?: boolean } = {}) {
+export function SchedulePage() {
   const [params, setParams] = useSearchParams();
   const nav = useNavigate();
   const date = params.get('date') ?? seoulToday();
@@ -88,7 +88,7 @@ export function SchedulePage({ readOnlyHeader }: { readOnlyHeader?: boolean } = 
 
   return (
     <div className="page">
-      {!readOnlyHeader && (
+      {(
         <div className="muted" style={{ textAlign: 'center' }}>
           {setting(snap, 'header_notice', '경민물류 일정표')}
           {savedAt && <span className="small" style={{ color: 'var(--green)' }}> · ✓ 자동 저장됨 {fmtStamp(savedAt).split(' ')[1]}</span>}

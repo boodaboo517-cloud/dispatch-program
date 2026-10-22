@@ -12,7 +12,7 @@ import { ClientDetailPage, ClientsPage } from './pages/ClientsPage.tsx';
 import { DriverHome } from './pages/DriverHome.tsx';
 import { FleetPage } from './pages/FleetPage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
-import { MonthlyPage } from './pages/MonthlyPage.tsx';
+import { OverviewPage } from './pages/OverviewPage.tsx';
 import { OrderInputPage } from './pages/OrderInputPage.tsx';
 import { ProductDetailPage } from './pages/ProductDetailPage.tsx';
 import { RevenuePage } from './pages/RevenuePage.tsx';
@@ -60,10 +60,10 @@ function TopMenu({ role }: { role: Role }) {
           <NavLink to="/fleet/drivers">기사 등록</NavLink>
           <span style={{ width: 16 }} />
           <button onClick={() => go(addDays(date, -1))}>◀ 전일</button>
-          <NavLink to="/monthly">월별 일정</NavLink>
+          <NavLink to="/all">전체 일정표</NavLink>
           <button onClick={() => go(addDays(date, 1))}>익일 ▶</button>
           <span style={{ width: 16 }} />
-          <NavLink to="/" end className={() => (loc.pathname === '/' ? 'active' : '')}>일정표</NavLink>
+          <NavLink to="/" end className={() => (loc.pathname === '/' ? 'active' : '')}>배차</NavLink>
           <NavLink to="/fleet/maintenance">정비</NavLink>
           <NavLink to="/revenue">매출</NavLink>
           <NavLink to="/settings">설정</NavLink>
@@ -81,7 +81,7 @@ function TopMenu({ role }: { role: Role }) {
 function TabBar({ role }: { role: Role }) {
   if (role === 'viewer') return null;
   const tabs: [string, string, string][] = [
-    ['/', '📋', '일정표'], ['/monthly', '📅', '월별'], ['/order', '➕', '오더'], ['/clients', '🏢', '거래처'], ['/settings', '🚚', '차량·설정'],
+    ['/', '📋', '배차'], ['/all', '🗓', '일정표'], ['/order', '➕', '오더'], ['/clients', '🏢', '거래처'], ['/settings', '🚚', '차량·설정'],
   ];
   return (
     <nav className="tabbar">
@@ -118,7 +118,8 @@ function Shell() {
       <Routes>
         <Route path="/" element={viewer ? <Navigate to="/driver" replace /> : <SchedulePage />} />
         <Route path="/driver" element={<DriverHome />} />
-        <Route path="/monthly" element={<MonthlyPage />} />
+        <Route path="/all" element={<OverviewPage />} />
+        <Route path="/monthly" element={<Navigate to="/all" replace />} />
         <Route path="/order" element={viewer ? <Navigate to="/driver" /> : <OrderInputPage />} />
         <Route path="/clients" element={<ClientsPage />} />
         <Route path="/clients/:id" element={<ClientDetailPage />} />

@@ -7,7 +7,8 @@ import { fmtDate, fmtStamp, seoulToday } from '../lib/time.ts';
 import { useSession, useSnap } from '../ui/hooks.ts';
 import { clientName, productName, productOf, qtyText, setting, shipText, shipTimeOf, ZONE_LABEL } from '../ui/labels.ts';
 import { StorageBadge, tempText } from '../ui/OrderSheet.tsx';
-import { DateBar, SchedulePage } from './SchedulePage.tsx';
+import { OverviewPage } from './OverviewPage.tsx';
+import { DateBar } from './SchedulePage.tsx';
 import { OdometerInput, OilBar } from './FleetPage.tsx';
 
 function DispatchCard({ row, date, title }: { row: BoardRow; date: string; title?: string }) {
@@ -107,7 +108,7 @@ export function DriverHome() {
           )}
         </>
       ) : (
-        <SchedulePage readOnlyHeader />
+        <OverviewPage embedded />
       )}
       {dispatcher && (
         <a href={`tel:${dispatcher}`} style={{ display: 'block', marginTop: 12 }}><button className="primary" style={{ width: '100%', minHeight: 56, fontSize: 19 }}>📞 배차 담당 전화</button></a>

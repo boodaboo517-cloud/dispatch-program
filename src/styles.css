@@ -221,3 +221,14 @@ tr.err td { background: var(--red-soft); }
 .cell.ext { background: #ffedd5; color: #9a3412; font-weight: 700; align-items: center; text-align: center; font-size: 13px; }
 .vrow.external { border: 2px dashed #f97316; }
 .pc-table tbody.vgroup.external { border: 3px dashed #f97316; }
+
+/* 일정표 한눈에 보기: 육지 위 · 제주 아래 */
+.zone-section { margin: 10px 0 18px; }
+.zone-title { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; color: #fff; position: sticky; top: 60px; z-index: 12; }
+.zone-title b { font-size: 20px; white-space: nowrap; flex: none; }
+.zone-title .right { flex: none; }
+.zone-section.land .zone-title { background: #1e3a8a; }
+.zone-section.jeju .zone-title { background: #b45309; }
+.zone-title .ghost { color: #fff; min-height: 36px; }
+.zone-section .board-head { position: static; }
+@media (min-width: 1024px) { .zone-title { top: 118px; } .zone-section .pc-table th { position: static; } }
