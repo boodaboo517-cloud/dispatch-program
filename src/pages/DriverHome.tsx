@@ -47,6 +47,7 @@ function DispatchCard({ row, date, title, me }: { row: BoardRow; date: string; t
       {part.seq && <div className="badge warn" style={{ fontSize: 16 }}>{part.seq}번째 차량</div>}
       {part.helper && <div className="badge warn" style={{ fontSize: 16 }}>동승 · {row.helperRole ? HELPER_ROLE_LABEL[row.helperRole] : '동승'} (기사 {driverName(snap, row.driverId) || '미지정'})</div>}
       <div className="plate">{row.vehicle.short_no}</div>
+      {(row.startTime || row.startPlace) && <div style={{ textAlign: 'center', fontSize: 20, fontWeight: 800, color: '#1d4ed8' }}>출근 {row.startTime} {row.startPlace}</div>}
       <div style={{ textAlign: 'center' }} className="muted">{fmtDate(date)} · {ZONE_LABEL[z]} · {row.vehicle.plate}</div>
       {showUnload && <><h3>{z === 'land' ? '하차' : '오전'} {row.unloads.length}건 {row.arrivalShip && <span className="badge ok">{z === 'land' ? '상행' : '도착'} {shipText(row.arrivalShip, row.arrivalTag)}</span>}</h3>
       {row.unloads.length ? <ol>{row.unloads.map(line)}</ol> : <p className="muted">없음</p>}</>}

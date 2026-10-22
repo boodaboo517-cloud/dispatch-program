@@ -99,7 +99,10 @@ function Orders({ snap, list }: { snap: Snapshot; list: DailyOrder[] }) {
 function VehicleRow({ snap, row }: { snap: Snapshot; row: BoardRow }) {
   const status = row.status && row.status !== 'field' ? row.status : '';
   const helper = row.helperId ? <div className="ps-oline center"><Fit><span className="ps-helper">+{driverName(snap, row.helperId)} {row.helperRole}</span></Fit></div> : null;
-  const name = <><div className="ps-oline center"><Fit>{driverName(snap, row.driverId)}{seqMark(row.unloadSeq)}</Fit></div>{helper}</>;
+  const start = row.startTime || row.startPlace
+    ? <div className="ps-oline center"><Fit><span className="ps-start">{[row.startTime, row.startPlace].filter(Boolean).join(' ')}</span></Fit></div>
+    : null;
+  const name = <>{start}<div className="ps-oline center"><Fit>{driverName(snap, row.driverId)}{seqMark(row.unloadSeq)}</Fit></div>{helper}</>;
   const loadName = <><div className="ps-oline center"><Fit>{driverName(snap, row.loadDriverId)}{seqMark(row.loadSeq)}</Fit></div>{helper}</>;
   const statusText = status || row.statusMemo
     ? <>{status && <span className={`st ${status}`}>{DAY_STATUS_LABEL[status]}</span>}{row.statusMemo && <span className="ps-red"> {row.statusMemo}</span>}</>

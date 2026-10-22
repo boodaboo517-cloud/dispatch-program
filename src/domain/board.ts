@@ -98,6 +98,9 @@ export interface BoardRow {
   /** 동승 기사 (선탑·지원) */
   helperId: string | null;
   helperRole: HelperRole | '';
+  /** 출근 시간·장소 */
+  startTime: string;
+  startPlace: string;
   arrivalShip: string | null;
   arrivalTag: ShipTag;
   departureShip: string | null;
@@ -177,6 +180,8 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
       loadSeq: vd?.load_seq ?? (vd?.load_driver_id ? null : vd?.unload_seq ?? null),
       helperId: vd?.helper_driver_id ?? null,
       helperRole: vd?.helper_role ?? '',
+      startTime: vd?.start_time ?? '',
+      startPlace: vd?.start_place ?? '',
       arrivalShip: vd?.arrival_ship ?? unloads.find((o) => o.arrival_ship)?.arrival_ship ?? null,
       arrivalTag: vd?.arrival_ship ? vd.arrival_ship_tag : unloads.find((o) => o.arrival_ship)?.arrival_ship_tag ?? '',
       departureShip: vd?.departure_ship ?? loads.find(vehicleSails)?.departure_ship ?? null,
@@ -205,6 +210,8 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
         loadSeq: null,
         helperId: vd?.helper_driver_id ?? null,
         helperRole: vd?.helper_role ?? '',
+        startTime: '',
+        startPlace: '',
         arrivalShip: arr?.arrival_ship ?? null,
         arrivalTag: arr?.arrival_ship_tag ?? '',
         departureShip: dep?.departure_ship ?? null,
@@ -399,6 +406,23 @@ export function setRowHelper(tx: Tx, p: { date: string; vehicle_id: string; zone
   const vd = ensureVehicleDay(tx, p.date, p.vehicle_id, p.zone);
   tx.update('vehicle_days', vd.id, { helper_driver_id: p.driver_id, helper_role: p.driver_id ? p.role : '' });
 }
+
+/** 출근 시간·장소 */
+export function setRowStart(tx: Tx, p: { date: string; vehicle_id: string; zone: Zone | null; time: string; place: string }) {
+  const vd = ensureVehicleDay(tx, p.date, p.vehicle_id, p.zone);
+  tx.update('vehicle_days', vd.id, { start_time: p.time, start_place: p.place.trim() });
+}
+
+/** 같은 차량의 가장 최근 출근 시간·장소 (새 날짜 입력 때 기본값) */
+export function lastStart(snap: Pick<Snapshot, 'vehicle_days'>, vehicleId: string, before: string): { time: string; place: string } | null {
+  const prev = snap.vehicle_days
+    .filter((v) => v.vehicle_id === vehicleId && v.date < before && (v.start_time || v.start_place))
+    .sort((a, b) => b.date.localeCompare(a.date))[0];
+  return prev ? { time: prev.start_time ?? '', place: prev.start_place ?? '' } : null;
+}
+
+/** "07:00 부두" */
+export const startText = (r: Pick<BoardRow, 'startTime' | 'startPlace'>) => [r.startTime, r.startPlace].filter(Boolean).join(' ');
 
 /** 처리 순서 직접 지정 (null = 표시 안 함) */
 export function setDriverSeq(tx: Tx, p: { date: string; vehicle_id: string; zone: Zone | null; side: DriverSide; seq: number | null }) {

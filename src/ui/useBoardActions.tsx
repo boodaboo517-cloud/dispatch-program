@@ -1,10 +1,11 @@
 // 일정표 칸 동작 (휴대폰·PC 공통)
 import {
   ON_CALL_SHIFT, abbrev, acceptShipPending, nudgeVehicle, workLogOf, assignVehicle, blankOrder, buildBoard, createOrder, ignoreShipPending, opposite, saveOrder,
-  HELPER_ROLE_LABEL, rowDriver, seqMark, setDriverSeq, setRowDriver, setRowHelper, setRowShip, setVehicleDayStatus, setVehicleZone, shipTime,
+  HELPER_ROLE_LABEL, START_PLACES, lastStart, startText, setRowStart, rowDriver, seqMark, setDriverSeq, setRowDriver, setRowHelper, setRowShip, setVehicleDayStatus, setVehicleZone, shipTime,
   type Board, type BoardRow, type DailyOrder, type DriverSide, type HelperRole, type Kind, type Zone,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
+import { useState } from 'react';
 import { useRole, useSnap } from './hooks.ts';
 import { ZONE_LABEL, driverName, shipText, vehicleNo } from './labels.ts';
 import { OrderSheet, QuickQtySheet } from './OrderSheet.tsx';
@@ -140,6 +141,16 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     if (role) store.run((tx) => setRowHelper(tx, { date, vehicle_id: row.vehicle.id, zone: row.zone, driver_id: d, role }));
   };
 
+  /** 출근 시간·장소: 비어 있으면 같은 차량의 최근 값으로 채워 둔다 */
+  const editStart = (row: BoardRow) => {
+    if (!staff) return;
+    const prev = row.startTime || row.startPlace ? { time: row.startTime, place: row.startPlace } : lastStart(store.getState().snap, row.vehicle.id, date);
+    sheet.open((close) => (
+      <StartSheet title={`${row.vehicle.short_no} 출근 시간·장소`} initial={prev ?? { time: '', place: '' }} close={close}
+        onSave={(time, place) => store.run((tx) => setRowStart(tx, { date, vehicle_id: row.vehicle.id, zone: row.zone, time, place }))} />
+    ));
+  };
+
   /** 처리 순서 (1번차·2번차…) 직접 고치기 */
   const editSeq = (row: BoardRow) => {
     const pickSeq = (side: DriverSide, cur: number | null) => (
@@ -170,6 +181,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
         <div>위치: {row.zone ? ZONE_LABEL[row.zone] : '미정'}</div>
         <div>{sideLabel(row, 'unload')} 기사: {driverName(snap, row.driverId) || '미지정'} {seqMark(row.unloadSeq)}</div>
         <div>{sideLabel(row, 'load')} 기사: {row.loadDriverId !== row.driverId ? driverName(snap, row.loadDriverId) : <span className="muted">{sideLabel(row, 'unload')}과 같음</span>} {seqMark(row.loadSeq)}</div>
+        <div>출근: {startText(row) || <span className="muted">미정</span>}</div>
         <div>동승: {row.helperId ? <>{driverName(snap, row.helperId)} <span className="badge warn">{row.helperRole ? HELPER_ROLE_LABEL[row.helperRole] : '동승'}</span></> : <span className="muted">없음</span>}</div>
         {row.driverId && <div>근무형태: {workLogOf(snap, row.driverId, date)?.work_types.join(', ') || <span className="muted">미입력</span>}</div>}
         {row.inRepair && <div style={{ color: 'var(--red)' }}>수리 중 {row.statusMemo}</div>}
@@ -179,6 +191,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
             { label: `${sideLabel(row, 'unload')} 기사`, run: () => void editDriver(row, 'unload') },
             { label: `${sideLabel(row, 'load')} 기사`, run: () => void editDriver(row, 'load') },
             { label: '순서 ①②', run: () => editSeq(row) },
+            { label: '출근 시간·장소', run: () => editStart(row) },
             { label: '동승 (선탑·지원)', run: () => void editHelper(row) },
             ...(row.driverId ? [{ label: '근무형태', run: () => void pick.workType(date, row.driverId!) }] : []),
             { label: '상태·위치', run: () => void editStatus(row) },
@@ -215,7 +228,29 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     if (r) store.run((tx) => saveOrder(tx, { ...o, ...(isLoad ? { departure_ship: r.ship, departure_ship_tag: r.tag } : { arrival_ship: r.ship, arrival_ship_tag: r.tag }) }));
   };
 
-  return { addOrder, openOrder, editShip, tapShip, editDriver, editSeq, editHelper, editStatus, tapVehicle, assign, editWaitingShip, showText, abbrev };
+  return { addOrder, openOrder, editShip, tapShip, editDriver, editSeq, editHelper, editStart, editStatus, tapVehicle, assign, editWaitingShip, showText, abbrev };
+}
+
+/** 출근 시간·장소 입력 */
+function StartSheet({ title, initial, close, onSave }: { title: string; initial: { time: string; place: string }; close: () => void; onSave: (time: string, place: string) => void }) {
+  const [time, setTime] = useState(initial.time);
+  const [place, setPlace] = useState(initial.place);
+  const save = (t: string, p: string) => { onSave(t, p); close(); };
+  return (
+    <Sheet title={title} onClose={close} footer={<>
+      <button onClick={() => save('', '')}>비우기</button>
+      <button className="primary" onClick={() => save(time, place)}>저장</button>
+    </>}>
+      <label className="field"><span>출근 시간</span><input type="time" value={time} onChange={(e) => setTime(e.target.value)} /></label>
+      <div className="field">
+        <span>출근 장소</span>
+        <div className="chips" style={{ flexWrap: 'wrap', overflow: 'visible' }}>
+          {START_PLACES.map((p) => <button key={p} className={`chip ${place === p ? 'on' : ''}`} style={{ minHeight: 44 }} onClick={() => setPlace(place === p ? '' : p)}>{p}</button>)}
+        </div>
+        <input style={{ marginTop: 6 }} value={place} onChange={(e) => setPlace(e.target.value)} placeholder="직접 쓰기 (예: 애월 창고)" />
+      </div>
+    </Sheet>
+  );
 }
 
 /** 순서 고치기 시트: 저장할 때마다 다시 그려지도록 최신 줄을 읽는다 */

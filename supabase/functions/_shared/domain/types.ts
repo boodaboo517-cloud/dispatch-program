@@ -214,6 +214,9 @@ export interface DailyOrder extends Base {
 /** 차량별 하루 한 줄 — 선박·상태·기사 등 차량 단위 정보 */
 /** 동승 기사 역할: 선탑(교육) / 지원 */
 export type HelperRole = '선탑' | '지원';
+/** 제주 출근 장소 바로 고르기 */
+export const START_PLACES = ['부두', '차고지', '본사', '함덕', '고산', '현장'] as const;
+
 export const HELPER_ROLE_LABEL: Record<HelperRole, string> = { 선탑: '선탑(교육)', 지원: '지원' };
 
 export interface VehicleDay extends Base {
@@ -230,6 +233,9 @@ export interface VehicleDay extends Base {
   /** 함께 타는 두 번째 기사 (선탑·교육 / 지원) */
   helper_driver_id?: string | null;
   helper_role?: HelperRole | '';
+  /** 출근 시간(HH:mm)·장소 (제주: 부두, 차고지, 본사, 함덕, 고산, 현장 …) */
+  start_time?: string;
+  start_place?: string;
   arrival_ship: string | null;
   arrival_ship_tag: ShipTag;
   departure_ship: string | null;

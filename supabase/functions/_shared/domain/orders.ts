@@ -58,6 +58,8 @@ export function blankVehicleDay(p: { date: string; vehicle_id: string } & Partia
     load_seq: null,
     helper_driver_id: null,
     helper_role: '',
+    start_time: '',
+    start_place: '',
     arrival_ship: null,
     arrival_ship_tag: '',
     departure_ship: null,
@@ -195,7 +197,7 @@ export function ensureVehicleDay(tx: Tx, date: string, vehicleId: string, zone: 
 }
 
 function vehicleDayHasContent(tx: Tx, vd: VehicleDay): boolean {
-  if (vd.departure_ship || vd.status || vd.status_memo || vd.driver_id || vd.load_driver_id || vd.helper_driver_id) return true;
+  if (vd.departure_ship || vd.status || vd.status_memo || vd.driver_id || vd.load_driver_id || vd.helper_driver_id || vd.start_time || vd.start_place) return true;
   if (vd.arrival_ship && vd.arrival_from_id === null) return true;
   return tx.list('daily_orders').some((o) => o.date === vd.date && o.vehicle_id === vd.vehicle_id);
 }

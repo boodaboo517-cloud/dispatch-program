@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { buildBoard, setDriverSeq, setRowDriver, setRowHelper } from '../board.ts';
+import { buildBoard, lastStart, setDriverSeq, setRowDriver, setRowHelper, setRowStart, startText } from '../board.ts';
 import { blankOrder, saveOrder } from '../orders.ts';
 import { Tx } from '../tx.ts';
 import { ON_CALL_SHIFT, type Driver } from '../types.ts';
@@ -138,5 +138,16 @@ describe('한 차량 기사 2명 (선탑·지원)', () => {
     setRowHelper(tx, { date: D, vehicle_id: 'v9915', zone: 'jeju', driver_id: 'dB', role: '지원' });
     setRowHelper(tx, { date: D, vehicle_id: 'v9915', zone: 'jeju', driver_id: null, role: '' });
     expect([row(tx, 'v9915').helperId, row(tx, 'v9915').helperRole]).toEqual([null, '']);
+  });
+});
+
+describe('출근 시간·장소', () => {
+  it('저장하고, 다음 날 입력 때는 같은 차량의 최근 값을 기본으로', () => {
+    const tx = setup();
+    setRowStart(tx, { date: D, vehicle_id: 'v9915', zone: 'jeju', time: '07:00', place: '부두' });
+    const r = row(tx, 'v9915');
+    expect(startText(r)).toBe('07:00 부두');
+    expect(lastStart(tx.result(), 'v9915', '2026-10-21')).toEqual({ time: '07:00', place: '부두' });
+    expect(lastStart(tx.result(), 'v9914', '2026-10-21')).toBeNull();
   });
 });

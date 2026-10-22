@@ -292,3 +292,4 @@ tr.err td { background: var(--red-soft); }
 .paper .ps-note { color: #dc2626; font-size: .8em; font-weight: 600; }
 .paper .ps-oline.center { justify-content: center; }
 .paper .ps-helper { color: #b45309; font-size: .85em; font-weight: 700; }
+.paper .ps-start { color: #1d4ed8; font-size: .8em; font-weight: 700; }

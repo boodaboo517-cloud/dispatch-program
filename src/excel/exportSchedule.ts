@@ -51,7 +51,7 @@ function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: 
     const first = ws.getRow(r);
     first.getCell(1).value = shipText(row.arrivalShip, row.arrivalTag);
     first.getCell(2).value = row.vehicle.short_no;
-    first.getCell(3).value = drv + helper;
+    first.getCell(3).value = drv + helper + (row.startTime || row.startPlace ? ` (출근 ${[row.startTime, row.startPlace].filter(Boolean).join(' ')})` : '');
     first.getCell(16).value = shipText(row.departureShip, row.departureTag);
     if (hasOrders) {
       first.getCell(9).value = row.vehicle.short_no;
