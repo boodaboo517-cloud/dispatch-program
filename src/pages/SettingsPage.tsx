@@ -241,7 +241,8 @@ export function SettingsPage() {
     <div className="page" style={{ maxWidth: 820 }}>
       <h2>더보기 · 설정</h2>
       <div className="row wrap">
-        <button className="grow" onClick={() => nav('/fleet/vehicles')}>🚚 차량·기사·선박</button>
+        <button className="grow" onClick={() => nav('/fleet/vehicles')}>🚚 차량·기사</button>
+        <button className="grow" onClick={() => nav('/fleet/ships')}>⛴ 선박 등록·수정</button>
         <button className="grow" onClick={() => nav('/fleet/maintenance')}>🔧 정비</button>
         <button className="grow" onClick={() => nav('/fleet/field')}>👷 현장근무 설정</button>
         {staff && <button className="grow" onClick={() => nav('/revenue')}>💰 매출</button>}

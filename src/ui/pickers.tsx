@@ -9,6 +9,8 @@ import { STORAGE_LABEL, ZONE_LABEL, setting } from './labels.ts';
 import { PickerList, Seg, type PickSection } from './Picker.tsx';
 import { Sheet, useSheet } from './Sheet.tsx';
 import { WorkTypeSheet } from './WorkTypeSheet.tsx';
+import { ShipEditSheet, blankShip } from './ShipEditSheet.tsx';
+import { useRole, useSnap } from './hooks.ts';
 
 export interface ClientPick {
   client_id: string | null;
@@ -110,7 +112,9 @@ function ClientProductSheet(p: { vehicleId: string | null; startClient?: { id: s
 }
 
 function ShipSheet(p: { zone: Zone | null; which: 'arrival' | 'departure'; current: { ship: string | null; tag: ShipTag }; close: () => void; done: (r: { ship: string | null; tag: ShipTag } | null) => void }) {
-  const s = snap();
+  const s = useSnap(); // 여기서 새 선박을 등록하면 목록이 바로 갱신되도록
+  const sheet = useSheet();
+  const { staff } = useRole();
   const init = splitShipTag(p.current.tag);
   const [base, setBase] = useState<string>((SHIP_TAG_PRESETS as readonly string[]).includes(init.base) ? init.base : '');
   const [booker, setBooker] = useState(init.booker);
@@ -141,7 +145,10 @@ function ShipSheet(p: { zone: Zone | null; which: 'arrival' | 'departure'; curre
         }]}
         onPick={(it) => finish({ ship: choices.find((c) => c.value + c.ship.id === it.id)!.value, tag })}
         free={{ label: '직접 쓰기 (예: 제주로지 예약)', onFree: (t) => t.trim() && finish({ ship: t.trim(), tag }) }}
-        top={p.current.ship ? <div className="list-item" onClick={() => finish({ ship: null, tag: '' })}><span style={{ color: 'var(--red)' }}>선박 지우기 (현재: {p.current.ship})</span></div> : undefined}
+        top={<>
+          {p.current.ship && <div className="list-item" onClick={() => finish({ ship: null, tag: '' })}><span style={{ color: 'var(--red)' }}>선박 지우기 (현재: {p.current.ship})</span></div>}
+          {staff && <div className="list-item" onClick={() => sheet.open((c) => <ShipEditSheet ship={blankShip(s.ships.length)} close={c} />)}><span style={{ color: 'var(--blue)' }}>＋ 새 선박 등록 (선박명·시간)</span></div>}
+        </>}
       />
     </Sheet>
   );

@@ -58,6 +58,7 @@ function TopMenu({ role }: { role: Role }) {
           <NavLink to="/clients" onClick={(e) => { e.preventDefault(); nav('/clients'); }}>품목 등록</NavLink>
           <NavLink to="/fleet/vehicles">차량 등록</NavLink>
           <NavLink to="/fleet/drivers">기사 등록</NavLink>
+          <NavLink to="/fleet/ships">선박 등록</NavLink>
           <span style={{ width: 16 }} />
           <button onClick={() => go(addDays(date, -1))}>◀ 전일</button>
           <NavLink to="/all">전체 일정표</NavLink>
