@@ -233,37 +233,36 @@ tr.err td { background: var(--red-soft); }
 .zone-section .board-head { position: static; }
 @media (min-width: 1024px) { .zone-title { top: 118px; } .zone-section .pc-table th { position: static; } }
 
-/* 종이 일정표 모양 (일정표 탭) */
+/* 종이 일정표 모양 (일정표 탭, 확인용) — 글자가 칸을 넘지 않게 줄바꿈 */
 .paper-title { text-align: center; font-weight: 800; font-size: 18px; margin: 2px 0; }
-.paper { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; line-height: 1.35; color: #111; }
-.paper th, .paper td { border: 1px solid #222; padding: 3px 3px; vertical-align: middle; text-align: center; word-break: keep-all; overflow-wrap: anywhere; }
-.paper th { background: #dbe4f0; font-weight: 800; padding: 5px 2px; }
-.paper .c-ship { width: 13%; } .paper .c-body { width: 20%; } .paper .c-drv { width: 11%; } .paper .c-veh { width: 12%; }
-.paper td.drv, .paper td.veh, .paper td.ship { padding-left: 1px; padding-right: 1px; }
-.paper td.drv { word-break: break-all; }
-.paper td.body { text-align: left; }
-.paper .ps-pill { display: inline-block; background: #fbd5dc; border-radius: 9px; padding: 1px 6px; font-weight: 700; white-space: nowrap; }
+.paper { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11px; line-height: 1.3; color: #111; border: 2px solid #222; background: #fff; margin-top: 10px; }
+.paper th, .paper td { border: 1px solid #222; padding: 2px 1px; vertical-align: middle; text-align: center; overflow: hidden; overflow-wrap: anywhere; word-break: break-all; }
+.paper th { background: #dbe4f0; font-weight: 800; padding: 4px 0; }
+.paper th.zone { color: #fff; font-size: 13px; padding: 3px 0; }
+.paper.land th.zone { background: #1e3a8a; }
+.paper.jeju th.zone { background: #b45309; }
+.paper .c-ship { width: 11%; } .paper .c-veh { width: 10%; } .paper .c-drv { width: 10%; } .paper .c-body { width: 19%; }
+.paper td.veh, .paper td.drv, .paper td.ship { font-size: 10px; word-break: keep-all; }
+.paper td.ship .ps-pill { padding: 0 2px; }
+.paper td.body { word-break: keep-all; }
+.paper td.veh .ps-pill { padding: 0 2px; }
+.paper td.body { text-align: left; padding: 2px 3px; }
+.paper .ps-pill { display: inline-block; max-width: 100%; background: #fbd5dc; border-radius: 7px; padding: 0 3px; font-weight: 700; }
 .paper .ps-pill small { font-weight: 500; color: #6b2130; }
-.paper .ps-pill.veh, .paper .ps-pill.wait { padding: 1px 3px; }
 .paper .ps-pill.veh.repair { background: #fecaca; outline: 2px solid var(--red); }
-.paper .ps-pill.wait { background: #fde047; }
-.paper .ps-tag { display: block; color: #dc2626; font-size: 10px; font-weight: 700; line-height: 1.1; }
-.paper .ps-time { display: block; color: #555; font-size: 10px; }
+.paper td.veh.wait { background: #fde047; font-weight: 700; }
+.paper .ps-tag { display: block; color: #dc2626; font-size: .85em; font-weight: 700; line-height: 1.1; }
+.paper .ps-time { display: block; color: #555; font-size: .85em; }
 .paper .ps-red { color: #dc2626; }
 .paper .ps-sep { color: #999; }
 .paper .ps-ext { color: #dc2626; font-weight: 800; }
-.paper .st { display: inline-block; border-radius: 6px; padding: 0 5px; font-weight: 700; font-size: inherit; }
+.paper .st { display: inline-block; border-radius: 5px; padding: 0 3px; font-weight: 700; font-size: inherit; }
 .paper tr.secondary td { background: #f8fafc; }
 .paper tr.waiting td.body:not(:empty) { background: #fef9c3; }
 .paper tr.external td.body:not(:empty) { background: #fff7ed; }
 .paper tr.fieldrow td { background: #f5f5f4; }
 .paper tr.fieldrow.first td { border-top: 2px solid #222; }
 .paper td.site { font-weight: 800; }
-.paper { border: 2px solid #222; background: #fff; margin-top: 10px; user-select: text; }
-.paper th.zone { color: #fff; font-size: 15px; }
-.paper.land th.zone { background: #1e3a8a; }
-.paper.jeju th.zone { background: #b45309; }
 .paper-page .datebar { margin-bottom: 0; }
-@media (min-width: 1024px) { .paper { font-size: 15px; } .paper .ps-tag, .paper .ps-time { font-size: 12px; } .paper th, .paper td { padding: 5px 6px; } }
-@media (max-width: 1023px) { .paper td.drv, .paper .ps-pill.veh { font-size: 11px; } .paper .ps-pill { padding: 1px 4px; } }
-@media (max-width: 380px) { .paper { font-size: 11px; } .paper .ps-pill { padding: 1px 2px; } .paper td.drv, .paper .ps-pill.veh { font-size: 10px; } }
+@media (max-width: 380px) { .paper { font-size: 10px; } .paper td.veh, .paper td.drv, .paper td.ship { font-size: 9px; } }
+@media (min-width: 1024px) { .paper { font-size: 14px; } .paper td.veh, .paper td.drv, .paper td.ship { font-size: 14px; } .paper th, .paper td { padding: 4px 4px; } .paper th.zone { font-size: 16px; } }
