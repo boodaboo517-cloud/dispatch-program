@@ -1,7 +1,7 @@
 // 기사 조회 전용 화면: 내 배차 카드 / 전체 일정 보기 (수정 버튼 없음)
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HELPER_ROLE_LABEL, addDays, buildBoard, buildIndex, type BoardRow } from '../domain/index.ts';
+import { HELPER_ROLE_LABEL, addDays, workText, buildBoard, buildIndex, type BoardRow } from '../domain/index.ts';
 
 /** 내가 맡은 쪽(오전/오후)과 그날 처리 순서 */
 function myPart(row: BoardRow, me: string | null) {
@@ -35,6 +35,7 @@ function DispatchCard({ row, date, title, me }: { row: BoardRow; date: string; t
         {p && <> <StorageBadge storage={p.storage} temp={tempText(p)} /></>}
         {(o.pickup_place || o.dropoff_place) && <div>📍 {o.pickup_place || '-'} → {o.dropoff_place || '-'}</div>}
         {o.same_day && <div className="badge warn">당일 왕복</div>}
+        {workText(o) && <div style={{ color: 'var(--red)', fontWeight: 800 }}>⏰ {workText(o)}</div>}
         {o.memo && <div className="muted">📝 {o.memo}</div>}
         {i >= 0 && p && <div className="muted small">눌러서 주소·길찾기·전화 ›</div>}
       </li>

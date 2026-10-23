@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildBoard, lastStart, missingDriver, needsDriver, setDriverSeq, setRowDriver, setRowHelper, setRowStart, startText } from '../board.ts';
-import { blankOrder, saveOrder } from '../orders.ts';
+import { blankOrder, saveOrder, workText } from '../orders.ts';
 import { Tx } from '../tx.ts';
 import { ON_CALL_SHIFT, type Driver, type Weekday } from '../types.ts';
 import { assignedDriverIds, fixedOffDays, offByZone, weeklyOffOn, workDaysFromOff } from '../workforce.ts';
@@ -175,5 +175,13 @@ describe('휴무 육지·제주 구분', () => {
     const off = offByZone(s, '2026-10-25');
     expect(off.jeju.map((d) => d.id)).toEqual(['d1']);
     expect(off.land.map((d) => d.id)).toEqual(['d2', 'd3']);
+  });
+});
+
+describe('상·하차 세부', () => {
+  it('"08:40 하차 · 막걸리공병 하차지원"', () => {
+    expect(workText({ kind: 'unload', work_time: '08:40', work_detail: '막걸리공병 하차지원' })).toBe('08:40 하차 · 막걸리공병 하차지원');
+    expect(workText({ kind: 'load', work_time: '14:00', work_detail: '' })).toBe('14:00 상차');
+    expect(workText({ kind: 'load' })).toBe('');
   });
 });

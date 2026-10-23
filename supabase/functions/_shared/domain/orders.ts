@@ -21,6 +21,8 @@ export function blankOrder(p: { date: string; zone: Zone; kind: Kind } & Partial
     quantity: null,
     unit: '',
     memo: '',
+    work_time: '',
+    work_detail: '',
     vehicle_id: null,
     driver_id: null,
     arrival_ship: null,
@@ -427,3 +429,8 @@ export function transportSummary(s: Pick<Snapshot, 'ships'>, o: DailyOrder): str
   return parts.join(' · ');
 }
 
+
+/** 상·하차 세부 한 줄: "08:40 하차 · 막걸리공병 하차지원" */
+export function workText(o: Pick<DailyOrder, 'kind' | 'work_time' | 'work_detail'>): string {
+  return [o.work_time ? `${o.work_time} ${o.kind === 'load' ? '상차' : '하차'}` : '', o.work_detail?.trim() ?? ''].filter(Boolean).join(' · ');
+}

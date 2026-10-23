@@ -1,4 +1,4 @@
-import { CARRIER_LABEL, DAY_STATUS_LABEL, HELPER_ROLE_LABEL, WORK_TYPE_SHORT, abbrev, parseShip, seqMark, workLogOf, type BoardRow, type DailyOrder, type Snapshot } from '../../domain/index.ts';
+import { CARRIER_LABEL, DAY_STATUS_LABEL, HELPER_ROLE_LABEL, workText, WORK_TYPE_SHORT, abbrev, parseShip, seqMark, workLogOf, type BoardRow, type DailyOrder, type Snapshot } from '../../domain/index.ts';
 import { clientName, driverName, productName, productOf, qtyText, shipTimeOf } from '../../ui/labels.ts';
 
 export function hasMoney(snap: Snapshot, o: DailyOrder) {
@@ -29,6 +29,7 @@ export function OrderMarks({ snap, o, staff }: { snap: Snapshot; o: DailyOrder; 
 export function OrderCellText({ snap, o }: { snap: Snapshot; o: DailyOrder }) {
   return (
     <>
+      {workText(o) && <div className="l2" style={{ color: 'var(--red)', fontWeight: 700 }}>{abbrev(workText(o), 10)}</div>}
       <div className="l1">{abbrev(clientName(snap, o)) || '·'}</div>
       <div className="l2">{abbrev(productName(snap, o))} {qtyText(o)}</div>
       {o.kind === 'load' && o.shipment === 'bulk' && o.departure_ship && <div className="l2" style={{ color: '#075985' }}>🚢{abbrev(parseShip(o.departure_ship).name)}</div>}

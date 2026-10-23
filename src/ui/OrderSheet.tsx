@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   CALC_LABEL, CARRIER_LABEL, EXTRA_PRESETS, Tx, acceptLinkPending, arrivalOffset, buildBoard, transportSummary,
   type CarrierType, type Shipment, computeRevenue, deleteOrder, findLinkedUnload, ignoreLinkPending, newId,
-  createOrder, saveOrder, saveRevenue, setProductDefaultPrice, won,
+  createOrder, saveOrder, saveRevenue, workText, setProductDefaultPrice, won,
   type BillingStatus, type CalcMethod, type DailyOrder, type OrderRevenue, type Unit,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
@@ -194,6 +194,7 @@ export function OrderSheet({ orderId, close, startEditing = false }: { orderId: 
         <>
           <label className="field"><span>지역</span><input value={o.region} onChange={(e) => set({ region: e.target.value })} /></label>
           <PlaceFields pickup={o.pickup_place ?? ''} dropoff={o.dropoff_place ?? ''} onChange={(p) => set(p)} />
+          <WorkFields kind={o.kind} time={o.work_time ?? ''} detail={o.work_detail ?? ''} onChange={(p) => set(p)} />
           <div className="field"><span className="muted small">수량 (10파렛트 · 3대 처럼 써도 됨)</span>
             <QtyInput quantity={o.quantity} unit={o.unit} onChange={(quantity, unit) => set({ quantity, unit })} />
           </div>
@@ -205,6 +206,7 @@ export function OrderSheet({ orderId, close, startEditing = false }: { orderId: 
         <>
           <Field label="지역" value={o.region} />
           {(o.pickup_place || o.dropoff_place) && <Field label="상차지 → 하차지" value={`${o.pickup_place || '-'} → ${o.dropoff_place || '-'}`} />}
+          {workText(o) && <Field label="세부" value={workText(o)} />}
           <Field label="수량" value={o.quantity == null ? '' : `${o.quantity} ${o.unit}`} />
           {transportSummary(snap, o) && <Field label="운송" value={transportSummary(snap, o)} />}
           <Field label="비고" value={o.memo} />
@@ -351,6 +353,21 @@ export function PlaceFields(p: { pickup: string; dropoff: string; onChange: (v: 
   );
 }
 
+/** 상·하차 세부: 작업 시간 + 내용 (예: 08:40 · 막걸리공병 하차지원) */
+export function WorkFields(p: { kind: DailyOrder['kind']; time: string; detail: string; onChange: (v: { work_time?: string; work_detail?: string }) => void }) {
+  const word = p.kind === 'load' ? '상차' : '하차';
+  return (
+    <div className="row" style={{ alignItems: 'flex-end' }}>
+      <label className="field" style={{ width: 130, flex: 'none' }}><span>{word} 시간</span>
+        <input type="time" value={p.time} onChange={(e) => p.onChange({ work_time: e.target.value })} />
+      </label>
+      <label className="field grow"><span>{word} 세부 내용</span>
+        <input value={p.detail} placeholder={`예: 막걸리공병 ${word}지원`} onChange={(e) => p.onChange({ work_detail: e.target.value })} />
+      </label>
+    </div>
+  );
+}
+
 /** 품목 → 거래처 순으로 등록된 상차지·하차지 주소를 기본값으로 */
 export function defaultPlaces(s: { clients: { id: string; pickup_address?: string; dropoff_address?: string }[] }, clientId: string | null, product: { pickup_address: string; dropoff_address: string } | null) {
   const c = s.clients.find((x) => x.id === clientId);
@@ -382,6 +399,8 @@ export function QuickQtySheet({ orderId, close, onAddMore }: { orderId: string; 
     </>}>
       <p style={{ fontSize: 18 }}><b>{clientName(snap, o)}</b> {productName(snap, o)} {o.region && `· ${o.region}`}</p>
       <QtyInput big quantity={o.quantity} unit={o.unit} onChange={setQty} />
+      <WorkFields kind={o.kind} time={o.work_time ?? ''} detail={o.work_detail ?? ''}
+        onChange={(p) => store.run((tx) => saveOrder(tx, { ...o, ...p }, { userEdit: false }))} />
       {product && (
         <label className="row" style={{ marginTop: 8, gap: 8 }}>
           <input type="checkbox" style={{ width: 22, height: 22 }} checked={remember} onChange={(e) => setRemember(e.target.checked)} />

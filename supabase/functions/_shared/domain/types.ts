@@ -204,6 +204,9 @@ export interface DailyOrder extends Base {
   /** 상차지 · 하차지 (오더마다 다를 수 있음) */
   pickup_place?: string;
   dropoff_place?: string;
+  /** 상·하차 세부: 작업 시간(HH:mm)과 내용 (예: 08:40, "막걸리공병 하차지원") */
+  work_time?: string;
+  work_detail?: string;
   /** 당일 왕복: 올라가서 상차하고 같은 날 내려옴 → 연결 하차가 같은 날짜, 차량 위치는 안 바뀜 */
   same_day?: boolean;
   /** 직영 / 용차 / 화주배차. 용차·화주배차는 차량번호 없이 아래 글자로 표시하고 배차 대기로 세지 않는다 */

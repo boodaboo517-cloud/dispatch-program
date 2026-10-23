@@ -1,6 +1,6 @@
 // 종이 일정표 모양 (확인용, 누르기 없음): 차량 한 대 = 한 줄. 선박 | 차량 | 기사 | 하차 | 차량 | 기사 | 상차 | 선박 (제주는 오전·오후)
 import {
-  DAY_STATUS_LABEL, isExternal, missingDriver, offByZone, parseShip, seqMark, sitesGrouped,
+  DAY_STATUS_LABEL, isExternal, missingDriver, workText, offByZone, parseShip, seqMark, sitesGrouped,
   type BoardRow, type DailyOrder, type FieldAssignment, type Snapshot, type Zone,
 } from '../../domain/index.ts';
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
@@ -78,6 +78,7 @@ function Orders({ snap, list }: { snap: Snapshot; list: DailyOrder[] }) {
         const notes = [...new Set(g.flatMap((o) => {
           const product = snap.products.find((x) => x.id === o.product_id);
           return [
+            workText(o),
             o.kind === 'load' ? o.pickup_place : o.dropoff_place,
             o.kind === 'load' && o.shipment === 'bulk' ? '벌크' : '',
             o.memo,
@@ -180,12 +181,14 @@ export function SheetBoard(p: { zone: Zone; date: string; rows: BoardRow[]; wait
         {p.waiting.map((o) => <WaitingRow key={o.id} snap={snap} o={o} />)}
         {p.external.map((o) => <WaitingRow key={o.id} snap={snap} o={o} />)}
         <FieldRows snap={snap} rows={fieldRows} />
-        {off.length > 0 && (
-          <tr className="fieldrow first offrow">
-            <td className="site">휴무</td>
-            <td className="body" colSpan={7}><Fit>{off.map((d) => d.name).join(', ')}</Fit></td>
-          </tr>
-        )}
+        {([['기사 휴무', off.filter((d) => d.staff_type === '기사')], ['현장 휴무', off.filter((d) => d.staff_type !== '기사')]] as const)
+          .filter(([, list]) => list.length > 0)
+          .map(([label, list], i) => (
+            <tr key={label} className={`fieldrow offrow${i === 0 ? ' first' : ''}`}>
+              <td className="site"><Fit>{label}</Fit></td>
+              <td className="body" colSpan={7}><Fit>{list.map((d) => d.name).join(', ')}</Fit></td>
+            </tr>
+          ))}
       </tbody>
     </table>
   );

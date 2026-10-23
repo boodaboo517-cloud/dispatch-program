@@ -1,6 +1,6 @@
 // PC 넓은 표: 하차일정 | 상차일정, 차량 기준 같은 줄, 차량별 빨간 구분선, 4글자 축약 + 클릭 시 전체 보기
 import { useState } from 'react';
-import { abbrev, assignVehicle, isExternal, missingDriver, rowDriver, seqMark, type BoardRow, type DriverSide, type DailyOrder, type Zone } from '../../domain/index.ts';
+import { abbrev, assignVehicle, isExternal, missingDriver, workText, rowDriver, seqMark, type BoardRow, type DriverSide, type DailyOrder, type Zone } from '../../domain/index.ts';
 import { store } from '../../data/store.ts';
 import { useRole, useSnap } from '../../ui/hooks.ts';
 import { Cell } from '../../ui/Cell.tsx';
@@ -42,7 +42,7 @@ export function PcBoard(p: { zone: Zone; rows: BoardRow[]; waiting: DailyOrder[]
 
 function OrderFields({ o, a, staff }: { o: DailyOrder; a: Actions; staff: boolean }) {
   const snap = useSnap();
-  const vals = [clientName(snap, o), o.region, productName(snap, o), qtyText(o), o.memo];
+  const vals = [clientName(snap, o), o.region, productName(snap, o), qtyText(o), [workText(o), o.memo].filter(Boolean).join(' · ')];
   return (
     <>
       {vals.map((v, i) => (

@@ -1,7 +1,7 @@
 // 기존 "경민물류 일정표" 양식으로 내보내기 (하루 = 시트 1장). 엑셀에는 축약 없이 전체 내용.
 import type { Worksheet } from 'exceljs';
 import {
-  DAY_STATUS_LABEL, missingDriver, seqMark, buildBoard, transportSummary, buildIndex, eachDay, isDriverWorking, sitesGrouped,
+  DAY_STATUS_LABEL, missingDriver, workText, seqMark, buildBoard, transportSummary, buildIndex, eachDay, isDriverWorking, sitesGrouped,
   type BoardRow, type DailyOrder, type Snapshot, type Zone,
 } from '../domain/index.ts';
 import { dayjs } from '../lib/time.ts';
@@ -15,7 +15,7 @@ function orderVals(s: Snapshot, o: DailyOrder | undefined) {
   const places = o.pickup_place || o.dropoff_place ? `${o.pickup_place || ''}→${o.dropoff_place || ''}` : '';
   const ext = o.carrier_type && o.carrier_type !== 'own' && o.vehicle_id ? transportSummary(s, o) : '';
   const extra = o.kind === 'load' ? [o.shipment === 'bulk' ? '벌크' : '', o.same_day ? '당일왕복' : '', !o.same_day && o.arrival_offset != null ? `하차+${o.arrival_offset}일` : ''] : [];
-  return [clientName(s, o), o.region, productName(s, o), qtyText(o), [places, ...extra, ext, o.memo].filter(Boolean).join(' ')];
+  return [clientName(s, o), o.region, productName(s, o), qtyText(o), [workText(o), places, ...extra, ext, o.memo].filter(Boolean).join(' ')];
 }
 
 function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: BoardRow[], waiting: DailyOrder[], external: DailyOrder[] = []) {

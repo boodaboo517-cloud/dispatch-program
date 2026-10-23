@@ -9,7 +9,7 @@ import { store } from '../data/store.ts';
 import { fmtDate, seoulToday } from '../lib/time.ts';
 import { useSnap } from '../ui/hooks.ts';
 import { arrivalShipLabel, clientName, departureShipLabel, driverName, kindLabel, productName, shipText, vehicleNo } from '../ui/labels.ts';
-import { PlaceFields, TransportFields, defaultPlaces } from '../ui/OrderSheet.tsx';
+import { PlaceFields, TransportFields, WorkFields, defaultPlaces } from '../ui/OrderSheet.tsx';
 import { QtyInput } from '../ui/QtyInput.tsx';
 import { Seg, WeekdayChips } from '../ui/Picker.tsx';
 import { usePickers } from '../ui/pickers.tsx';
@@ -127,6 +127,7 @@ export function OrderInputPage() {
       {o.client_id && <button style={{ width: '100%', margin: '4px 0' }} onClick={addExtra}>＋ 같은 거래처 품목 추가</button>}
       <label className="field"><span>지역</span><input value={o.region} onChange={(e) => set({ region: e.target.value })} /></label>
       <PlaceFields pickup={o.pickup_place ?? ''} dropoff={o.dropoff_place ?? ''} onChange={(p) => set(p)} />
+      <WorkFields kind={o.kind} time={o.work_time ?? ''} detail={o.work_detail ?? ''} onChange={(p) => set(p)} />
       <TransportFields o={o} set={set} />
       <p className="muted">차량·기사·선박은 나중에 지정해도 됩니다 (비우면 배차 대기)</p>
       {(o.carrier_type ?? 'own') === 'own' && <Row k="차량" v={vehicleNo(snap, o.vehicle_id)} ph="나중에 배차" onClick={async () => { const v = await pick.vehicle(buildBoard(snap, o.date), o.zone); if (v) set({ vehicle_id: v }); }} />}
