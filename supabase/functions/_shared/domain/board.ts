@@ -154,6 +154,17 @@ export function shipTime(snap: Snapshot, name: string | null): string {
   return shipTimeOf(snap.ships, name) || '99:98';
 }
 
+/** 상차 칸에 적은 비고는 그 짐을 내리는 하차 칸에도 같이 보인다 */
+function fromLoadNotes(snap: Snapshot, idx: Index, unloads: DailyOrder[]): string[] {
+  const notes = new Set<string>();
+  for (const u of unloads) {
+    const src = u.linked_from_id ? snap.daily_orders.find((o) => o.id === u.linked_from_id) : undefined;
+    const note = src?.vehicle_id ? idx.vd.get(`${src.date}|${src.vehicle_id}`)?.load_note?.trim() : '';
+    if (note) notes.add(note);
+  }
+  return [...notes];
+}
+
 export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex(snap)): Board {
   const field = snap.field_assignments
     .filter((f) => f.date === date)
@@ -204,7 +215,7 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
       loadSeq: vd?.load_seq ?? (vd?.load_driver_id ? null : vd?.unload_seq ?? null),
       helperId: vd?.helper_driver_id ?? null,
       helperRole: vd?.helper_role ?? '',
-      unloadNote: vd?.unload_note ?? '',
+      unloadNote: [vd?.unload_note ?? '', ...fromLoadNotes(snap, idx, unloads)].filter(Boolean).join(' · '),
       loadNote: vd?.load_note ?? '',
       startTime: startDefault ? DEFAULT_START.time : vd?.start_time ?? '',
       startPlace: startDefault ? DEFAULT_START.place : vd?.start_place ?? '',

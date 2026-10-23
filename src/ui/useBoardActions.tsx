@@ -146,7 +146,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
   /** 오전(하차)·오후(상차) 칸 비고만 (오더 없이). 빈 글자로 저장하면 지움 */
   const editNote = async (row: BoardRow, kind: Kind) => {
     if (!staff) return;
-    const cur = kind === 'unload' ? row.unloadNote : row.loadNote;
+    const cur = (kind === 'unload' ? row.vd?.unload_note : row.vd?.load_note) ?? '';
     const t = await pick.memo(cur, `${row.vehicle.short_no} ${sideLabel(row, kind === 'unload' ? 'unload' : 'load')} 비고`);
     if (t === null) return;
     store.run((tx) => setRowNote(tx, { date, vehicle_id: row.vehicle.id, zone: row.zone, kind, note: t }));

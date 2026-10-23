@@ -485,3 +485,17 @@ describe('오전·오후 칸 비고만', () => {
     expect([r.unloadNote, r.status]).toEqual(['', 'empty']);
   });
 });
+
+describe('상차 비고 → 하차에도 표시', () => {
+  it('상차 오더 비고와 상차 칸 비고가 도착지 하차에 같이 보인다', () => {
+    const tx = new Tx(baseSnapshot());
+    const load = createOrder(tx, blankOrder({ date: D, zone: 'land', kind: 'load', client_id: 'c-dm', vehicle_id: 'v9915', departure_ship: '제이엘', memo: '파손주의' }));
+    setRowShip(tx, { date: D, vehicle_id: 'v9915', zone: 'land', which: 'departure', ship: '제이엘', tag: '' });
+    setRowNote(tx, { date: D, vehicle_id: 'v9915', zone: 'land', kind: 'load', note: '박스 위 적재금지' });
+    const r = buildBoard(tx.result(), '2026-10-21').rows.find((x) => x.vehicle.id === 'v9915' && !x.secondary)!;
+    expect(r.unloads.map((o) => [o.linked_from_id, o.memo])).toEqual([[load.id, '파손주의']]);
+    expect(r.unloadNote).toBe('박스 위 적재금지');
+    setRowNote(tx, { date: '2026-10-21', vehicle_id: 'v9915', zone: 'jeju', kind: 'unload', note: '08시 하차' });
+    expect(buildBoard(tx.result(), '2026-10-21').rows.find((x) => x.vehicle.id === 'v9915' && !x.secondary)!.unloadNote).toBe('08시 하차 · 박스 위 적재금지');
+  });
+});
