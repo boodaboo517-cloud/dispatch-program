@@ -289,7 +289,7 @@ tr.err td { background: var(--red-soft); }
 .paper .ps-time { color: #555; font-size: .8em; }
 .paper .ps-ord + .ps-ord { border-top: 1px dotted #bbb; margin-top: 1px; padding-top: 1px; }
 .paper .ps-oline { display: flex; overflow: hidden; }
-.paper .ps-note { color: #dc2626; font-size: .8em; font-weight: 600; }
+.paper .ps-note { color: #dc2626; font-size: .68em; font-weight: 600; }
 .paper .ps-oline.center { justify-content: center; }
 .paper .ps-helper { color: #b45309; font-size: .85em; font-weight: 700; }
 .paper .ps-start { color: #1d4ed8; font-size: .8em; font-weight: 700; }
