@@ -6,7 +6,16 @@ import { ErrorBoundary } from './ui/ErrorBoundary.tsx';
 import { initInstallCapture } from './lib/install.ts';
 import './styles.css';
 
-registerSW({ immediate: true });
+registerSW({
+  immediate: true,
+  // 휴대폰에서 앱을 켜 둔 채로 쓰면 업데이트를 늦게 받으므로: 다시 볼 때마다, 그리고 15분마다 새 버전 확인
+  onRegisteredSW(_url, r) {
+    if (!r) return;
+    const check = () => void r.update().catch(() => undefined);
+    setInterval(check, 15 * 60 * 1000);
+    document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && check());
+  },
+});
 initInstallCapture();
 
 createRoot(document.getElementById('root')!).render(

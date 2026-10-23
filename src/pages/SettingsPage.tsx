@@ -13,6 +13,7 @@ import { Editable } from '../ui/Editable.tsx';
 import { useRole, useSnap, useStore } from '../ui/hooks.ts';
 import { setting } from '../ui/labels.ts';
 import { InstallCard } from '../ui/InstallCard.tsx';
+import { reloadFresh } from '../lib/recover.ts';
 import { Sheet, useSheet } from '../ui/Sheet.tsx';
 
 function saveSetting(key: string, value: unknown) {
@@ -250,6 +251,11 @@ export function SettingsPage() {
       </div>
 
       <InstallCard />
+
+      <div className="card row" style={{ alignItems: 'center' }}>
+        <div className="grow"><b>앱 버전</b><div className="muted small">{__APP_VERSION__}</div></div>
+        <button onClick={() => void reloadFresh()}>최신 버전 받기</button>
+      </div>
 
       {staff && alerts.length > 0 && (
         <div className="card"><h3>알림</h3>{alerts.map((a, i) => <div key={i} className={`banner ${a.level === 'over' ? 'red' : 'yellow'}`}>{a.message}</div>)}</div>

@@ -2,8 +2,14 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { execSync } from 'node:child_process';
+
+// 화면에 보여 줄 앱 버전: 빌드 시각(한국) · 커밋
+const commit = (process.env.VERCEL_GIT_COMMIT_SHA ?? (() => { try { return execSync('git rev-parse HEAD').toString(); } catch { return ''; } })()).trim().slice(0, 7);
+const built = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 16).replace('T', ' ');
 
 export default defineConfig({
+  define: { __APP_VERSION__: JSON.stringify(`${built}${commit ? ` · ${commit}` : ''}`) },
   plugins: [
     react(),
     VitePWA({
