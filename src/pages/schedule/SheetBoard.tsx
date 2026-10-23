@@ -101,7 +101,7 @@ function VehicleRow({ snap, row }: { snap: Snapshot; row: BoardRow }) {
   const status = row.status && row.status !== 'field' ? row.status : '';
   const helper = row.helperId ? <div className="ps-oline center"><Fit><span className="ps-helper">+{driverName(snap, row.helperId)} {row.helperRole}</span></Fit></div> : null;
   const start = row.startTime || row.startPlace
-    ? <div className="ps-oline center"><Fit><span className="ps-start">{[row.startTime, row.startPlace].filter(Boolean).join(' ')}</span></Fit></div>
+    ? <div className="ps-oline center"><Fit><span className={`ps-start ${row.startDefault ? 'dflt' : ''}`}>{[row.startTime, row.startPlace].filter(Boolean).join(' ')}</span></Fit></div>
     : null;
   const noUnload = missingDriver(row, 'unload');
   const noLoad = missingDriver(row, 'load');

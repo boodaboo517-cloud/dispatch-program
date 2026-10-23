@@ -147,11 +147,21 @@ describe('한 차량 기사 2명 (선탑·지원)', () => {
 describe('출근 시간·장소', () => {
   it('저장하고, 다음 날 입력 때는 같은 차량의 최근 값을 기본으로', () => {
     const tx = setup();
-    setRowStart(tx, { date: D, vehicle_id: 'v9915', zone: 'jeju', time: '07:00', place: '부두' });
+    setRowStart(tx, { date: D, vehicle_id: 'v9915', zone: 'jeju', time: '06:30', place: '함덕' });
     const r = row(tx, 'v9915');
-    expect(startText(r)).toBe('07:00 부두');
-    expect(lastStart(tx.result(), 'v9915', '2026-10-21')).toEqual({ time: '07:00', place: '부두' });
+    expect(startText(r)).toBe('06:30 함덕');
+    expect(lastStart(tx.result(), 'v9915', '2026-10-21')).toEqual({ time: '06:30', place: '함덕' });
     expect(lastStart(tx.result(), 'v9914', '2026-10-21')).toBeNull();
+  });
+  it('제주 기사는 따로 적지 않으면 07:00 부두, 바뀐 날만 저장', () => {
+    const tx = setup();
+    set(tx, 'v9915', 'dA');
+    expect([startText(row(tx, 'v9915')), row(tx, 'v9915').startDefault]).toEqual(['07:00 부두', true]);
+    expect(startText(row(tx, 'v9914'))).toBe(''); // 기사 없는 차량은 표시 안 함
+    setRowStart(tx, { date: D, vehicle_id: 'v9915', zone: 'jeju', time: '06:30', place: '차고지' });
+    expect([startText(row(tx, 'v9915')), row(tx, 'v9915').startDefault]).toEqual(['06:30 차고지', false]);
+    setRowStart(tx, { date: D, vehicle_id: 'v9915', zone: 'jeju', time: '07:00', place: '부두' });
+    expect(row(tx, 'v9915').startDefault).toBe(true);
   });
 });
 

@@ -1,7 +1,7 @@
 // 일정표 칸 동작 (휴대폰·PC 공통)
 import {
   ON_CALL_SHIFT, abbrev, acceptShipPending, nudgeVehicle, workLogOf, assignVehicle, blankOrder, buildBoard, createOrder, ignoreShipPending, opposite, saveOrder,
-  HELPER_ROLE_LABEL, START_PLACES, setRowNote, lastStart, startText, setRowStart, rowDriver, seqMark, setDriverSeq, setRowDriver, setRowHelper, setRowShip, setVehicleDayStatus, setVehicleZone, shipTime,
+  DEFAULT_START, HELPER_ROLE_LABEL, START_PLACES, setRowNote, lastStart, startText, setRowStart, rowDriver, seqMark, setDriverSeq, setRowDriver, setRowHelper, setRowShip, setVehicleDayStatus, setVehicleZone, shipTime,
   type Board, type BoardRow, type DailyOrder, type DriverSide, type HelperRole, type Kind, type Zone,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
@@ -152,12 +152,12 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     store.run((tx) => setRowNote(tx, { date, vehicle_id: row.vehicle.id, zone: row.zone, kind, note: t }));
   };
 
-  /** 출근 시간·장소: 비어 있으면 같은 차량의 최근 값으로 채워 둔다 */
+  /** 출근 시간·장소: 제주는 기본 07:00 부두, 바뀔 때만 고친다 */
   const editStart = (row: BoardRow) => {
     if (!staff) return;
-    const prev = row.startTime || row.startPlace ? { time: row.startTime, place: row.startPlace } : lastStart(store.getState().snap, row.vehicle.id, date);
+    const prev = row.startTime || row.startPlace ? { time: row.startTime, place: row.startPlace } : row.zone === 'jeju' ? { ...DEFAULT_START } : lastStart(store.getState().snap, row.vehicle.id, date);
     sheet.open((close) => (
-      <StartSheet title={`${row.vehicle.short_no} 출근 시간·장소`} initial={prev ?? { time: '', place: '' }} close={close}
+      <StartSheet title={`${row.vehicle.short_no} 출근 시간·장소`} initial={prev ?? { time: '', place: '' }} jeju={row.zone === 'jeju'} close={close}
         onSave={(time, place) => store.run((tx) => setRowStart(tx, { date, vehicle_id: row.vehicle.id, zone: row.zone, time, place }))} />
     ));
   };
@@ -272,13 +272,13 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
 }
 
 /** 출근 시간·장소 입력 */
-function StartSheet({ title, initial, close, onSave }: { title: string; initial: { time: string; place: string }; close: () => void; onSave: (time: string, place: string) => void }) {
+function StartSheet({ title, initial, jeju, close, onSave }: { title: string; initial: { time: string; place: string }; jeju: boolean; close: () => void; onSave: (time: string, place: string) => void }) {
   const [time, setTime] = useState(initial.time);
   const [place, setPlace] = useState(initial.place);
   const save = (t: string, p: string) => { onSave(t, p); close(); };
   return (
     <Sheet title={title} onClose={close} footer={<>
-      <button onClick={() => save('', '')}>비우기</button>
+      <button onClick={() => save('', '')}>{jeju ? `기본으로 (${DEFAULT_START.time} ${DEFAULT_START.place})` : '비우기'}</button>
       <button className="primary" onClick={() => save(time, place)}>저장</button>
     </>}>
       <label className="field"><span>출근 시간</span><input type="time" value={time} onChange={(e) => setTime(e.target.value)} /></label>

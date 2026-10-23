@@ -5,7 +5,7 @@ import { activeRepair, repairMemo, saveMaintenance } from './maintenance.ts';
 import { carriedLoads, ensureVehicleDay, opposite, waitsForShip } from './orders.ts';
 import { departDelay, isWaitShip, shipTimeOf } from './ships.ts';
 import type { Tx } from './tx.ts';
-import { ON_CALL_SHIFT } from './types.ts';
+import { DEFAULT_START, ON_CALL_SHIFT } from './types.ts';
 import type {
   DailyOrder, DayStatus, Driver, FieldAssignment, HelperRole, Kind, MaintenanceKind, ShipTag, Snapshot, Vehicle, VehicleDay, Zone,
 } from './types.ts';
@@ -111,6 +111,8 @@ export interface BoardRow {
   /** 출근 시간·장소 */
   startTime: string;
   startPlace: string;
+  /** 따로 적지 않아 기본값(07:00 부두)으로 보이는 중 */
+  startDefault: boolean;
   arrivalShip: string | null;
   arrivalTag: ShipTag;
   departureShip: string | null;
@@ -187,6 +189,8 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
     const carried = zone ? carriedLoads(waitingLoads, v.id, date, zone) : [];
     if (!status && mine.length === 0 && carried.length === 0 && !vd?.unload_note && !vd?.load_note) status = 'empty';
     const driverId = vd?.driver_id ?? orders.find((o) => o.driver_id)?.driver_id ?? null;
+    // 제주 기사는 따로 적지 않으면 기본 출근(07:00 부두)
+    const startDefault = zone === 'jeju' && !!driverId && !vd?.start_time && !vd?.start_place && status !== 'rest' && status !== 'repair';
     rows.push({
       vehicle: v,
       zone,
@@ -202,8 +206,9 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
       helperRole: vd?.helper_role ?? '',
       unloadNote: vd?.unload_note ?? '',
       loadNote: vd?.load_note ?? '',
-      startTime: vd?.start_time ?? '',
-      startPlace: vd?.start_place ?? '',
+      startTime: startDefault ? DEFAULT_START.time : vd?.start_time ?? '',
+      startPlace: startDefault ? DEFAULT_START.place : vd?.start_place ?? '',
+      startDefault,
       arrivalShip: vd?.arrival_ship ?? unloads.find((o) => o.arrival_ship)?.arrival_ship ?? null,
       arrivalTag: vd?.arrival_ship ? vd.arrival_ship_tag : unloads.find((o) => o.arrival_ship)?.arrival_ship_tag ?? '',
       departureShip: vd?.departure_ship ?? loads.find(vehicleSails)?.departure_ship ?? null,
@@ -237,6 +242,7 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
         loadNote: '',
         startTime: '',
         startPlace: '',
+        startDefault: false,
         arrivalShip: arr?.arrival_ship ?? null,
         arrivalTag: arr?.arrival_ship_tag ?? '',
         departureShip: dep?.departure_ship ?? null,
@@ -441,7 +447,9 @@ export function setRowNote(tx: Tx, p: { date: string; vehicle_id: string; zone: 
 /** 출근 시간·장소 */
 export function setRowStart(tx: Tx, p: { date: string; vehicle_id: string; zone: Zone | null; time: string; place: string }) {
   const vd = ensureVehicleDay(tx, p.date, p.vehicle_id, p.zone);
-  tx.update('vehicle_days', vd.id, { start_time: p.time, start_place: p.place.trim() });
+  // 기본값과 같으면 비워 둔다 (기본값으로 표시)
+  const same = p.zone === 'jeju' && p.time === DEFAULT_START.time && p.place.trim() === DEFAULT_START.place;
+  tx.update('vehicle_days', vd.id, same ? { start_time: '', start_place: '' } : { start_time: p.time, start_place: p.place.trim() });
 }
 
 /** 같은 차량의 가장 최근 출근 시간·장소 (새 날짜 입력 때 기본값) */

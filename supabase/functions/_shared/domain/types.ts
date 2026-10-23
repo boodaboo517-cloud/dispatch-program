@@ -229,6 +229,8 @@ export interface DailyOrder extends Base {
 export type HelperRole = '선탑' | '지원';
 /** 제주 출근 장소 바로 고르기 */
 export const START_PLACES = ['부두', '차고지', '본사', '함덕', '고산', '현장'] as const;
+/** 제주 기사 기본 출근: 따로 적지 않으면 오전 7시 부두 */
+export const DEFAULT_START = { time: '07:00', place: '부두' } as const;
 
 export const HELPER_ROLE_LABEL: Record<HelperRole, string> = { 선탑: '선탑(교육)', 지원: '지원' };
 
