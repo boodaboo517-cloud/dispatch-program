@@ -341,6 +341,14 @@ function OffSheet({ staffId, close }: { staffId: string; close: () => void }) {
 
 function FieldSetupPanel() {
   const snap = useSnap();
+  const sites = [...snap.field_sites].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name, 'ko'));
+  /** 근무지 순서 한 칸 위/아래 (전체를 0,1,2… 로 다시 매김) */
+  const moveSite = (i: number, dir: -1 | 1) => {
+    const list = [...sites];
+    const [x] = list.splice(i, 1);
+    list.splice(i + dir, 0, x);
+    store.run((tx) => list.forEach((site, k) => site.sort_order !== k && tx.update('field_sites', site.id, { sort_order: k })));
+  };
   const sheet = useSheet();
   const { staff } = useRole();
   const pick = usePickers();
@@ -376,20 +384,32 @@ function FieldSetupPanel() {
   };
   return (
     <>
-      <h3>근무지</h3>
-      <div className="card">
-        {snap.field_sites.map((s) => (
-          <div key={s.id} className="row">
-            <div className="grow"><Editable label="근무지" value={s.name} onSave={staff ? (v) => store.run((tx) => tx.update('field_sites', s.id, { name: v })) : undefined} /></div>
-            <select aria-label="일정표 위치" value={s.zone ?? ''} disabled={!staff} style={{ width: 'auto' }}
-              onChange={(e) => store.run((tx) => tx.update('field_sites', s.id, { zone: (e.target.value || null) as Zone | null }))}>
-              <option value="">표시 위치 없음</option><option value="land">육지 표</option><option value="jeju">제주 표</option>
-            </select>
-            {staff && <button className="ghost" onClick={() => confirm('삭제할까요?') && store.run((tx) => tx.remove('field_sites', s.id))}>✕</button>}
-          </div>
-        ))}
-        {staff && <button onClick={() => { const n = prompt('근무지 이름')?.trim(); if (n) store.run((tx) => tx.insert('field_sites', { id: newId(), name: n, sort_order: snap.field_sites.length, zone: 'jeju' })); }}>＋ 근무지</button>}
+      <h3>근무지 <span className="muted small">(일정표 현장 표에 이 순서로 나옵니다)</span></h3>
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        {sites.map((s, i) => {
+          const people = snap.field_assignments.filter((f) => f.date === today && f.site_id === s.id && !f.is_off).length;
+          return (
+            <div key={s.id} className="list-item site-row">
+              <span className="muted" style={{ width: 22, textAlign: 'right' }}>{i + 1}</span>
+              <b className="grow" style={{ fontSize: 18, cursor: staff ? 'pointer' : 'default' }}
+                onClick={() => { if (!staff) return; const n = prompt('근무지 이름', s.name)?.trim(); if (n && n !== s.name) store.run((tx) => tx.update('field_sites', s.id, { name: n })); }}>
+                {s.name}
+              </b>
+              <span className="muted small" style={{ whiteSpace: 'nowrap' }}>오늘 {people}명</span>
+              {staff && (
+                <>
+                  <button className="ghost site-btn" aria-label="위로" disabled={i === 0} onClick={() => moveSite(i, -1)}>▲</button>
+                  <button className="ghost site-btn" aria-label="아래로" disabled={i === sites.length - 1} onClick={() => moveSite(i, 1)}>▼</button>
+                  <button className="ghost site-btn" aria-label="삭제" onClick={() => confirm(`${s.name} 근무지를 삭제할까요?`) && store.run((tx) => tx.remove('field_sites', s.id))}>✕</button>
+                </>
+              )}
+            </div>
+          );
+        })}
+        {!sites.length && <p className="muted" style={{ padding: 12 }}>근무지가 없습니다</p>}
       </div>
+      {staff && <button style={{ width: '100%' }} onClick={() => { const n = prompt('근무지 이름')?.trim(); if (n) store.run((tx) => tx.insert('field_sites', { id: newId(), name: n, sort_order: sites.length, zone: 'jeju' })); }}>＋ 근무지 추가</button>}
+      <p className="muted small">이름을 누르면 바꿀 수 있습니다. ▲▼로 순서를 바꿉니다.</p>
       <h3>고정 근무 (매일 자동 표시 · 변경 시 지난 날짜는 그대로)</h3>
       {snap.recurring_field_work.map((r) => {
         const v = versionOn(snap.recurring_field_versions.filter((x) => x.recurring_field_id === r.id), today);

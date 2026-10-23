@@ -308,3 +308,7 @@ tr.err td { background: var(--red-soft); }
 .fp-chip { min-height: 44px; font-size: 15px; }
 .paper.fieldwork th.zone { background: #166534; }
 .paper.fieldwork tr.newsite td { border-top: 2px solid #222; }
+/* 현장 설정: 근무지 목록 */
+.site-row { gap: 6px; min-height: 56px; }
+.site-btn { min-width: 40px; padding: 0 8px; font-size: 16px; }
+.site-btn:disabled { opacity: .25; }
