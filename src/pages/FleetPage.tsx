@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   activeRepair, newId, planCreateFieldRecurring, planFieldRecurringChange, planFieldRecurringEnd,
-  setDayOff, versionOn, weekdaysLabel, fixedOffDays, planStaffFixedOff,
+  versionOn, weekdaysLabel, fixedOffDays, planStaffFixedOff, LEAVE_REASONS, cancelLeave, leaveRanges, setLeave,
   ON_CALL_SHIFT, SHIFT_PRESETS, driverGroup, guessDriverZone, type Driver, type Ship, type Vehicle, type VehicleType, type Weekday, type Zone,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
@@ -124,12 +124,64 @@ function OffDaysTable({ close }: { close: () => void }) {
   );
 }
 
+/** 휴무 기간 등록 (휴가·병가 등): 그 기간 배차·현장근무에서 빠짐 */
+function LeaveCard({ staffId }: { staffId: string }) {
+  const snap = useSnap();
+  const today = seoulToday();
+  const [from, setFrom] = useState(today);
+  const [to, setTo] = useState(today);
+  const [reason, setReason] = useState<string>('휴가');
+  const ranges = leaveRanges(snap, staffId, today);
+  const add = () => {
+    let r = { days: 0, cleared: 0 };
+    store.run((tx) => { r = setLeave(tx, { staffId, from, to, reason }); });
+    store.toast(`휴무 ${r.days}일 등록${r.cleared ? ` · 이미 배차된 ${r.cleared}건은 기사를 비웠습니다` : ''}`);
+  };
+  const days = from && to ? Math.abs(Math.round((Date.parse(to) - Date.parse(from)) / 86400000)) + 1 : 0;
+  return (
+    <div className="card">
+      <b>휴무 기간 등록</b> <span className="muted small">(그 기간 배차·현장근무 선택 목록에서 빠짐)</span>
+      <div className="row" style={{ marginTop: 6 }}>
+        <label className="field grow"><span>시작</span><input type="date" value={from} onChange={(e) => { setFrom(e.target.value); if (e.target.value > to) setTo(e.target.value); }} /></label>
+        <label className="field grow"><span>끝</span><input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} /></label>
+      </div>
+      <div className="chips" style={{ flexWrap: 'wrap', overflow: 'visible' }}>
+        {LEAVE_REASONS.map((x) => <button key={x} className={`chip ${reason === x ? 'on' : ''}`} onClick={() => setReason(x)}>{x}</button>)}
+      </div>
+      <button className="primary" style={{ width: '100%', marginTop: 8 }} onClick={add}>휴무 등록 ({days}일)</button>
+      {ranges.length > 0 && <div style={{ marginTop: 10 }}><b className="small">예정된 휴무</b></div>}
+      {ranges.map((r) => (
+        <div key={r.from} className="row" style={{ minHeight: 44 }}>
+          <span className="grow">{fmtDate(r.from)}{r.to !== r.from ? ` ~ ${fmtDate(r.to)}` : ''} <span className="badge warn">{r.reason}</span></span>
+          <button className="ghost" onClick={() => confirm('이 휴무를 취소할까요?') && store.run((tx) => cancelLeave(tx, { staffId, from: r.from, to: r.to }))}>취소</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** 사람 고르고 → 휴무 기간 등록 */
+function LeaveSheet({ close }: { close: () => void }) {
+  const snap = useSnap();
+  const [id, setId] = useState<string | null>(null);
+  const person = snap.drivers.find((x) => x.id === id);
+  return (
+    <Sheet title={person ? `${person.name} 휴무 등록` : '휴무 등록 · 누구?'} onClose={close} footer={<button onClick={close}>닫기</button>}>
+      {person ? <LeaveCard staffId={person.id} /> : (
+        <div>
+          {[...snap.drivers].sort((a, b) => a.staff_type.localeCompare(b.staff_type, 'ko') || a.name.localeCompare(b.name, 'ko')).map((x) => (
+            <div key={x.id} className="list-item" onClick={() => setId(x.id)}><b className="grow">{x.name}</b><span className="muted small">{x.staff_type}</span></div>
+          ))}
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
 function DriverSheet({ d, close }: { d: Driver; close: () => void }) {
   const snap = useSnap();
   const cur = snap.drivers.find((x) => x.id === d.id) ?? d;
-  const [offDate, setOffDate] = useState(seoulToday());
   const save = (p: Partial<Driver>) => store.run((tx) => (tx.get('drivers', d.id) ? tx.update('drivers', d.id, p) : tx.insert('drivers', { ...d, ...p })));
-  const offs = snap.field_assignments.filter((f) => f.staff_id === d.id && f.is_off && f.date >= seoulToday()).sort((a, b) => a.date.localeCompare(b.date));
   return (
     <Sheet title={cur.name} onClose={close}>
       <Editable label="이름" value={cur.name} onSave={(v) => save({ name: v })} />
@@ -147,11 +199,7 @@ function DriverSheet({ d, close }: { d: Driver; close: () => void }) {
       <TeamField value={cur.team ?? ''} onSave={(v) => save({ team: v })} />
       <Editable label="소속" value={cur.affiliation} onSave={(v) => save({ affiliation: v })} />
       <Editable label="비고" value={cur.memo ?? ''} placeholder="예: 대형면허, 야간 가능, 주 3일만" multiline onSave={(v) => save({ memo: v })} />
-      <div className="card">
-        <b>휴무 지정</b> <span className="muted small">(배차·현장근무 선택 목록에서 빠짐)</span>
-        <div className="row"><input type="date" value={offDate} onChange={(e) => setOffDate(e.target.value)} /><button onClick={() => store.run((tx) => setDayOff(tx, offDate, d.id, true))}>휴무</button></div>
-        {offs.map((f) => <div key={f.id} className="row"><span className="grow">{fmtDate(f.date)}</span><button className="ghost" onClick={() => store.run((tx) => setDayOff(tx, f.date, d.id, false))}>취소</button></div>)}
-      </div>
+      <LeaveCard staffId={d.id} />
       <button className="danger" style={{ width: '100%' }} onClick={() => { if (confirm('삭제할까요?')) { store.run((tx) => tx.remove('drivers', d.id)); close(); } }}>삭제</button>
     </Sheet>
   );
@@ -210,6 +258,7 @@ export function FleetPage() {
             store.run((tx) => tx.insert('drivers', d));
             sheet.open((c) => <DriverSheet d={d} close={c} />);
           }}>＋ 기사·직원 등록</button>}
+          {staff && <button style={{ width: '100%', marginTop: 8 }} onClick={() => sheet.open((c) => <LeaveSheet close={c} />)}>🏖 휴무 기간 등록 (휴가·병가)</button>}
           {staff && <button style={{ width: '100%', marginTop: 8 }} onClick={() => sheet.open((c) => <OffDaysTable close={c} />)}>📅 고정 휴무일 한번에 보기·수정</button>}
           {(['기사', '현장', '사무'] as const).map((type) => {
             const list = snap.drivers.filter((d) => d.staff_type === type);

@@ -1,8 +1,8 @@
 // 기사 근무 기록: 근무형태 선택, 알바 출근, 월간 근무현황
-import { eachDay, weekdayOf } from './dates.ts';
+import { addDays, eachDay, weekdayOf } from './dates.ts';
 import { newId } from './ids.ts';
-import { isDriverWorking } from './board.ts';
-import { planFieldRecurringChange } from './fieldwork.ts';
+import { isDriverWorking, setRowDriver, setRowHelper } from './board.ts';
+import { planFieldRecurringChange, setDayOff } from './fieldwork.ts';
 import { versionOn } from './recurring.ts';
 import { Tx, applyMutations } from './tx.ts';
 import { ON_CALL_SHIFT, WORK_TYPES, guessDriverZone, type Driver, type DriverWorkLog, type Mutation, type Snapshot, type Weekday, type WorkType, type Zone } from './types.ts';
@@ -146,4 +146,51 @@ export function planStaffFixedOff(snap: Snapshot, p: { staffId: string; off: Wee
     recurringChanged++;
   }
   return { mutations, recurringChanged };
+}
+
+/** 휴무 사유 */
+export const LEAVE_REASONS = ['휴가', '병가', '경조사', '개인사정', '기타'] as const;
+
+/**
+ * 휴무 기간 등록: 그 기간 매일 휴무로 (배차·현장근무 선택 목록에서 빠짐).
+ * 이미 배차돼 있던 차량(오전·오후·동승)과 오더 기사는 비운다. 돌려주는 값 = 날짜 수, 비운 배차 수
+ */
+export function setLeave(tx: Tx, p: { staffId: string; from: string; to: string; reason: string }) {
+  const from = p.from <= p.to ? p.from : p.to;
+  const to = p.from <= p.to ? p.to : p.from;
+  let days = 0;
+  let cleared = 0;
+  for (const d of eachDay(from, to)) {
+    setDayOff(tx, d, p.staffId, true);
+    const offRow = tx.list('field_assignments').find((f) => f.date === d && f.staff_id === p.staffId && f.is_off);
+    if (offRow) tx.update('field_assignments', offRow.id, { task: p.reason || '휴무' });
+    days++;
+    for (const vd of tx.list('vehicle_days').filter((v) => v.date === d)) {
+      if (vd.driver_id === p.staffId) { setRowDriver(tx, { date: d, vehicle_id: vd.vehicle_id, zone: vd.zone, driver_id: null, side: 'unload' }); cleared++; }
+      const now = tx.get('vehicle_days', vd.id)!;
+      if (now.load_driver_id === p.staffId) { setRowDriver(tx, { date: d, vehicle_id: vd.vehicle_id, zone: vd.zone, driver_id: null, side: 'load' }); cleared++; }
+      if (now.helper_driver_id === p.staffId) { setRowHelper(tx, { date: d, vehicle_id: vd.vehicle_id, zone: vd.zone, driver_id: null, role: '' }); cleared++; }
+    }
+    for (const o of tx.list('daily_orders').filter((o) => o.date === d && o.driver_id === p.staffId)) tx.update('daily_orders', o.id, { driver_id: null });
+  }
+  return { days, cleared };
+}
+
+/** 휴무 기간 취소 */
+export function cancelLeave(tx: Tx, p: { staffId: string; from: string; to: string }) {
+  for (const d of eachDay(p.from, p.to)) setDayOff(tx, d, p.staffId, false);
+}
+
+/** 오늘 이후 휴무를 연속 기간으로 묶어서: [{from, to, reason}] */
+export function leaveRanges(snap: Pick<Snapshot, 'field_assignments'>, staffId: string, fromDate: string) {
+  const days = snap.field_assignments
+    .filter((f) => f.staff_id === staffId && f.is_off && f.date >= fromDate)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const out: { from: string; to: string; reason: string }[] = [];
+  for (const f of days) {
+    const last = out[out.length - 1];
+    if (last && addDays(last.to, 1) === f.date && last.reason === (f.task || '휴무')) last.to = f.date;
+    else out.push({ from: f.date, to: f.date, reason: f.task || '휴무' });
+  }
+  return out;
 }

@@ -6,7 +6,7 @@ import { copyOrder, createOrder, splitPerVehicle } from '../actions.ts';
 import { planCreateRecurring, planRecurringChange } from '../recurring.ts';
 import { blankField, planCreateFieldRecurring, saveFieldAssignment, setDayOff, setDaySite, setStaffWorking } from '../fieldwork.ts';
 import { ON_CALL_SHIFT, repairSnapshot, type Driver, type Weekday } from '../types.ts';
-import { assignedDriverIds, fixedOffDays, offByZone, planStaffFixedOff, weeklyOffOn, workDaysFromOff } from '../workforce.ts';
+import { assignedDriverIds, cancelLeave, fixedOffDays, leaveRanges, offByZone, planStaffFixedOff, setLeave, weeklyOffOn, workDaysFromOff } from '../workforce.ts';
 import { baseSnapshot, resetIds } from './fixtures.ts';
 
 beforeEach(resetIds);
@@ -344,5 +344,22 @@ describe('현장근무자 근무·휴무·근무지 바꾸기', () => {
     setDaySite(tx, D, 'f1', 'site2');
     expect(tx.list('field_assignments').find((f) => f.date === D && !f.is_off)!.site_id).toBe('site2');
     expect(tx.list('field_assignments').find((f) => f.date === '2026-10-21' && !f.is_off)!.site_id).toBe('site1');
+  });
+});
+
+describe('휴무 기간 (휴가·병가)', () => {
+  it('기간 매일 휴무, 이미 배차된 기사는 비우고, 연속 기간으로 묶어 보여 준다, 취소하면 원래대로', () => {
+    const tx = setup();
+    set(tx, 'v9915', 'dA');
+    set(tx, 'v9914', 'dB');
+    set(tx, 'v9914', 'dA', 'load');
+    const r = setLeave(tx, { staffId: 'dA', from: D, to: '2026-10-22', reason: '휴가' });
+    expect(r).toEqual({ days: 3, cleared: 2 });
+    expect(row(tx, 'v9915').driverId).toBeNull();
+    expect(row(tx, 'v9914').loadDriverId).toBe('dB');
+    expect(tx.list('daily_orders').filter((o) => o.date === D && o.driver_id === 'dA')).toEqual([]);
+    expect(leaveRanges(tx.result(), 'dA', D)).toEqual([{ from: D, to: '2026-10-22', reason: '휴가' }]);
+    cancelLeave(tx, { staffId: 'dA', from: D, to: '2026-10-22' });
+    expect(leaveRanges(tx.result(), 'dA', D)).toEqual([]);
   });
 });
