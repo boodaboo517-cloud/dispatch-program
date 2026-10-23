@@ -255,7 +255,7 @@ tr.err td { background: var(--red-soft); }
 .paper td.veh.wait { background: #fde047; font-weight: 700; }
 .paper .ps-red { color: #dc2626; }
 .paper .ps-sep { color: #999; }
-.paper .ps-ext { color: #dc2626; font-weight: 800; }
+.paper .ps-ext { color: #dc2626; font-weight: 800; font-size: .85em; white-space: nowrap; }
 .paper .st { display: inline-block; border-radius: 5px; padding: 0 3px; font-weight: 700; font-size: inherit; }
 .paper tr.secondary td { background: #f8fafc; }
 .paper tr.waiting td.body:not(:empty) { background: #fef9c3; }

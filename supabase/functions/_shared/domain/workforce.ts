@@ -22,6 +22,13 @@ export function workDaysFromOff(off: Weekday[]): Weekday[] {
 export function offByZone(snap: Snapshot, date: string): Record<Zone, Driver[]> {
   const ids = new Set(snap.field_assignments.filter((f) => f.date === date && f.is_off && f.staff_id).map((f) => f.staff_id!));
   for (const d of weeklyOffOn(snap, date)) ids.add(d.id);
+  // 고정 현장근무가 있는 직원이 그날 현장·차량 어디에도 없으면 휴무로 본다
+  const working = assignedDriverIds(snap, date);
+  for (const f of snap.field_assignments) if (f.date === date && !f.is_off && f.staff_id) working.add(f.staff_id);
+  for (const r of snap.recurring_field_work) {
+    if (!r.active || !r.staff_id || (r.generated_until && date > r.generated_until)) continue;
+    if (!working.has(r.staff_id) && !workLogOf(snap, r.staff_id, date)) ids.add(r.staff_id);
+  }
   const out: Record<Zone, Driver[]> = { land: [], jeju: [] };
   for (const d of snap.drivers) if (ids.has(d.id)) out[driverZone(d)].push(d);
   for (const k of Object.keys(out) as Zone[]) out[k].sort((a, b) => a.name.localeCompare(b.name, 'ko'));

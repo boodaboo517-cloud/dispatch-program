@@ -131,7 +131,7 @@ function WaitingRow({ snap, o }: { snap: Snapshot; o: DailyOrder }) {
   const ext = isExternal(o);
   const load = o.kind === 'load';
   const veh = ext
-    ? <td className="veh"><span className="ps-ext">{o.carrier_name || (o.carrier_type === 'shipper' ? '화주' : '용차')}</span></td>
+    ? <td className="veh"><div className="ps-oline center"><Fit><span className="ps-ext">{o.carrier_name || (o.carrier_type === 'shipper' ? '화주' : '용차')}</span></Fit></div></td>
     : <td className="veh wait"><Fit>미배차</Fit></td>;
   return (
     <tr className={ext ? 'external' : 'waiting'}>

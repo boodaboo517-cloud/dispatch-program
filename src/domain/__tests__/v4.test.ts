@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { buildBoard, lastStart, missingDriver, needsDriver, setDriverSeq, setRowDriver, setRowHelper, setRowStart, startText } from '../board.ts';
 import { blankOrder, saveOrder, workText } from '../orders.ts';
 import { Tx } from '../tx.ts';
+import { blankField, saveFieldAssignment } from '../fieldwork.ts';
 import { ON_CALL_SHIFT, type Driver, type Weekday } from '../types.ts';
 import { assignedDriverIds, fixedOffDays, offByZone, weeklyOffOn, workDaysFromOff } from '../workforce.ts';
 import { baseSnapshot, resetIds } from './fixtures.ts';
@@ -198,5 +199,22 @@ describe('배차 못 한 짐 날짜 변경', () => {
     expect(unload.date).toBe('2026-10-23');
     expect(buildBoard(tx.result(), D).waiting.land).toEqual([]);
     expect(buildBoard(tx.result(), '2026-10-22').waiting.land.map((o) => o.id)).toEqual([load.id]);
+  });
+});
+
+describe('현장근무자 휴무', () => {
+  it('고정 현장근무가 있는데 그날 현장·차량 어디에도 없으면 휴무로 표시', () => {
+    const s = baseSnapshot();
+    const base = { phone: '', work_days: [] as Weekday[], shift: '', affiliation: '', memo: '', zone: 'jeju' as const };
+    s.drivers = [{ ...base, id: 'f1', name: '현장A', staff_type: '현장' }, { ...base, id: 'f2', name: '현장B', staff_type: '현장' }];
+    s.recurring_field_work = [
+      { id: 'r1', staff_id: 'f1', active: true, generated_until: '2026-12-31' },
+      { id: 'r2', staff_id: 'f2', active: true, generated_until: '2026-12-31' },
+    ];
+    const tx = new Tx(s);
+    saveFieldAssignment(tx, blankField({ date: D, staff_id: 'f1', task: '경리' }));
+    expect(offByZone(tx.result(), D).jeju.map((d) => d.id)).toEqual(['f2']);
+    // 생성 기간 밖(먼 미래)은 추정하지 않음
+    expect(offByZone(tx.result(), '2027-02-01').jeju).toEqual([]);
   });
 });
