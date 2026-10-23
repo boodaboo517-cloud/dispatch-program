@@ -147,6 +147,7 @@ function ShipSheet(p: { zone: Zone | null; which: 'arrival' | 'departure'; curre
         free={{ label: '직접 쓰기 (예: 제주로지 예약)', onFree: (t) => t.trim() && finish({ ship: t.trim(), tag }) }}
         top={<>
           {p.current.ship && <div className="list-item" onClick={() => finish({ ship: null, tag: '' })}><span style={{ color: 'var(--red)' }}>선박 지우기 (현재: {p.current.ship})</span></div>}
+          {p.which === 'departure' && <div className="list-item" onClick={() => finish({ ship: '익일선적', tag })}><span><b>📅 익일선적</b> <span className="muted small">다음 날 선적 → 그다음 날 도착 (+2일)</span></span></div>}
           {p.which === 'departure' && <div className="list-item" onClick={() => finish({ ship: '대기', tag })}><span><b>⏸ 대기</b> <span className="muted small">배를 안 탐 · 다음 날도 이 지역에 그대로</span></span></div>}
           {staff && <div className="list-item" onClick={() => sheet.open((c) => <ShipEditSheet ship={blankShip(s.ships.length)} close={c} />)}><span style={{ color: 'var(--blue)' }}>＋ 새 선박 등록 (선박명·시간)</span></div>}
         </>}

@@ -382,3 +382,15 @@ describe('선박 "대기" = 배 안 탐', () => {
     expect(buildBoard(tx.result(), '2026-10-21').rows.find((r) => r.vehicle.id === 'v9915' && !r.secondary)!.zone).toBe('jeju');
   });
 });
+
+describe('선박 "익일선적" = 다음 날 선적, 그다음 날 도착', () => {
+  it('다음 날은 같은 지역, 이틀 뒤 반대 지역 · 반대편 하차도 이틀 뒤', () => {
+    const tx = new Tx(baseSnapshot());
+    const load = createOrder(tx, blankOrder({ date: D, zone: 'land', kind: 'load', client_id: 'c-dm', vehicle_id: 'v9915', departure_ship: '익일선적' }));
+    setRowShip(tx, { date: D, vehicle_id: 'v9915', zone: 'land', which: 'departure', ship: '익일선적', tag: '' });
+    const zoneOn = (d: string) => buildBoard(tx.result(), d).rows.find((r) => r.vehicle.id === 'v9915' && !r.secondary)!.zone;
+    expect(zoneOn('2026-10-21')).toBe('land');
+    expect(zoneOn('2026-10-22')).toBe('jeju');
+    expect(tx.list('daily_orders').find((o) => o.linked_from_id === load.id)!.date).toBe('2026-10-22');
+  });
+});

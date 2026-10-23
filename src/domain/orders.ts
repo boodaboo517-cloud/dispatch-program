@@ -1,7 +1,7 @@
 // 오더 저장·삭제와 "상차 → 다음 날 반대 지역 하차", "선박 자동 이어짐" 연결 로직.
 import { addDays } from './dates.ts';
 import { newId } from './ids.ts';
-import { findShip, isWaitShip } from './ships.ts';
+import { findShip, isNextDayShip, isWaitShip } from './ships.ts';
 import { CARRIER_LABEL } from './types.ts';
 import type { Tx } from './tx.ts';
 import type {
@@ -78,6 +78,8 @@ export function blankVehicleDay(p: { date: string; vehicle_id: string } & Partia
 /** 선박 설정의 "도착일 차이" (기본 1일) */
 export function arrivalOffset(snap: Pick<Snapshot, 'ships'>, shipName: string | null): number {
   if (!shipName) return 1;
+  // 익일선적: 다음 날 배에 실어 그다음 날 도착
+  if (isNextDayShip(shipName)) return 1 + (findShip(snap.ships, shipName.replace(/익일\s*선적/, '').trim())?.arrival_day_offset ?? 1);
   return findShip(snap.ships, shipName)?.arrival_day_offset ?? 1;
 }
 

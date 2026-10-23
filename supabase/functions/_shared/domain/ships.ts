@@ -11,6 +11,11 @@ export function parseShip(value: string | null | undefined): { name: string; por
 /** 선박 칸이 "대기"면 배를 타지 않음 → 다음 날도 그 지역에 그대로 */
 export const isWaitShip = (value: string | null | undefined) => !!value && value.includes('대기');
 
+/** 선박 칸이 "익일선적"이면 오늘 출발이 아니라 다음 날 선적 → 그다음 날 도착 (도착 +2일, 다음 날까지는 이 지역) */
+export const isNextDayShip = (value: string | null | undefined) => !!value && /익일\s*선적/.test(value);
+/** 출발까지 미뤄지는 날 수 (익일선적 1, 보통 0) */
+export const departDelay = (value: string | null | undefined) => (isNextDayShip(value) ? 1 : 0);
+
 export const formatShip = (name: string, port = '') => (port ? `${name} (${port})` : name);
 
 export function findShip(ships: Ship[], value: string | null | undefined): Ship | undefined {
