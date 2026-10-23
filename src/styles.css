@@ -246,6 +246,7 @@ tr.err td { background: var(--red-soft); }
 .paper td.veh, .paper td.drv, .paper td.ship { font-size: 10px; word-break: keep-all; }
 .paper td.body { white-space: nowrap; text-overflow: clip; }
 .paper .fit { display: inline-block; white-space: nowrap; transform-origin: left center; }
+.paper .fit.wrap { display: block; white-space: normal; word-break: keep-all; overflow-wrap: anywhere; line-height: 1.25; }
 .paper td.drv .fit, .paper td.veh .fit, .paper td.ship .fit, .paper td.site .fit { transform-origin: center; }
 .paper td.veh .ps-pill { padding: 0 2px; }
 .paper td.body { text-align: left; padding: 2px 3px; }

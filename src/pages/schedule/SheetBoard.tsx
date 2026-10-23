@@ -22,7 +22,10 @@ function Cols() {
   );
 }
 
-/** 칸 안에서 줄을 바꾸지 않고, 길면 글자를 줄여 한 줄에 맞춘다 (최소 6px, 그래도 길면 옆으로 눌러서) */
+/** 30자 넘는 긴 내용은 줄을 바꿔 글씨가 너무 작아지지 않게 한다 */
+const WRAP_AT = 30;
+
+/** 칸 안에서 줄을 바꾸지 않고, 길면 글자를 줄여 한 줄에 맞춘다 (최소 6px, 그래도 길면 옆으로 눌러서). 30자 넘으면 줄바꿈 */
 function Fit({ children }: { children: ReactNode }) {
   const ref = useRef<HTMLSpanElement>(null);
   useLayoutEffect(() => {
@@ -32,6 +35,7 @@ function Fit({ children }: { children: ReactNode }) {
     const fit = () => {
       el.style.fontSize = '';
       el.style.transform = '';
+      el.classList.toggle('wrap', (el.textContent ?? '').trim().length > WRAP_AT);
       const cs = getComputedStyle(cell);
       const avail = cell.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
       const need = el.scrollWidth;
