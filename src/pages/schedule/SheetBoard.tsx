@@ -1,6 +1,6 @@
 // 종이 일정표 모양 (확인용, 누르기 없음): 차량 한 대 = 한 줄. 선박 | 차량 | 기사 | 하차 | 차량 | 기사 | 상차 | 선박 (제주는 오전·오후)
 import {
-  DAY_STATUS_LABEL, ON_CALL_SHIFT, driverZone, isDriverWorking, isExternal, missingDriver, workText, offByZone, parseShip, seqMark, sitesGrouped,
+  DAY_STATUS_LABEL, ON_CALL_SHIFT, driverZone, isDriverWorking, isExternal, isWaitShip, missingDriver, workText, offByZone, parseShip, seqMark, sitesGrouped,
   type BoardRow, type DailyOrder, type FieldAssignment, type Snapshot, type Zone,
 } from '../../domain/index.ts';
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
@@ -111,7 +111,9 @@ function VehicleRow({ snap, row }: { snap: Snapshot; row: BoardRow }) {
   const statusText = status || row.statusMemo
     ? <>{status && <span className={`st ${status}`}>{DAY_STATUS_LABEL[status]}</span>}{row.statusMemo && <span className="ps-red"> {row.statusMemo}</span>}</>
     : null;
-  const veh = <td className="veh"><Fit><span className={`ps-pill veh ${row.inRepair ? 'repair' : ''}`}>{row.vehicle.short_no}</span></Fit></td>;
+  // 분홍 표시는 선박이 연결된 차량만 (대기·일정 없는 차량은 색 없이)
+  const shipLinked = [row.arrivalShip, row.departureShip].some((s) => s && !isWaitShip(s));
+  const veh = <td className="veh"><Fit><span className={`ps-pill veh ${shipLinked ? '' : 'plain'} ${row.inRepair ? 'repair' : ''}`}>{row.vehicle.short_no}</span></Fit></td>;
   return (
     <tr className={row.secondary ? 'secondary' : ''}>
       <td className="ship"><ShipText snap={snap} ship={row.arrivalShip} tag={row.arrivalTag} /></td>
@@ -218,7 +220,7 @@ export function SheetExtras({ date, field }: { date: string; field: FieldAssignm
         {rows.map((f, i) => (
           <tr key={f.id} className={i > 0 && siteName(rows[i - 1]) !== siteName(f) ? 'newsite' : ''}>
             <td className="site"><Fit>{i === 0 || siteName(rows[i - 1]) !== siteName(f) ? siteName(f) : ''}</Fit></td>
-            <td className="veh">{f.vehicle_id && <Fit><span className="ps-pill veh">{vehicleNo(snap, f.vehicle_id)}</span></Fit>}</td>
+            <td className="veh">{f.vehicle_id && <Fit><span className="ps-pill veh plain">{vehicleNo(snap, f.vehicle_id)}</span></Fit>}</td>
             <td className="drv"><Fit>{driverName(snap, f.staff_id)}</Fit></td>
             <td className="body"><Fit>{f.task}</Fit></td>
           </tr>

@@ -251,6 +251,7 @@ tr.err td { background: var(--red-soft); }
 .paper td.body { text-align: left; padding: 2px 3px; }
 .paper .ps-pill { display: inline-block; max-width: 100%; background: #fbd5dc; border-radius: 7px; padding: 0 3px; font-weight: 700; }
 .paper .ps-pill small { font-weight: 500; color: #6b2130; }
+.paper .ps-pill.veh.plain { background: none; }
 .paper .ps-pill.veh.repair { background: #fecaca; outline: 2px solid var(--red); }
 .paper td.veh.wait { background: #fde047; font-weight: 700; }
 .paper .ps-red { color: #dc2626; }
