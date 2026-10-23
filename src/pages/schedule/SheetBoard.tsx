@@ -52,12 +52,6 @@ function Fit({ children }: { children: ReactNode }) {
 }
 
 /** 선박 칸: (예약업체·표시 작게 한 줄) / 선박명 / 시간(작게). 지역(기항지)은 표시하지 않음 */
-/** 휴무자 이름 + 사유 (휴가·병가 등, 그냥 휴무면 이름만) */
-function offName(snap: Snapshot, date: string, d: { id: string; name: string }) {
-  const r = snap.field_assignments.find((f) => f.date === date && f.staff_id === d.id && f.is_off)?.task;
-  return r && r !== '휴무' ? `${d.name}(${r})` : d.name;
-}
-
 function ShipText({ snap, ship, tag }: { snap: Snapshot; ship: string | null; tag: string }) {
   if (!ship) return null;
   const time = shipTimeOf(snap, ship);
@@ -188,7 +182,7 @@ export function SheetBoard(p: { zone: Zone; date: string; rows: BoardRow[]; wait
         {off.some((d) => d.staff_type === '기사') && (
           <tr className={`fieldrow offrow${working.length || standby.length ? '' : ' first'}`}>
             <td className="site"><Fit>기사 휴무</Fit></td>
-            <td className="body" colSpan={7}><Fit>{off.filter((d) => d.staff_type === '기사').map((d) => offName(snap, p.date, d)).join(', ')}</Fit></td>
+            <td className="body" colSpan={7}><Fit>{off.filter((d) => d.staff_type === '기사').map((d) => d.name).join(', ')}</Fit></td>
           </tr>
         )}
 
@@ -223,7 +217,7 @@ export function SheetExtras({ date, field }: { date: string; field: FieldAssignm
         {!rows.length && <tr><td colSpan={4} className="body" style={{ color: '#888', textAlign: 'center' }}>근무자 없음</td></tr>}
         <tr className="fieldrow offrow first">
           <td className="site"><Fit>현장 휴무</Fit></td>
-          <td className="body" colSpan={3}><Fit>{fieldOff.map((d) => offName(snap, date, d)).join(', ') || '없음'}</Fit></td>
+          <td className="body" colSpan={3}><Fit>{fieldOff.map((d) => d.name).join(', ') || '없음'}</Fit></td>
         </tr>
       </tbody>
     </table>
