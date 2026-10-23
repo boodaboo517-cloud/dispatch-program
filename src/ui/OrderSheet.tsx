@@ -54,6 +54,15 @@ export function OrderSheet({ orderId, close, startEditing = false }: { orderId: 
   const editing = !!draft;
   const set = (p: Partial<DailyOrder>) => setDraft({ ...(draft ?? order), ...p });
 
+  /** 배차 못 한 짐을 다른 날로 */
+  const moveDate = async () => {
+    const d = await pick.date(`${kindLabel(order.zone, order.kind)} 날짜 변경`, order.date);
+    if (!d || d === order.date) return;
+    store.run((tx) => saveOrder(tx, { ...tx.get('daily_orders', order.id)!, date: d }));
+    store.toast(`${fmtDate(d)}로 옮겼습니다`);
+    close();
+  };
+
   /** 같은 거래처의 다른 품목을 같은 차량·기사·선박으로 한 건 더 */
   const addSameClient = async () => {
     const c = await pick.clientProduct(order.vehicle_id, { id: order.client_id!, text: order.client_text });
@@ -130,6 +139,7 @@ export function OrderSheet({ orderId, close, startEditing = false }: { orderId: 
             <>
               <button className="danger" onClick={remove}>삭제</button>
               {order.client_id && order.source !== 'linked' && <button onClick={() => void addSameClient()}>＋ 같은 거래처 품목</button>}
+              {!order.vehicle_id && <button onClick={() => void moveDate()}>📅 날짜 변경</button>}
               <button className="primary" onClick={() => setDraft({ ...order })}>수정</button>
             </>
           )}

@@ -7,9 +7,10 @@ import {
 import { store } from '../data/store.ts';
 import { useState } from 'react';
 import { useRole, useSnap } from './hooks.ts';
-import { ZONE_LABEL, driverName, shipText, vehicleNo } from './labels.ts';
+import { ZONE_LABEL, driverName, kindLabel, shipText, vehicleNo } from './labels.ts';
+import { fmtDate } from '../lib/time.ts';
 import { OrderSheet, QuickQtySheet } from './OrderSheet.tsx';
-import { EXTERNAL_HIRED, EXTERNAL_SHIPPER, usePickers } from './pickers.tsx';
+import { EXTERNAL_HIRED, EXTERNAL_SHIPPER, MOVE_DATE, usePickers } from './pickers.tsx';
 import { Sheet, useSheet } from './Sheet.tsx';
 
 export function useBoardActions(date: string, board: Board, onFocusVehicle?: (vehicleId: string) => void) {
@@ -202,12 +203,21 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     );
   };
 
+  /** 배차 못 한 짐을 다른 날로 (상차면 연결된 반대편 하차도 함께 옮겨짐) */
+  const moveDate = async (o: DailyOrder) => {
+    const d = await pick.date(`${kindLabel(o.zone, o.kind)} 날짜 변경`, o.date);
+    if (!d || d === o.date) return;
+    store.run((tx) => saveOrder(tx, { ...tx.get('daily_orders', o.id)!, date: d }));
+    store.toast(`${fmtDate(d)}로 옮겼습니다`);
+  };
+
   /** 노란 차량 칸 → 그날 그 지역 차량 목록에서 배차 → 그 차량 줄로 이동 */
   const assign = async (o: DailyOrder) => {
     if (!staff) return;
     const b = buildBoard(store.getState().snap, date);
     const vid = await pick.vehicle(b, o.zone, true);
     if (!vid) return;
+    if (vid === MOVE_DATE) return void moveDate(o);
     if (vid === EXTERNAL_HIRED || vid === EXTERNAL_SHIPPER) {
       // 용차·화주배차: 업체·차량번호·연락처를 바로 적도록 수정 화면을 연다
       store.run((tx) => saveOrder(tx, { ...o, vehicle_id: null, carrier_type: vid === EXTERNAL_HIRED ? 'hired' : 'shipper' }));
@@ -228,7 +238,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     if (r) store.run((tx) => saveOrder(tx, { ...o, ...(isLoad ? { departure_ship: r.ship, departure_ship_tag: r.tag } : { arrival_ship: r.ship, arrival_ship_tag: r.tag }) }));
   };
 
-  return { addOrder, openOrder, editShip, tapShip, editDriver, editSeq, editHelper, editStart, editStatus, tapVehicle, assign, editWaitingShip, showText, abbrev };
+  return { addOrder, moveDate, openOrder, editShip, tapShip, editDriver, editSeq, editHelper, editStart, editStatus, tapVehicle, assign, editWaitingShip, showText, abbrev };
 }
 
 /** 출근 시간·장소 입력 */

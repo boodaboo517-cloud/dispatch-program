@@ -185,3 +185,18 @@ describe('상·하차 세부', () => {
     expect(workText({ kind: 'load' })).toBe('');
   });
 });
+
+describe('배차 못 한 짐 날짜 변경', () => {
+  it('미배차 상차를 다른 날로 옮기면 연결된 반대편 하차도 같이 옮겨진다', () => {
+    const tx = new Tx(baseSnapshot());
+    const load = saveOrder(tx, blankOrder({ date: D, zone: 'land', kind: 'load', client_id: 'c-dm', departure_ship: '제이엘' }));
+    expect(buildBoard(tx.result(), D).waiting.land.map((o) => o.id)).toEqual([load.id]);
+    saveOrder(tx, { ...tx.get('daily_orders', load.id)!, date: '2026-10-22' });
+    const moved = tx.get('daily_orders', load.id)!;
+    const unload = tx.list('daily_orders').find((o) => o.linked_from_id === load.id)!;
+    expect(moved.date).toBe('2026-10-22');
+    expect(unload.date).toBe('2026-10-23');
+    expect(buildBoard(tx.result(), D).waiting.land).toEqual([]);
+    expect(buildBoard(tx.result(), '2026-10-22').waiting.land.map((o) => o.id)).toEqual([load.id]);
+  });
+});
