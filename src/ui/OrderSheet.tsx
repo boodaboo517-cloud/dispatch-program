@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   CALC_LABEL, CARRIER_LABEL, EXTRA_PRESETS, Tx, acceptLinkPending, arrivalOffset, buildBoard, transportSummary,
   type CarrierType, type Shipment, computeRevenue, deleteOrder, findLinkedUnload, ignoreLinkPending, newId,
-  createOrder, isPerVehicleSplittable, saveOrder, saveRevenue, splitPerVehicle, workText, setProductDefaultPrice, won,
+  copyOrder, createOrder, isPerVehicleSplittable, addDays, saveOrder, saveRevenue, splitPerVehicle, workText, setProductDefaultPrice, won,
   type BillingStatus, type CalcMethod, type DailyOrder, type OrderRevenue, type Unit,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
@@ -141,6 +141,7 @@ export function OrderSheet({ orderId, close, startEditing = false }: { orderId: 
             <>
               <button className="danger" onClick={remove}>삭제</button>
               {order.client_id && order.source !== 'linked' && <button onClick={() => void addSameClient()}>＋ 같은 거래처 품목</button>}
+              <button onClick={() => sheet.open((c) => <CopySheet order={order} close={c} onDone={close} />)}>📋 복사</button>
               {!order.vehicle_id && <button onClick={() => void moveDate()}>📅 날짜 변경</button>}
               {isPerVehicleSplittable(order) && <button onClick={() => { let n = 0; store.run((tx) => { n = splitPerVehicle(tx, order.id).length; }); store.toast(`1대씩 ${n}건으로 나눴습니다 (나머지는 배차 대기)`); close(); }}>대당 나누기</button>}
               <button className="primary" onClick={() => setDraft({ ...order })}>수정</button>
@@ -391,6 +392,43 @@ export function defaultPlaces(s: { clients: { id: string; pickup_address?: strin
 }
 
 /** 목록에서 고른 직후: "입력됨" + 수량만 빠르게 수정 */
+/** 오더 복사: 날짜 고르기 + 차량·기사도 같이 */
+function CopySheet({ order, close, onDone }: { order: DailyOrder; close: () => void; onDone: () => void }) {
+  const [date, setDate] = useState(order.date);
+  const [keepVehicle, setKeepVehicle] = useState(false);
+  const run = () => {
+    let ids: string[] = [];
+    store.run((tx) => { ids = copyOrder(tx, order.id, { date, keepVehicle: keepVehicle && !!order.vehicle_id }); });
+    store.toast(`${fmtDate(date)}로 복사했습니다${ids.length > 1 ? ` (1대씩 ${ids.length}건)` : ''}${keepVehicle && order.vehicle_id ? '' : ' · 배차 대기'}`);
+    close();
+    onDone();
+  };
+  return (
+    <Sheet title="오더 복사" onClose={close} footer={<button className="primary" onClick={run}>복사</button>}>
+      <div className="field">
+        <span>복사할 날짜</span>
+        <div className="row">
+          <button onClick={() => setDate(addDays(date, -1))}>◀</button>
+          <input type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} />
+          <button onClick={() => setDate(addDays(date, 1))}>▶</button>
+        </div>
+        <div className="chips" style={{ flexWrap: 'wrap', overflow: 'visible', marginTop: 6 }}>
+          {[['같은 날', 0], ['다음 날', 1], ['모레', 2], ['일주일 뒤', 7]].map(([l, n]) => (
+            <button key={l} className={`chip ${date === addDays(order.date, n as number) ? 'on' : ''}`} onClick={() => setDate(addDays(order.date, n as number))}>{l}</button>
+          ))}
+        </div>
+      </div>
+      {order.vehicle_id && (
+        <label className="row" style={{ gap: 8, margin: '10px 0' }}>
+          <input type="checkbox" style={{ width: 22, height: 22 }} checked={keepVehicle} onChange={(e) => setKeepVehicle(e.target.checked)} />
+          <span>차량·기사도 같이 복사 ({vehicleNo(store.getState().snap, order.vehicle_id)})</span>
+        </label>
+      )}
+      <p className="muted small">거래처·품목·수량·선박·상차지·비고·금액이 그대로 복사됩니다. 차량을 같이 복사하지 않으면 배차 대기로 들어갑니다.</p>
+    </Sheet>
+  );
+}
+
 export function QuickQtySheet({ orderId, close, onAddMore }: { orderId: string; close: () => void; onAddMore?: () => void }) {
   const snap = useSnap();
   const o = snap.daily_orders.find((x) => x.id === orderId);

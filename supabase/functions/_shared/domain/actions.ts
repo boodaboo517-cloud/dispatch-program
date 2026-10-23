@@ -42,3 +42,27 @@ export function splitPerVehicle(tx: Tx, orderId: string): string[] {
   }
   return ids;
 }
+
+/**
+ * 오더 복사: 같은 내용으로 새 오더 한 건 (날짜를 바꿀 수 있음). keepVehicle 이 아니면 배차 대기로.
+ * 상차면 반대편 하차도 새로 생기고, 금액을 넣어 두었으면 금액도 복사(청구 상태는 미청구). "N대"면 1대씩 나눈다.
+ */
+export function copyOrder(tx: Tx, orderId: string, p: { date: string; keepVehicle: boolean }): string[] {
+  const o = tx.get('daily_orders', orderId);
+  if (!o) return [];
+  const sameSlot = tx.list('daily_orders').filter((x) => x.date === p.date && x.zone === o.zone && x.kind === o.kind);
+  const copy = createOrder(tx, {
+    ...o,
+    id: newId(), date: p.date,
+    vehicle_id: p.keepVehicle ? o.vehicle_id : null, driver_id: p.keepVehicle ? o.driver_id : null,
+    source: 'manual', recurring_order_id: null, recurring_version_id: null, edited_manually: false,
+    linked_from_id: null, link_status: 'none', link_pending: null, sort_order: sameSlot.length,
+  });
+  const rev = tx.list('order_revenue').find((r) => r.order_id === o.id);
+  if (rev) {
+    const auto = tx.list('order_revenue').find((r) => r.order_id === copy.id);
+    if (auto) tx.remove('order_revenue', auto.id);
+    saveRevenue(tx, { ...rev, id: newId(), order_id: copy.id, billing_status: '미청구' });
+  }
+  return splitPerVehicle(tx, copy.id);
+}

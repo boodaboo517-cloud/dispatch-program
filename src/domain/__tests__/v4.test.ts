@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { buildBoard, lastStart, missingDriver, needsDriver, setDriverSeq, setRowDriver, setRowHelper, setRowStart, startText } from '../board.ts';
 import { blankOrder, saveOrder, workText } from '../orders.ts';
 import { Tx, applyMutations } from '../tx.ts';
-import { createOrder, splitPerVehicle } from '../actions.ts';
+import { copyOrder, createOrder, splitPerVehicle } from '../actions.ts';
 import { planCreateRecurring, planRecurringChange } from '../recurring.ts';
 import { blankField, planCreateFieldRecurring, saveFieldAssignment } from '../fieldwork.ts';
 import { ON_CALL_SHIFT, repairSnapshot, type Driver, type Weekday } from '../types.ts';
@@ -296,5 +296,24 @@ describe('반복 오더도 대당 자동 나누기', () => {
     }).mutations);
     expect(snap.daily_orders.filter((o) => o.date === today && o.kind === 'load')).toHaveLength(3);
     expect(snap.daily_orders.filter((o) => o.date === '2026-10-26' && o.kind === 'load')).toHaveLength(3);
+  });
+});
+
+describe('오더 복사', () => {
+  it('다른 날로 복사: 내용·금액 그대로, 차량은 비움(배차 대기), 상차면 반대편 하차도 새로', () => {
+    const tx = new Tx(baseSnapshot());
+    const load = createOrder(tx, blankOrder({ date: D, zone: 'land', kind: 'load', client_id: 'c-dm', product_id: 'p-gam', quantity: 10, unit: '파렛트', vehicle_id: 'v9915', memo: '야간', departure_ship: '제이엘' }));
+    const [id] = copyOrder(tx, load.id, { date: '2026-10-21', keepVehicle: false });
+    const c = tx.get('daily_orders', id)!;
+    expect([c.date, c.client_id, c.quantity, c.memo, c.vehicle_id, c.source]).toEqual(['2026-10-21', 'c-dm', 10, '야간', null, 'manual']);
+    expect(tx.list('daily_orders').filter((o) => o.linked_from_id === id)).toHaveLength(1);
+    expect(tx.list('order_revenue').filter((r) => r.order_id === id)).toHaveLength(1);
+    expect(buildBoard(tx.result(), '2026-10-21').waiting.land.map((o) => o.id)).toEqual([id]);
+  });
+  it('차량도 같이 복사', () => {
+    const tx = new Tx(baseSnapshot());
+    const o = createOrder(tx, blankOrder({ date: D, zone: 'land', kind: 'unload', client_id: 'c-dm', vehicle_id: 'v9915', driver_id: 'dA' }));
+    const [id] = copyOrder(tx, o.id, { date: D, keepVehicle: true });
+    expect([tx.get('daily_orders', id)!.vehicle_id, tx.get('daily_orders', id)!.driver_id]).toEqual(['v9915', 'dA']);
   });
 });
