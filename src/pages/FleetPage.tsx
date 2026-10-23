@@ -1,4 +1,4 @@
-// 차량·기사·선박·정비·현장근무 등록
+// 차량·기사·선박·현장근무 등록
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -16,9 +16,8 @@ import { usePickers } from '../ui/pickers.tsx';
 import { Sheet, useSheet } from '../ui/Sheet.tsx';
 import { ShipEditSheet, blankShip } from '../ui/ShipEditSheet.tsx';
 import { AttendancePanel } from './AttendancePanel.tsx';
-import { MaintenancePanel } from './MaintenancePanel.tsx';
 
-type Tab = 'vehicles' | 'drivers' | 'attendance' | 'ships' | 'maintenance' | 'field';
+type Tab = 'vehicles' | 'drivers' | 'attendance' | 'ships' | 'field';
 const TYPES: VehicleType[] = ['5톤', '통윙', '통윙2냉', '1톤', '승용'];
 
 function VehicleSheet({ v, close }: { v: Vehicle; close: () => void }) {
@@ -36,7 +35,7 @@ function VehicleSheet({ v, close }: { v: Vehicle; close: () => void }) {
       <Editable label="상태" value={cur.status} options={['운행', '정비', '휴차'].map((t) => ({ value: t, label: t }))} onSave={s('status')} />
       <Editable label="현재 위치" value={cur.home_zone ?? ''} options={[{ value: '', label: '미정' }, { value: 'land', label: '육지' }, { value: 'jeju', label: '제주' }]} onSave={(x) => save({ home_zone: (x || null) as Vehicle['home_zone'] })} />
       <Editable label="정렬 순서" value={cur.sort_order} type="number" onSave={s('sort_order', true)} />
-      <p className="muted small">정비 기간은 "정비" 탭에서 등록하면 그 기간 동안 일정표에 수리로 자동 표시됩니다. 현재 위치는 처음 등록할 때만 쓰이고, 이후는 선박 이동으로 자동 결정됩니다.</p>
+      <p className="muted small">상태를 "정비"로 두면 일정표에 수리로 표시됩니다 (하루만이면 배차 화면 차량 칸 › 상태·위치). 현재 위치는 처음 등록할 때만 쓰이고, 이후는 선박 이동으로 자동 결정됩니다.</p>
       <button className="danger" style={{ width: '100%' }} onClick={() => { if (confirm('차량을 삭제할까요?')) { store.run((tx) => tx.remove('vehicles', v.id)); close(); } }}>차량 삭제</button>
     </Sheet>
   );
@@ -214,7 +213,7 @@ export function FleetPage() {
   const { staff } = useRole();
   const today = seoulToday();
 
-  const tabs: [Tab, string][] = [['vehicles', '차량'], ['drivers', '기사'], ['attendance', '근무현황'], ['ships', '선박'], ['maintenance', '정비'], ['field', '현장']];
+  const tabs: [Tab, string][] = [['vehicles', '차량'], ['drivers', '기사'], ['attendance', '근무현황'], ['ships', '선박'], ['field', '현장']];
   const blankVehicle = (): Vehicle => ({ id: newId(), plate: '', short_no: '', vehicle_type: '5톤', usage: '배차', ownership: '자차', default_driver_id: null, status: '운행', home_zone: null, sort_order: snap.vehicles.length, oil_interval_km: null });
   const blankDriver = (): Driver => ({ id: newId(), name: '', phone: '', work_days: [], shift: '', affiliation: '', staff_type: '기사', memo: '' });
 
@@ -293,7 +292,6 @@ export function FleetPage() {
 
       {tab === 'attendance' && <AttendancePanel />}
       {tab === 'ships' && <ShipsPanel />}
-      {tab === 'maintenance' && <MaintenancePanel />}
       {tab === 'field' && <FieldSetupPanel />}
     </div>
   );

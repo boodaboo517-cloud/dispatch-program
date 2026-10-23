@@ -1,7 +1,7 @@
 // 엑셀·설정·사용자 권한
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Tx, maintenanceAlerts, newId, type Role, type Snapshot } from '../domain/index.ts';
+import { Tx, newId, type Role, type Snapshot } from '../domain/index.ts';
 import { BackupError, backupSummary, downloadBackup, lastBackupAt, parseBackup, readBackupFile, uploadPlan } from '../data/backup.ts';
 import { emailStatus, lastEmailBackupAt, sendBackupEmail, type EmailStatus } from '../data/emailBackup.ts';
 import { store } from '../data/store.ts';
@@ -223,7 +223,6 @@ export function SettingsPage() {
   const today = seoulToday();
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
-  const alerts = maintenanceAlerts(snap, today);
   const suggestions = snap.product_suggestions.filter((s) => s.status === 'pending');
 
   const upload = async (file: File | undefined) => {
@@ -244,7 +243,6 @@ export function SettingsPage() {
       <div className="row wrap">
         <button className="grow" onClick={() => nav('/fleet/vehicles')}>🚚 차량·기사</button>
         <button className="grow" onClick={() => nav('/fleet/ships')}>⛴ 선박 등록·수정</button>
-        <button className="grow" onClick={() => nav('/fleet/maintenance')}>🔧 정비</button>
         <button className="grow" onClick={() => nav('/fleet/field')}>👷 현장근무 설정</button>
         {staff && <button className="grow" onClick={() => nav('/revenue')}>💰 매출</button>}
         <button className="grow" onClick={() => nav('/driver')}>📱 기사 화면 보기</button>
@@ -257,9 +255,6 @@ export function SettingsPage() {
         <button onClick={() => void reloadFresh()}>최신 버전 받기</button>
       </div>
 
-      {staff && alerts.length > 0 && (
-        <div className="card"><h3>알림</h3>{alerts.map((a, i) => <div key={i} className={`banner ${a.level === 'over' ? 'red' : 'yellow'}`}>{a.message}</div>)}</div>
-      )}
       {staff && suggestions.length > 0 && (
         <div className="card"><h3>기사 제안 승인 대기 {suggestions.length}건</h3>
           {suggestions.map((s) => <div key={s.id} className="list-item" onClick={() => nav(`/products/${s.product_id}`)}>{snap.products.find((p) => p.id === s.product_id)?.name} · {s.kind === 'photo' ? '사진' : s.payload}</div>)}
@@ -297,8 +292,6 @@ export function SettingsPage() {
           <Editable label="상단 안내문구" value={setting(snap, 'header_notice', '')} onSave={(v) => saveSetting('header_notice', v)} />
           <Editable label="배차 담당 전화" value={setting(snap, 'dispatcher_phone', '')} type="tel" onSave={(v) => saveSetting('dispatcher_phone', v)} />
           <Editable label="자주 쓰는 비고" value={setting<string[]>(snap, 'memo_phrases', []).join(', ')} multiline onSave={(v) => saveSetting('memo_phrases', v.split(',').map((x) => x.trim()).filter(Boolean))} />
-          <Editable label="정비업체" value={setting<string[]>(snap, 'maintenance_shops', []).join(', ')} onSave={(v) => saveSetting('maintenance_shops', v.split(',').map((x) => x.trim()).filter(Boolean))} />
-          <Editable label="오일 주기 기본 km" value={setting(snap, 'oil_interval_km', 15000)} type="number" onSave={(v) => saveSetting('oil_interval_km', Number(v) || 15000)} />
           <Editable label="기사 제안 허용" value={String(setting(snap, 'driver_suggestions', false))} options={[{ value: 'false', label: '아니오 (관리자·배차만 수정)' }, { value: 'true', label: '예 (사진·주의사항 제안 → 승인 후 반영)' }]} onSave={(v) => saveSetting('driver_suggestions', v === 'true')} />
         </div>
       )}

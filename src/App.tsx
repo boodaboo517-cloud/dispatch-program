@@ -66,7 +66,6 @@ function TopMenu({ role }: { role: Role }) {
           <button onClick={() => go(addDays(date, 1))}>익일 ▶</button>
           <span style={{ width: 16 }} />
           <NavLink to={loc.pathname === '/' ? '/' : menuUrl('/')} end className={() => (loc.pathname === '/' ? 'active' : '')}>배차</NavLink>
-          <NavLink to="/fleet/maintenance">정비</NavLink>
           <NavLink to="/revenue">매출</NavLink>
           <NavLink to="/settings">설정</NavLink>
         </>
@@ -173,6 +172,7 @@ function Shell() {
         <Route path="/clients/:id" element={<ClientDetailPage />} />
         <Route path="/products/:id" element={<ProductDetailPage />} />
         <Route path="/fleet" element={<Navigate to="/fleet/vehicles" replace />} />
+        <Route path="/fleet/maintenance" element={<Navigate to="/fleet/vehicles" replace />} />
         <Route path="/fleet/:tab" element={<FleetPage />} />
         <Route path="/revenue" element={<RevenuePage />} />
         <Route path="/settings" element={<SettingsPage />} />
