@@ -1,6 +1,8 @@
 // 현장근무 탭: 근무지별 · 이름 · 업무 · 지급 차량 / 휴무자
 import { blankField, offByZone, saveFieldAssignment, setDayOff, sitesGrouped, type FieldAssignment } from '../../domain/index.ts';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { FieldPeople } from './FieldPeople.tsx';
 import { store } from '../../data/store.ts';
 import { useRole, useSnap } from '../../ui/hooks.ts';
 import { Cell } from '../../ui/Cell.tsx';
@@ -8,7 +10,25 @@ import { driverName, vehicleNo } from '../../ui/labels.ts';
 import { usePickers } from '../../ui/pickers.tsx';
 import { useSheet, Sheet } from '../../ui/Sheet.tsx';
 
+/** 사람별(기본) / 근무지별 보기 */
 export function FieldTab({ date }: { date: string }) {
+  const [view, setView] = useState<'people' | 'sites'>(() => (localStorage.getItem('field-view') === 'sites' ? 'sites' : 'people'));
+  const set = (v: 'people' | 'sites') => {
+    setView(v);
+    try { localStorage.setItem('field-view', v); } catch { /* 무시 */ }
+  };
+  return (
+    <div>
+      <div className="seg fp-seg" style={{ margin: '6px 0', width: '100%' }}>
+        <button className={`grow ${view === 'people' ? 'on' : ''}`} style={{ flex: 1 }} onClick={() => set('people')}>사람별</button>
+        <button className={`grow ${view === 'sites' ? 'on' : ''}`} style={{ flex: 1 }} onClick={() => set('sites')}>근무지별</button>
+      </div>
+      {view === 'people' ? <FieldPeople date={date} /> : <FieldSites date={date} />}
+    </div>
+  );
+}
+
+function FieldSites({ date }: { date: string }) {
   const snap = useSnap();
   const { staff } = useRole();
   const pick = usePickers();

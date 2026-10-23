@@ -4,7 +4,7 @@ import { blankOrder, saveOrder, workText } from '../orders.ts';
 import { Tx, applyMutations } from '../tx.ts';
 import { copyOrder, createOrder, splitPerVehicle } from '../actions.ts';
 import { planCreateRecurring, planRecurringChange } from '../recurring.ts';
-import { blankField, planCreateFieldRecurring, saveFieldAssignment } from '../fieldwork.ts';
+import { blankField, planCreateFieldRecurring, saveFieldAssignment, setDayOff, setDaySite, setStaffWorking } from '../fieldwork.ts';
 import { ON_CALL_SHIFT, repairSnapshot, type Driver, type Weekday } from '../types.ts';
 import { assignedDriverIds, fixedOffDays, offByZone, planStaffFixedOff, weeklyOffOn, workDaysFromOff } from '../workforce.ts';
 import { baseSnapshot, resetIds } from './fixtures.ts';
@@ -315,5 +315,34 @@ describe('오더 복사', () => {
     const o = createOrder(tx, blankOrder({ date: D, zone: 'land', kind: 'unload', client_id: 'c-dm', vehicle_id: 'v9915', driver_id: 'dA' }));
     const [id] = copyOrder(tx, o.id, { date: D, keepVehicle: true });
     expect([tx.get('daily_orders', id)!.vehicle_id, tx.get('daily_orders', id)!.driver_id]).toEqual(['v9915', 'dA']);
+  });
+});
+
+describe('현장근무자 근무·휴무·근무지 바꾸기', () => {
+  const setupField = () => {
+    const s = baseSnapshot();
+    s.drivers = [{ id: 'f1', name: '현장A', phone: '', work_days: [1, 2, 3, 4, 5, 6], shift: '', affiliation: '', staff_type: '현장', memo: '', zone: 'jeju' }];
+    s.field_sites = [{ id: 'site1', name: '본사', sort_order: 0, zone: 'jeju' }, { id: 'site2', name: '함덕', sort_order: 1, zone: 'jeju' }];
+    return applyMutations(s, planCreateFieldRecurring(s, { staff_id: 'f1', today: '2026-10-19', startDate: '2026-10-19', fields: { weekdays: [1, 2, 3, 4, 5, 6], site_id: 'site1', task: '경리', vehicle_id: null } }).mutations);
+  };
+  it('휴무 → 그날 근무 줄 없어지고, 근무로 되돌리면 평소 근무지·업무로 다시', () => {
+    const tx = new Tx(setupField());
+    setDayOff(tx, D, 'f1', true);
+    expect(tx.list('field_assignments').filter((f) => f.date === D).map((f) => f.is_off)).toEqual([true]);
+    setStaffWorking(tx, D, 'f1');
+    const rows = tx.list('field_assignments').filter((f) => f.date === D);
+    expect(rows.map((f) => [f.is_off, f.site_id, f.task])).toEqual([[false, 'site1', '경리']]);
+  });
+  it('고정 휴무일(일요일)에도 "근무"로 그날만 출근', () => {
+    const tx = new Tx(setupField());
+    setStaffWorking(tx, '2026-10-25', 'f1');
+    expect(tx.list('field_assignments').filter((f) => f.date === '2026-10-25').map((f) => f.site_id)).toEqual(['site1']);
+    expect(offByZone(tx.result(), '2026-10-25').jeju).toEqual([]);
+  });
+  it('그날만 근무지 바꾸기 (고정 근무는 그대로, 다시 생성돼도 유지)', () => {
+    const tx = new Tx(setupField());
+    setDaySite(tx, D, 'f1', 'site2');
+    expect(tx.list('field_assignments').find((f) => f.date === D && !f.is_off)!.site_id).toBe('site2');
+    expect(tx.list('field_assignments').find((f) => f.date === '2026-10-21' && !f.is_off)!.site_id).toBe('site1');
   });
 });

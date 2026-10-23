@@ -120,7 +120,8 @@ export function setDayOff(tx: Tx, date: string, staffId: string, off: boolean) {
   const offRow = rows.find((f) => f.is_off);
   if (off) {
     if (!offRow) tx.insert('field_assignments', blankField({ date, staff_id: staffId, is_off: true, task: '휴무' }));
-    for (const f of rows.filter((f) => !f.is_off && f.source === 'recurring')) tx.remove('field_assignments', f.id);
+    // 그날 근무 줄은 지운다 (정비실 입고로 생긴 줄은 정비 기록과 묶여 있어 그대로)
+    for (const f of rows.filter((f) => !f.is_off && f.source !== 'maintenance')) tx.remove('field_assignments', f.id);
   } else if (offRow) {
     tx.remove('field_assignments', offRow.id);
   }
@@ -132,4 +133,35 @@ export function sitesGrouped(snap: Snapshot, rows: FieldAssignment[]) {
   const none = rows.filter((r) => !r.is_off && (!r.site_id || !sites.some((s) => s.id === r.site_id)));
   if (none.length) groups.push({ site: { id: '', name: '근무지 미정', sort_order: 999 }, rows: none });
   return { groups: groups.filter((g) => g.rows.length), off: rows.filter((r) => r.is_off) };
+}
+
+/** 그 직원의 평소 근무 (고정 근무 → 최근 근무 순): 근무지·업무·차량 */
+export function usualField(snap: Pick<Snapshot, 'recurring_field_work' | 'recurring_field_versions' | 'field_assignments'>, staffId: string, date: string) {
+  for (const r of snap.recurring_field_work.filter((x) => x.staff_id === staffId && x.active)) {
+    const vs = snap.recurring_field_versions.filter((v) => v.recurring_field_id === r.id).sort((a, b) => a.effective_from.localeCompare(b.effective_from));
+    const v = versionOn(vs, date) ?? vs[vs.length - 1];
+    if (v) return { site_id: v.site_id, task: v.task, vehicle_id: v.vehicle_id, recurringId: r.id };
+  }
+  const last = snap.field_assignments
+    .filter((f) => f.staff_id === staffId && !f.is_off && f.date <= date)
+    .sort((a, b) => b.date.localeCompare(a.date))[0];
+  return last ? { site_id: last.site_id, task: last.task, vehicle_id: last.vehicle_id, recurringId: null } : null;
+}
+
+/** 그날 근무로: 휴무 줄을 지우고, 근무 줄이 없으면 평소 근무지·업무로 한 줄 만든다 */
+export function setStaffWorking(tx: Tx, date: string, staffId: string) {
+  setDayOff(tx, date, staffId, false);
+  const has = tx.list('field_assignments').some((f) => f.date === date && f.staff_id === staffId && !f.is_off);
+  if (has) return;
+  const u = usualField({ recurring_field_work: tx.list('recurring_field_work'), recurring_field_versions: tx.list('recurring_field_versions'), field_assignments: tx.list('field_assignments') }, staffId, date);
+  const n = tx.list('field_assignments').filter((f) => f.date === date).length;
+  tx.insert('field_assignments', blankField({ date, staff_id: staffId, site_id: u?.site_id ?? null, task: u?.task ?? '', vehicle_id: u?.vehicle_id ?? null, sort_order: n }));
+}
+
+/** 그날만 근무지 바꾸기 (줄이 없으면 만들고, 휴무였으면 근무로) */
+export function setDaySite(tx: Tx, date: string, staffId: string, siteId: string | null) {
+  setStaffWorking(tx, date, staffId);
+  for (const f of tx.list('field_assignments').filter((f) => f.date === date && f.staff_id === staffId && !f.is_off)) {
+    saveFieldAssignment(tx, { ...f, site_id: siteId });
+  }
 }

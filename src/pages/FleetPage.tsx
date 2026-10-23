@@ -305,12 +305,14 @@ function FieldSetupPanel() {
       store.commit(planFieldRecurringEnd(snap, { recurringId: recId, endDate: d, today }).mutations);
       return;
     }
+    // 근무지 (닫으면 그대로)
+    const site = (await pick.site()) ?? v.site_id;
     const task = prompt('업무', v.task);
     if (task === null) return;
     const vid = await pick.anyVehicle();
     const d = await pick.date('적용 시작일 (이전 날짜는 그대로)', today, today);
     if (!d) return;
-    const r = planFieldRecurringChange(snap, { recurringId: recId, startDate: d, today, fields: { weekdays: v.weekdays, site_id: v.site_id, task, vehicle_id: vid === undefined ? v.vehicle_id : vid } });
+    const r = planFieldRecurringChange(snap, { recurringId: recId, startDate: d, today, fields: { weekdays: v.weekdays, site_id: site, task, vehicle_id: vid === undefined ? v.vehicle_id : vid } });
     store.commit(r.mutations);
     store.toast(`${fmtDate(d)}부터 변경${r.keptManual ? ` · 직접 수정 ${r.keptManual}건 유지됨` : ''}`);
   };
