@@ -306,3 +306,5 @@ tr.err td { background: var(--red-soft); }
 .fp-seg button.on { background: #1e3a8a; color: #fff; }
 .fp-seg button.on.off { background: var(--red); }
 .fp-chip { min-height: 44px; font-size: 15px; }
+.paper.fieldwork th.zone { background: #166534; }
+.paper.fieldwork tr.newsite td { border-top: 2px solid #222; }

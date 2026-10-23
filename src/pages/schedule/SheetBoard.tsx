@@ -167,7 +167,8 @@ function FieldRows({ snap, rows }: { snap: Snapshot; rows: FieldAssignment[] }) 
 
 export function SheetBoard(p: { zone: Zone; date: string; rows: BoardRow[]; waiting: DailyOrder[]; external: DailyOrder[]; field: FieldAssignment[] }) {
   const snap = useSnap();
-  const fieldRows = sitesGrouped(snap, p.field).groups.filter((g) => g.site.zone === p.zone).flatMap((g) => g.rows);
+  // 육지 표에는 육지 근무지(목포센터 등)만. 제주 근무지는 아래 "현장근무" 표로 따로
+  const fieldRows = p.zone === 'land' ? sitesGrouped(snap, p.field).groups.filter((g) => g.site.zone === 'land').flatMap((g) => g.rows) : [];
   const offAll = offByZone(snap, p.date);
   const off = offAll[p.zone];
   // 현장(현장·사무 직원) 휴무는 지역 구분 없이 육지 표 현장근무(목포센터) 바로 밑 한 줄로
@@ -202,16 +203,28 @@ export function SheetBoard(p: { zone: Zone; date: string; rows: BoardRow[]; wait
   );
 }
 
-/** 육지·제주 어느 표에도 속하지 않은 근무지 (휴무는 각 지역 표 맨 아래) */
+/** 현장근무 표 (제주 표와 분리, 근무자가 없어도 표시): 근무지 | 차량 | 이름 | 업무 */
 export function SheetExtras({ field }: { date?: string; field: FieldAssignment[] }) {
   const snap = useSnap();
-  const rest = sitesGrouped(snap, field).groups.filter((g) => !g.site.zone).flatMap((g) => g.rows);
-  if (!rest.length) return null;
+  const rows = sitesGrouped(snap, field).groups.filter((g) => g.site.zone !== 'land').flatMap((g) => g.rows);
+  const siteName = (f: FieldAssignment) => snap.field_sites.find((x) => x.id === f.site_id)?.name ?? '근무지 미정';
   return (
-    <table className="paper extra">
-      <Cols />
+    <table className="paper fieldwork">
+      <colgroup><col style={{ width: '20%' }} /><col style={{ width: '13%' }} /><col style={{ width: '15%' }} /><col /></colgroup>
+      <thead>
+        <tr><th colSpan={4} className="zone">현장근무</th></tr>
+        <tr><th>근무지</th><th>차량</th><th>이름</th><th>업무</th></tr>
+      </thead>
       <tbody>
-        <FieldRows snap={snap} rows={rest} />
+        {rows.map((f, i) => (
+          <tr key={f.id} className={i > 0 && siteName(rows[i - 1]) !== siteName(f) ? 'newsite' : ''}>
+            <td className="site"><Fit>{i === 0 || siteName(rows[i - 1]) !== siteName(f) ? siteName(f) : ''}</Fit></td>
+            <td className="veh">{f.vehicle_id && <Fit><span className="ps-pill veh">{vehicleNo(snap, f.vehicle_id)}</span></Fit>}</td>
+            <td className="drv"><Fit>{driverName(snap, f.staff_id)}</Fit></td>
+            <td className="body"><Fit>{f.task}</Fit></td>
+          </tr>
+        ))}
+        {!rows.length && <tr><td colSpan={4} className="body" style={{ color: '#888', textAlign: 'center' }}>근무자 없음</td></tr>}
       </tbody>
     </table>
   );
