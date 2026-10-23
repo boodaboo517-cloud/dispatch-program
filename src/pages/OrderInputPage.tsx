@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  blankOrder, buildBoard, createOrder, newId, splitPerVehicle, planCreateRecurring, weekdayOf,
+  assignVehicle, blankOrder, buildBoard, createOrder, isPerVehicleSplittable, newId, splitPerVehicle, planCreateRecurring, weekdayOf,
   type DailyOrder, type Kind, type Product, type Unit, type Weekday, type Zone,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
@@ -29,6 +29,10 @@ export function OrderInputPage() {
   const [repeat, setRepeat] = useState(false);
   /** 같은 거래처에서 함께 나가는 다른 품목들 (저장하면 품목마다 오더 1건) */
   const [extras, setExtras] = useState<Extra[]>([]);
+  /** "N대"면 오더 N건으로 나눠 저장 — 2번째부터 차량 (비우면 배차 대기) */
+  const [moreVehicles, setMoreVehicles] = useState<(string | null)[]>([]);
+  const own = (o.carrier_type ?? 'own') === 'own';
+  const perVehicle = isPerVehicleSplittable({ ...o, source: 'manual' }) ? o.quantity! : 0;
   const [weekdays, setWeekdays] = useState<Weekday[]>([weekdayOf(o.date)]);
   const set = (p: Partial<DailyOrder>) => setO({ ...o, ...p });
   const isLoad = o.kind === 'load';
@@ -89,7 +93,10 @@ export function OrderInputPage() {
       store.run((tx) => {
         for (const x of all) {
           createOrder(tx, x);
-          split += splitPerVehicle(tx, x.id).length - 1;
+          const ids = splitPerVehicle(tx, x.id);
+          split += ids.length - 1;
+          // 첫 품목을 나눈 건마다 고른 차량 배정
+          if (x.id === o.id && own && !repeat) ids.slice(1).forEach((id, i) => moreVehicles[i] && assignVehicle(tx, id, moreVehicles[i]));
         }
       });
       if (all.length > 1) store.toast(`${all.length}개 품목 저장`);
@@ -137,7 +144,14 @@ export function OrderInputPage() {
       <WorkFields kind={o.kind} time={o.work_time ?? ''} detail={o.work_detail ?? ''} onChange={(p) => set(p)} />
       <TransportFields o={o} set={set} />
       <p className="muted">차량·기사·선박은 나중에 지정해도 됩니다 (비우면 배차 대기)</p>
-      {(o.carrier_type ?? 'own') === 'own' && <Row k="차량" v={vehicleNo(snap, o.vehicle_id)} ph="나중에 배차" onClick={async () => { const v = await pick.vehicle(buildBoard(snap, o.date), o.zone); if (v) set({ vehicle_id: v }); }} />}
+      {perVehicle > 0 && <div className="banner blue">{o.quantity}대 → {repeat ? '반복 날짜마다 ' : ''}오더 {o.quantity}건으로 나눠 저장합니다 (1대씩 따로 배차{repeat ? ', 2번째부터는 배차 대기' : ''})</div>}
+      {own && <Row k={perVehicle ? '1번 차량' : '차량'} v={vehicleNo(snap, o.vehicle_id)} ph="나중에 배차" onClick={async () => { const v = await pick.vehicle(buildBoard(snap, o.date), o.zone); if (v) set({ vehicle_id: v }); }} />}
+      {own && !repeat && perVehicle > 1 && Array.from({ length: perVehicle - 1 }, (_, i) => (
+        <Row key={i} k={`${i + 2}번 차량`} v={vehicleNo(snap, moreVehicles[i] ?? null)} ph="나중에 배차" onClick={async () => {
+          const v = await pick.vehicle(buildBoard(snap, o.date), o.zone);
+          if (v) setMoreVehicles((cur) => { const next = [...cur]; next[i] = v; return next; });
+        }} />
+      ))}
       <Row k="기사" v={driverName(snap, o.driver_id)} ph="나중에" onClick={async () => { const d = await pick.driver(o.date, o.driver_id); if (d !== undefined) set({ driver_id: d }); }} />
       <Row
         k={isLoad ? departureShipLabel(o.zone) : arrivalShipLabel(o.zone)}

@@ -419,6 +419,7 @@ export function QuickQtySheet({ orderId, close, onAddMore }: { orderId: string; 
       <QtyInput big quantity={o.quantity} unit={o.unit} onChange={setQty} />
       <WorkFields kind={o.kind} time={o.work_time ?? ''} detail={o.work_detail ?? ''}
         onChange={(p) => store.run((tx) => saveOrder(tx, { ...o, ...p }, { userEdit: false }))} />
+      {isPerVehicleSplittable(o) && <div className="banner blue">완료를 누르면 {o.quantity}대 → 오더 {o.quantity}건으로 나눕니다 (첫 건은 이 차량, 나머지는 배차 대기)</div>}
       {product && (
         <label className="row" style={{ marginTop: 8, gap: 8 }}>
           <input type="checkbox" style={{ width: 22, height: 22 }} checked={remember} onChange={(e) => setRemember(e.target.checked)} />
