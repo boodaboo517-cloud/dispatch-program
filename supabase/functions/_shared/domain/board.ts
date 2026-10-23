@@ -2,7 +2,7 @@
 import { addDays, weekdayOf } from './dates.ts';
 import { newId } from './ids.ts';
 import { activeRepair, repairMemo, saveMaintenance } from './maintenance.ts';
-import { ensureVehicleDay, opposite } from './orders.ts';
+import { carriedLoads, ensureVehicleDay, opposite } from './orders.ts';
 import { departDelay, isWaitShip, shipTimeOf } from './ships.ts';
 import type { Tx } from './tx.ts';
 import { ON_CALL_SHIFT } from './types.ts';
@@ -47,7 +47,8 @@ function explicitZone(idx: Index, vehicleId: string, date: string): Zone | null 
 }
 
 /** 이 상차로 차량이 배를 타는지 */
-export const vehicleSails = (o: DailyOrder) => o.kind === 'load' && !!o.departure_ship && !isWaitShip(o.departure_ship) && !o.same_day && o.shipment !== 'bulk';
+export const vehicleSails = (o: DailyOrder) => o.kind === 'load' && !!o.departure_ship && !isWaitShip(o.departure_ship) && !o.same_day && o.shipment !== 'bulk'
+  && (!o.ship_date || o.ship_date === o.date); // 대기 후 나중 날 선적한 짐은 그 날 차량 줄의 선박으로 판단
 
 /** 용차·화주배차 오더 (직영 차량 배차 대상 아님) */
 export const isExternal = (o: DailyOrder) => !!o.carrier_type && o.carrier_type !== 'own';
@@ -55,7 +56,8 @@ export const isExternal = (o: DailyOrder) => !!o.carrier_type && o.carrier_type 
 /** 그날 차량이 배를 타는지: 안 타면 null, 타면 출발이 며칠 미뤄지는지 (익일선적 1) */
 function departsOn(idx: Index, vehicleId: string, date: string): number | null {
   const vd = idx.vd.get(`${date}|${vehicleId}`);
-  if (vd?.departure_ship && !isWaitShip(vd.departure_ship)) return departDelay(vd.departure_ship);
+  if (vd?.departure_ship && isWaitShip(vd.departure_ship)) return null; // 그날 차량 선박이 "대기"면 안 떠남
+  if (vd?.departure_ship) return departDelay(vd.departure_ship);
   // 당일 왕복 상차, 벌크(화물만 선적) 상차는 그날 밤 차량 위치를 바꾸지 않는다
   const o = (idx.ordersByVehicleDate.get(`${date}|${vehicleId}`) ?? []).find((x) => vehicleSails(x));
   return o ? departDelay(o.departure_ship) : null;
@@ -91,6 +93,8 @@ export interface BoardRow {
   vd: VehicleDay | undefined;
   unloads: DailyOrder[];
   loads: DailyOrder[];
+  /** 전날까지 선박 "대기"로 싣고 있는 짐 → [[ 상차짐 ]] */
+  carried: DailyOrder[];
   /** 오전(하차) 기사 */
   driverId: string | null;
   /** 오후(상차) 기사 (따로 없으면 오전 기사) */
@@ -151,6 +155,8 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
     .sort((a, b) => a.sort_order - b.sort_order);
   const fieldVehicleIds = new Set(field.filter((f) => f.vehicle_id && !f.is_off).map((f) => f.vehicle_id!));
   const dayOrders = idx.ordersByDate.get(date) ?? [];
+  // 선박 "대기"로 싣고 있거나 나중 날 선적하는 상차 (다음 날 [[ 상차짐 ]] 표시용)
+  const waitingLoads = snap.daily_orders.filter((o) => o.kind === 'load' && o.vehicle_id && o.date < date && (o.ship_date ? o.ship_date >= date : isWaitShip(o.departure_ship)));
   const rows: BoardRow[] = [];
   const unknownLocation: Vehicle[] = [];
   const vehicles = [...snap.vehicles].sort((a, b) => a.sort_order - b.sort_order || a.short_no.localeCompare(b.short_no));
@@ -175,7 +181,8 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
       statusMemo = statusMemo || repairMemo(repair);
     } else if (!status && v.status === '정비') status = 'repair';
     else if (!status && v.status === '휴차') status = 'rest';
-    if (!status && mine.length === 0) status = 'empty';
+    const carried = zone ? carriedLoads(waitingLoads, v.id, date, zone) : [];
+    if (!status && mine.length === 0 && carried.length === 0) status = 'empty';
     const driverId = vd?.driver_id ?? orders.find((o) => o.driver_id)?.driver_id ?? null;
     rows.push({
       vehicle: v,
@@ -183,6 +190,7 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
       vd,
       unloads,
       loads,
+      carried,
       driverId,
       loadDriverId: vd?.load_driver_id || driverId,
       unloadSeq: vd?.unload_seq ?? null,
@@ -213,6 +221,7 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
         vd: undefined,
         unloads: u,
         loads: l,
+        carried: [],
         driverId,
         loadDriverId: vd?.load_driver_id || driverId,
         unloadSeq: null,

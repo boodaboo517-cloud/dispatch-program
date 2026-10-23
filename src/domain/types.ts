@@ -206,6 +206,8 @@ export interface DailyOrder extends Base {
   /** 상차지 · 하차지 (오더마다 다를 수 있음) */
   pickup_place?: string;
   dropoff_place?: string;
+  /** 선박 "대기"로 상차한 짐을 실제로 배에 싣는 날 (비우면 상차일). 그 전날까지는 다음 날 일정에 [[ 상차짐 ]] 으로 이어짐 */
+  ship_date?: string | null;
   /** 상·하차 세부: 작업 시간(HH:mm)과 내용 (예: 08:40, "막걸리공병 하차지원") */
   work_time?: string;
   work_detail?: string;

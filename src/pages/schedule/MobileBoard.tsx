@@ -33,10 +33,16 @@ export function MobileBoard(p: { date: string; zone: Zone; rows: BoardRow[]; wai
 function VehicleRow({ date, row, zone, a, focus }: { date: string; row: BoardRow; zone: Zone; a: Actions; focus: string | null }) {
   const snap = useSnap();
   const { staff } = useRole();
-  const hasOrders = row.unloads.length + row.loads.length > 0;
+  const hasOrders = row.unloads.length + row.loads.length + row.carried.length > 0;
   const focused = !!focus && (focus === row.vehicle.id || [...row.unloads, ...row.loads].some((o) => o.id === focus));
   const orderCells = (list: DailyOrder[], kind: 'unload' | 'load') => (
     <div className="col">
+      {kind === 'load' && row.carried.map((o) => (
+        <Cell key={`c-${o.id}`} className="carried" onTap={() => a.tapCarried(row, o)}>
+          <div className="l1">[[ 상차짐 ]]</div>
+          <OrderCellText snap={snap} o={o} />
+        </Cell>
+      ))}
       {list.map((o) => (
         <Cell key={o.id} onTap={() => a.openOrder(o)} onLong={staff ? () => a.openOrder(o, true) : undefined}>
           <OrderMarks snap={snap} o={o} staff={staff} />

@@ -40,14 +40,15 @@ export function PcBoard(p: { zone: Zone; rows: BoardRow[]; waiting: DailyOrder[]
   );
 }
 
-function OrderFields({ o, a, staff }: { o: DailyOrder; a: Actions; staff: boolean }) {
+function OrderFields({ o, a, staff, carried }: { o: DailyOrder; a: Actions; staff: boolean; carried?: () => void }) {
   const snap = useSnap();
-  const vals = [clientName(snap, o), o.region, productName(snap, o), qtyText(o), [workText(o), o.memo].filter(Boolean).join(' · ')];
+  // 전날 대기로 싣고 있는 짐은 [[ ]] 로 감싸서
+  const vals = [carried ? `[[ ${clientName(snap, o)}` : clientName(snap, o), o.region, productName(snap, o), carried ? `${qtyText(o)} ]]` : qtyText(o), [workText(o), o.memo].filter(Boolean).join(' · ')];
   return (
     <>
       {vals.map((v, i) => (
         <td key={i}>
-          <Cell onTap={() => a.openOrder(o)} onLong={staff ? () => a.openOrder(o, true) : undefined} title={v} draggableId={!o.vehicle_id ? o.id : undefined}>
+          <Cell className={carried ? 'carried' : ''} onTap={carried ?? (() => a.openOrder(o))} onLong={staff && !carried ? () => a.openOrder(o, true) : undefined} title={v} draggableId={!o.vehicle_id ? o.id : undefined}>
             {abbrev(v)}
             {i === 0 && <OrderMarks snap={snap} o={o} staff={staff} />}
           </Cell>
@@ -70,8 +71,9 @@ function EmptyFields({ onAdd }: { onAdd?: () => void }) {
 function VehicleGroup({ row, zone, a, staff, focus }: { row: BoardRow; zone: Zone; a: Actions; staff: boolean; focus: string | null }) {
   const snap = useSnap();
   const [over, setOver] = useState(false);
-  const hasOrders = row.unloads.length + row.loads.length > 0;
-  const n = hasOrders ? Math.max(row.unloads.length, row.loads.length) + (staff ? 1 : 0) : 1;
+  const loadList = [...row.carried, ...row.loads];
+  const hasOrders = row.unloads.length + loadList.length > 0;
+  const n = hasOrders ? Math.max(row.unloads.length, loadList.length) + (staff ? 1 : 0) : 1;
   const focused = !!focus && (focus === row.vehicle.id || [...row.unloads, ...row.loads].some((o) => o.id === focus));
   const vehicleCell = (
     <td rowSpan={n}>
@@ -106,7 +108,7 @@ function VehicleGroup({ row, zone, a, staff, focus }: { row: BoardRow; zone: Zon
   const rows = [];
   for (let i = 0; i < n; i++) {
     const u = row.unloads[i];
-    const l = row.loads[i];
+    const l = loadList[i];
     rows.push(
       <tr key={i}>
         {i === 0 && (
@@ -124,7 +126,7 @@ function VehicleGroup({ row, zone, a, staff, focus }: { row: BoardRow; zone: Zon
             {u ? <OrderFields o={u} a={a} staff={staff} /> : <EmptyFields onAdd={staff ? () => a.addOrder(zone, 'unload', row) : undefined} />}
             {i === 0 && <td rowSpan={n} className="sep"><Cell className="vehicle" onTap={() => a.tapVehicle(row)}>{row.vehicle.short_no}</Cell></td>}
             {i === 0 && driverCell('load')}
-            {l ? <OrderFields o={l} a={a} staff={staff} /> : <EmptyFields onAdd={staff ? () => a.addOrder(zone, 'load', row) : undefined} />}
+            {l ? <OrderFields o={l} a={a} staff={staff} carried={row.carried.includes(l) ? () => a.tapCarried(row, l) : undefined} /> : <EmptyFields onAdd={staff ? () => a.addOrder(zone, 'load', row) : undefined} />}
           </>
         ) : (
           <td colSpan={12} className="sep">

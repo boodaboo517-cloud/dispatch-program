@@ -1,5 +1,5 @@
 // 오더 저장·삭제와 "상차 → 다음 날 반대 지역 하차", "선박 자동 이어짐" 연결 로직.
-import { addDays } from './dates.ts';
+import { addDays, diffDays } from './dates.ts';
 import { newId } from './ids.ts';
 import { findShip, isNextDayShip, isWaitShip } from './ships.ts';
 import { CARRIER_LABEL } from './types.ts';
@@ -87,8 +87,10 @@ export function arrivalOffset(snap: Pick<Snapshot, 'ships'>, shipName: string | 
 /** 상차 → 연결 하차까지 날 수: 당일 왕복 0, 직접 정한 값, 없으면 선박 설정(기본 1) */
 export function unloadDayOffset(snap: Pick<Snapshot, 'ships'>, load: DailyOrder): number {
   if (load.same_day) return 0;
-  if (load.arrival_offset != null) return load.arrival_offset;
-  return arrivalOffset(snap, load.departure_ship);
+  // 대기했다가 나중 날 선적한 짐: 상차일 → 선적일 날 수 + 선박 도착일 차이
+  const waited = load.ship_date && load.ship_date > load.date ? diffDays(load.ship_date, load.date) : 0;
+  if (load.arrival_offset != null) return waited + load.arrival_offset;
+  return waited + arrivalOffset(snap, load.departure_ship);
 }
 
 export function linkedValues(tx: Tx, load: DailyOrder): OrderSnapshot {
@@ -318,7 +320,20 @@ export function setRowShip(
     tx.update('daily_orders', o.id, { departure_ship: p.ship, departure_ship_tag: p.tag });
     syncLinkedUnload(tx, o.id);
   }
+  // 전날까지 "대기"로 싣고 있던 짐 [[ 상차짐 ]]: 이 날 선박을 정하면 이 날 선적 (또 대기면 다음 날로 계속)
+  for (const o of carriedLoads(tx.list('daily_orders'), p.vehicle_id, p.date, p.zone)) {
+    const sails = !!p.ship && !isWaitShip(p.ship);
+    tx.update('daily_orders', o.id, { departure_ship: sails ? p.ship : '대기', departure_ship_tag: p.tag, ship_date: sails ? p.date : null });
+    syncLinkedUnload(tx, o.id);
+  }
   syncShipCarryover(tx, vd.id);
+}
+
+/** 그날 이 차량에 실려 있는 "대기" 짐: 이전 날 같은 지역에서 상차했고, 아직 배를 안 탔거나 이 날 선적하는 것 (최대 14일) */
+export function carriedLoads(orders: DailyOrder[], vehicleId: string, date: string, zone: Zone | null): DailyOrder[] {
+  return orders.filter((o) => o.kind === 'load' && o.vehicle_id === vehicleId && o.date < date && diffDays(date, o.date) <= 14
+    && (!zone || o.zone === zone)
+    && (o.ship_date ? o.ship_date >= date : isWaitShip(o.departure_ship)));
 }
 
 function rowOrders(tx: Tx, date: string, vehicleId: string, kind: Kind) {

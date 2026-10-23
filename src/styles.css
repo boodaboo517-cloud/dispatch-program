@@ -314,3 +314,6 @@ tr.err td { background: var(--red-soft); }
 .site-btn:disabled { opacity: .25; }
 .paper tr.workrow td { background: #eff6ff; }
 .paper .ps-standby { color: #64748b; font-size: .75em; }
+/* 전날 선박 대기로 싣고 있는 짐 [[ 상차짐 ]] */
+.cell.carried { background: #f1f5f9; border: 1px dashed #64748b; }
+.paper .ps-carried { font-weight: 700; color: #334155; }

@@ -394,3 +394,38 @@ describe('선박 "익일선적" = 다음 날 선적, 그다음 날 도착', () =
     expect(tx.list('daily_orders').find((o) => o.linked_from_id === load.id)!.date).toBe('2026-10-22');
   });
 });
+
+describe('대기 상차짐 [[ 상차짐 ]] 이어가기', () => {
+  const D2 = '2026-10-21';
+  const D3 = '2026-10-22';
+  const start = () => {
+    const tx = new Tx(baseSnapshot());
+    const load = createOrder(tx, blankOrder({ date: D, zone: 'land', kind: 'load', client_id: 'c-dm', vehicle_id: 'v9915', departure_ship: '대기' }));
+    setRowShip(tx, { date: D, vehicle_id: 'v9915', zone: 'land', which: 'departure', ship: '대기', tag: '' });
+    return { tx, load };
+  };
+  const rowOn = (tx: Tx, d: string) => buildBoard(tx.result(), d).rows.find((r) => r.vehicle.id === 'v9915' && !r.secondary)!;
+  it('다음 날 같은 지역 차량 줄에 상차짐으로 이어지고 공차가 아니다', () => {
+    const { tx, load } = start();
+    const r = rowOn(tx, D2);
+    expect(r.zone).toBe('land');
+    expect(r.carried.map((o) => o.id)).toEqual([load.id]);
+    expect(r.status).toBe('');
+  });
+  it('다음 날 선박을 정하면 그 날 선적 → 그다음 날 반대편 하차·차량 이동, 이후엔 이어지지 않음', () => {
+    const { tx, load } = start();
+    setRowShip(tx, { date: D2, vehicle_id: 'v9915', zone: 'land', which: 'departure', ship: '제이엘', tag: '' });
+    const o = tx.get('daily_orders', load.id)!;
+    expect([o.departure_ship, o.ship_date]).toEqual(['제이엘', D2]);
+    expect(tx.list('daily_orders').find((x) => x.linked_from_id === load.id)!.date).toBe(D3);
+    expect(rowOn(tx, D2).zone).toBe('land');
+    expect(rowOn(tx, D2).carried).toHaveLength(1);
+    expect(rowOn(tx, D3).zone).toBe('jeju');
+  });
+  it('다음 날도 대기면 하루 더 이어진다', () => {
+    const { tx, load } = start();
+    setRowShip(tx, { date: D2, vehicle_id: 'v9915', zone: 'land', which: 'departure', ship: '대기', tag: '' });
+    expect(rowOn(tx, D3).carried.map((x) => x.id)).toEqual([load.id]);
+    expect(rowOn(tx, D3).zone).toBe('land');
+  });
+});
