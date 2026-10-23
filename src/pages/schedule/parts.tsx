@@ -57,7 +57,7 @@ export function VehicleCellText({ snap, row, date }: { snap: Snapshot; row: Boar
   return (
     <>
       <span>{row.vehicle.short_no}</span>
-      <span className={`drv${!name && hasWork ? ' none' : ''}`}>{name ? `${abbrev(name, 4)}${seqMark(row.unloadSeq)}` : hasWork ? '기사 미지정' : ''}</span>
+      {name ? <span className="drv">{abbrev(name, 4)}{seqMark(row.unloadSeq)}</span> : hasWork ? <span className="nodrv-badge">미배치</span> : null}
       {row.loadDriverId && row.loadDriverId !== row.driverId && (
         <span className="drv" title="오후(상차) 기사">→ {abbrev(driverName(snap, row.loadDriverId), 4)}{seqMark(row.loadSeq)}</span>
       )}

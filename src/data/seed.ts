@@ -1,7 +1,7 @@
 // 기본 데이터 (거래처·차량·기사·선박·현장근무). supabase/seed.sql 도 이 파일에서 생성한다.
 // ※ 첨부 일정표 원본을 받지 못해, 요구사항 본문에 나온 이름만 넣었다. 트럭 기사 이름은 자리표시자다.
 import type { Snapshot, Weekday } from '../domain/types.ts';
-import { emptySnapshot } from '../domain/types.ts';
+import { emptySnapshot, guessDriverZone } from '../domain/types.ts';
 
 const sid = (prefix: number, n: number) =>
   `00000000-0000-4000-8000-${String(prefix).padStart(4, '0')}${String(n).padStart(8, '0')}`;
@@ -38,6 +38,7 @@ export function seedSnapshot(): Snapshot {
   ];
   s.drivers = drivers.map(([name, shift, work_days, affiliation, staff_type], i) => ({
     id: sid(2, i + 1), name, phone: '', work_days, shift, affiliation, staff_type, memo: '', team: '',
+    zone: guessDriverZone({ shift, affiliation }),
   }));
   const driver = (name: string) => s.drivers.find((d) => d.name === name)!.id;
 

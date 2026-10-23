@@ -1,7 +1,7 @@
 // 기존 "경민물류 일정표" 양식으로 내보내기 (하루 = 시트 1장). 엑셀에는 축약 없이 전체 내용.
 import type { Worksheet } from 'exceljs';
 import {
-  DAY_STATUS_LABEL, seqMark, buildBoard, transportSummary, buildIndex, eachDay, isDriverWorking, sitesGrouped,
+  DAY_STATUS_LABEL, missingDriver, seqMark, buildBoard, transportSummary, buildIndex, eachDay, isDriverWorking, sitesGrouped,
   type BoardRow, type DailyOrder, type Snapshot, type Zone,
 } from '../domain/index.ts';
 import { dayjs } from '../lib/time.ts';
@@ -38,9 +38,9 @@ function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: 
     const n = Math.max(row.unloads.length, row.loads.length, 1);
     const hasOrders = row.unloads.length + row.loads.length > 0;
     const seq = (n: number | null) => (n ? ` ${seqMark(n)}` : '');
-    const drv = driverName(s, row.driverId) ? driverName(s, row.driverId) + seq(row.unloadSeq) : hasOrders ? '기사 미지정' : '';
+    const drv = driverName(s, row.driverId) ? driverName(s, row.driverId) + seq(row.unloadSeq) : missingDriver(row, 'unload') ? '미배치' : '';
     const helper = row.helperId ? ` +${driverName(s, row.helperId)}${row.helperRole ? `(${row.helperRole})` : ''}` : '';
-    const loadDrv = (driverName(s, row.loadDriverId) ? driverName(s, row.loadDriverId) + seq(row.loadSeq) : hasOrders ? '기사 미지정' : '') + helper;
+    const loadDrv = (driverName(s, row.loadDriverId) ? driverName(s, row.loadDriverId) + seq(row.loadSeq) : missingDriver(row, 'load') ? '미배치' : '') + helper;
     for (let i = 0; i < n; i++) {
       const line = ws.getRow(r + i);
       if (hasOrders) {

@@ -293,3 +293,8 @@ tr.err td { background: var(--red-soft); }
 .paper .ps-oline.center { justify-content: center; }
 .paper .ps-helper { color: #b45309; font-size: .85em; font-weight: 700; }
 .paper .ps-start { color: #1d4ed8; font-size: .8em; font-weight: 700; }
+.paper td.drv.nodrv { background: #fee2e2; }
+.paper .ps-nodrv { color: #b91c1c; font-weight: 900; }
+.paper tr.offrow td { background: #fef2f2; }
+/* 차량은 배정됐는데 기사가 없음 */
+.nodrv-badge { display: inline-block; background: var(--red); color: #fff; font-weight: 800; border-radius: 6px; padding: 1px 6px; font-size: 13px; }

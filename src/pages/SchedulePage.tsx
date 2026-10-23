@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { addDays, type Zone } from '../domain/index.ts';
+import { addDays, needsDriver, type Zone } from '../domain/index.ts';
 import { exportSchedule } from '../excel/exportSchedule.ts';
 import { fmtLong, fmtStamp, seoulToday } from '../lib/time.ts';
 import { useBoard, useIsWide, useRole, useSnap, useStore } from '../ui/hooks.ts';
@@ -73,7 +73,7 @@ export function SchedulePage() {
     const base = zone === 'land' ? board.land : board.jeju;
     if (filter === 'empty') return base.filter((r) => r.status === 'empty');
     if (filter === 'repair') return base.filter((r) => r.status === 'repair');
-    if (filter === 'nodriver') return base.filter((r) => r.unloads.length + r.loads.length > 0 && !r.driverId);
+    if (filter === 'nodriver') return base.filter(needsDriver);
     if (filter === 'waiting') return [];
     return base;
   }, [board, zone, filter]);
@@ -109,7 +109,7 @@ export function SchedulePage() {
         <Chip on={filter === 'waiting'} cls={s.waiting ? 'warn' : ''} onClick={() => setFilter(filter === 'waiting' ? 'all' : 'waiting')}>배차대기 {s.waiting}</Chip>
         <Chip on={tab === 'field'} onClick={() => update({ zone: 'field' })}>현장 {s.field}</Chip>
         {s.external > 0 && <span className="chip">용차·화주 {s.external}</span>}
-        {s.noDriver > 0 && <Chip on={filter === 'nodriver'} cls="alert" onClick={() => setFilter(filter === 'nodriver' ? 'all' : 'nodriver')}>기사 미지정 {s.noDriver}</Chip>}
+        {s.noDriver > 0 && <Chip on={filter === 'nodriver'} cls="alert" onClick={() => setFilter(filter === 'nodriver' ? 'all' : 'nodriver')}>기사 미배치 {s.noDriver}</Chip>}
         <span className="chip">하차 {s.unloads} · 상차 {s.loads}</span>
         {wide && <button className="chip" onClick={() => exportSchedule(snap, date, date)}>⬇ 엑셀</button>}
       </div>

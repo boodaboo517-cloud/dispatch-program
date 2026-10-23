@@ -1,6 +1,6 @@
 // 종이 일정표 모양 (확인용, 누르기 없음): 차량 한 대 = 한 줄. 선박 | 차량 | 기사 | 하차 | 차량 | 기사 | 상차 | 선박 (제주는 오전·오후)
 import {
-  DAY_STATUS_LABEL, isExternal, parseShip, seqMark, sitesGrouped, weeklyOffOn,
+  DAY_STATUS_LABEL, isExternal, missingDriver, offByZone, parseShip, seqMark, sitesGrouped,
   type BoardRow, type DailyOrder, type FieldAssignment, type Snapshot, type Zone,
 } from '../../domain/index.ts';
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
@@ -102,8 +102,11 @@ function VehicleRow({ snap, row }: { snap: Snapshot; row: BoardRow }) {
   const start = row.startTime || row.startPlace
     ? <div className="ps-oline center"><Fit><span className="ps-start">{[row.startTime, row.startPlace].filter(Boolean).join(' ')}</span></Fit></div>
     : null;
-  const name = <>{start}<div className="ps-oline center"><Fit>{driverName(snap, row.driverId)}{seqMark(row.unloadSeq)}</Fit></div>{helper}</>;
-  const loadName = <><div className="ps-oline center"><Fit>{driverName(snap, row.loadDriverId)}{seqMark(row.loadSeq)}</Fit></div>{helper}</>;
+  const noUnload = missingDriver(row, 'unload');
+  const noLoad = missingDriver(row, 'load');
+  const MISSING = <div className="ps-oline center"><Fit><span className="ps-nodrv">미배치</span></Fit></div>;
+  const name = <>{start}{noUnload ? MISSING : <div className="ps-oline center"><Fit>{driverName(snap, row.driverId)}{seqMark(row.unloadSeq)}</Fit></div>}{helper}</>;
+  const loadName = <>{noLoad ? MISSING : <div className="ps-oline center"><Fit>{driverName(snap, row.loadDriverId)}{seqMark(row.loadSeq)}</Fit></div>}{helper}</>;
   const statusText = status || row.statusMemo
     ? <>{status && <span className={`st ${status}`}>{DAY_STATUS_LABEL[status]}</span>}{row.statusMemo && <span className="ps-red"> {row.statusMemo}</span>}</>
     : null;
@@ -112,10 +115,10 @@ function VehicleRow({ snap, row }: { snap: Snapshot; row: BoardRow }) {
     <tr className={row.secondary ? 'secondary' : ''}>
       <td className="ship"><ShipText snap={snap} ship={row.arrivalShip} tag={row.arrivalTag} /></td>
       {veh}
-      <td className="drv">{name}</td>
+      <td className={`drv${noUnload ? ' nodrv' : ''}`}>{name}</td>
       <td className="body">{row.unloads.length ? <Orders snap={snap} list={row.unloads} /> : <Fit>{statusText}</Fit>}</td>
       {veh}
-      <td className="drv">{loadName}</td>
+      <td className={`drv${noLoad ? ' nodrv' : ''}`}>{loadName}</td>
       <td className="body">{row.loads.length ? <Orders snap={snap} list={row.loads} /> : row.unloads.length ? <Fit>{statusText}</Fit> : null}</td>
       <td className="ship"><ShipText snap={snap} ship={row.departureShip} tag={row.departureTag} /></td>
     </tr>
@@ -161,9 +164,10 @@ function FieldRows({ snap, rows }: { snap: Snapshot; rows: FieldAssignment[] }) 
   );
 }
 
-export function SheetBoard(p: { zone: Zone; rows: BoardRow[]; waiting: DailyOrder[]; external: DailyOrder[]; field: FieldAssignment[] }) {
+export function SheetBoard(p: { zone: Zone; date: string; rows: BoardRow[]; waiting: DailyOrder[]; external: DailyOrder[]; field: FieldAssignment[] }) {
   const snap = useSnap();
   const fieldRows = sitesGrouped(snap, p.field).groups.filter((g) => g.site.zone === p.zone).flatMap((g) => g.rows);
+  const off = offByZone(snap, p.date)[p.zone];
   return (
     <table className={`paper ${p.zone}`}>
       <Cols />
@@ -176,30 +180,27 @@ export function SheetBoard(p: { zone: Zone; rows: BoardRow[]; waiting: DailyOrde
         {p.waiting.map((o) => <WaitingRow key={o.id} snap={snap} o={o} />)}
         {p.external.map((o) => <WaitingRow key={o.id} snap={snap} o={o} />)}
         <FieldRows snap={snap} rows={fieldRows} />
+        {off.length > 0 && (
+          <tr className="fieldrow first offrow">
+            <td className="site">휴무</td>
+            <td className="body" colSpan={7}><Fit>{off.map((d) => d.name).join(', ')}</Fit></td>
+          </tr>
+        )}
       </tbody>
     </table>
   );
 }
 
-/** 육지·제주 어느 표에도 속하지 않은 근무지와 휴무자 */
-export function SheetExtras({ date, field }: { date: string; field: FieldAssignment[] }) {
+/** 육지·제주 어느 표에도 속하지 않은 근무지 (휴무는 각 지역 표 맨 아래) */
+export function SheetExtras({ field }: { date?: string; field: FieldAssignment[] }) {
   const snap = useSnap();
-  const { groups, off } = sitesGrouped(snap, field);
-  const rest = groups.filter((g) => !g.site.zone).flatMap((g) => g.rows);
-  // 그날 휴무 지정 + 매주 고정 휴무
-  const offNames = [...new Set([...off.map((f) => driverName(snap, f.staff_id)), ...weeklyOffOn(snap, date).map((d) => d.name)])].filter(Boolean);
-  if (!rest.length && !offNames.length) return null;
+  const rest = sitesGrouped(snap, field).groups.filter((g) => !g.site.zone).flatMap((g) => g.rows);
+  if (!rest.length) return null;
   return (
     <table className="paper extra">
       <Cols />
       <tbody>
         <FieldRows snap={snap} rows={rest} />
-        {offNames.length > 0 && (
-          <tr className="fieldrow first">
-            <td className="site">휴무</td>
-            <td className="body" colSpan={7}>{offNames.join(', ')}</td>
-          </tr>
-        )}
       </tbody>
     </table>
   );

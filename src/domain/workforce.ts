@@ -3,7 +3,7 @@ import { eachDay, weekdayOf } from './dates.ts';
 import { newId } from './ids.ts';
 import { isDriverWorking } from './board.ts';
 import type { Tx } from './tx.ts';
-import { ON_CALL_SHIFT, WORK_TYPES, type Driver, type DriverWorkLog, type Snapshot, type Weekday, type WorkType } from './types.ts';
+import { ON_CALL_SHIFT, WORK_TYPES, guessDriverZone, type Driver, type DriverWorkLog, type Snapshot, type Weekday, type WorkType, type Zone } from './types.ts';
 
 const ALL_WEEKDAYS: Weekday[] = [0, 1, 2, 3, 4, 5, 6];
 
@@ -17,6 +17,19 @@ export function fixedOffDays(d: Pick<Driver, 'work_days' | 'shift'>): Weekday[] 
 export function workDaysFromOff(off: Weekday[]): Weekday[] {
   return off.length ? ALL_WEEKDAYS.filter((w) => !off.includes(w)) : [];
 }
+
+/** 그날 휴무자 (휴무 지정 + 매주 고정 휴무) 를 근무 지역별로 */
+export function offByZone(snap: Snapshot, date: string): Record<Zone, Driver[]> {
+  const ids = new Set(snap.field_assignments.filter((f) => f.date === date && f.is_off && f.staff_id).map((f) => f.staff_id!));
+  for (const d of weeklyOffOn(snap, date)) ids.add(d.id);
+  const out: Record<Zone, Driver[]> = { land: [], jeju: [] };
+  for (const d of snap.drivers) if (ids.has(d.id)) out[driverZone(d)].push(d);
+  for (const k of Object.keys(out) as Zone[]) out[k].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  return out;
+}
+
+/** 근무 지역 (지정 안 했으면 근무조·소속으로 추정) */
+export const driverZone = (d: Driver): Zone => d.zone ?? guessDriverZone(d);
 
 /** 그날 고정 휴무인 사람 (그날 배차되었거나 근무 기록이 있으면 제외) */
 export function weeklyOffOn(snap: Snapshot, date: string): Driver[] {

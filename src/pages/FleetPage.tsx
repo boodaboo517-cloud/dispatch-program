@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   activeRepair, newId, planCreateFieldRecurring, planFieldRecurringChange, planFieldRecurringEnd,
   setDayOff, versionOn, weekdaysLabel, fixedOffDays, workDaysFromOff,
-  ON_CALL_SHIFT, SHIFT_PRESETS, driverGroup, type Driver, type Ship, type Vehicle, type VehicleType, type Weekday, type Zone,
+  ON_CALL_SHIFT, SHIFT_PRESETS, driverGroup, guessDriverZone, type Driver, type Ship, type Vehicle, type VehicleType, type Weekday, type Zone,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
 import { fmtDate, seoulToday } from '../lib/time.ts';
@@ -85,7 +85,7 @@ function OffDaysTable({ close }: { close: () => void }) {
   const order: Weekday[] = [1, 2, 3, 4, 5, 6, 0];
   const L = ['일', '월', '화', '수', '목', '금', '토'];
   const list = [...snap.drivers].filter((d) => d.shift !== ON_CALL_SHIFT)
-    .sort((a, b) => a.staff_type.localeCompare(b.staff_type, 'ko') || driverGroup(a).localeCompare(driverGroup(b), 'ko', { numeric: true }) || a.name.localeCompare(b.name, 'ko'));
+    .sort((a, b) => (b.zone ?? guessDriverZone(b)).localeCompare(a.zone ?? guessDriverZone(a)) || a.staff_type.localeCompare(b.staff_type, 'ko') || driverGroup(a).localeCompare(driverGroup(b), 'ko', { numeric: true }) || a.name.localeCompare(b.name, 'ko'));
   const toggle = (d: Driver, w: Weekday) => {
     const off = fixedOffDays(d);
     const next = off.includes(w) ? off.filter((x) => x !== w) : [...off, w];
@@ -102,7 +102,7 @@ function OffDaysTable({ close }: { close: () => void }) {
             const off = fixedOffDays(d);
             return (
               <tr key={d.id}>
-                <td><b>{d.name}</b><div className="muted" style={{ fontSize: 11 }}>{d.staff_type === '기사' ? driverGroup(d) : d.staff_type}</div></td>
+                <td><b>{d.name}</b><div className="muted" style={{ fontSize: 11 }}>{ZONE_LABEL[d.zone ?? guessDriverZone(d)]} · {d.staff_type === '기사' ? driverGroup(d) : d.staff_type}</div></td>
                 {order.map((w) => (
                   <td key={w} className={off.includes(w) ? 'off' : ''} role="button" aria-label={`${d.name} ${L[w]}요일`} onClick={() => toggle(d, w)}>
                     {off.includes(w) ? '휴' : ''}
@@ -136,6 +136,7 @@ function DriverSheet({ d, close }: { d: Driver; close: () => void }) {
       ) : (
         <OffDaysField d={cur} onSave={(w) => save({ work_days: w })} />
       )}
+      <Editable label="근무 지역" value={cur.zone ?? guessDriverZone(cur)} options={[{ value: 'jeju', label: '제주' }, { value: 'land', label: '육지' }]} onSave={(v) => save({ zone: v as Zone })} />
       <TeamField value={cur.team ?? ''} onSave={(v) => save({ team: v })} />
       <Editable label="소속" value={cur.affiliation} onSave={(v) => save({ affiliation: v })} />
       <Editable label="비고" value={cur.memo ?? ''} placeholder="예: 대형면허, 야간 가능, 주 3일만" multiline onSave={(v) => save({ memo: v })} />

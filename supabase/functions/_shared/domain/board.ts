@@ -131,6 +131,12 @@ export interface Board {
   };
 }
 
+/** 차량은 배정됐는데 그 쪽(하차/상차) 기사가 없음 → "미배치" */
+export const missingDriver = (r: Pick<BoardRow, 'unloads' | 'loads' | 'driverId' | 'loadDriverId'>, kind: Kind) =>
+  kind === 'unload' ? r.unloads.length > 0 && !r.driverId : r.loads.length > 0 && !r.loadDriverId;
+export const needsDriver = (r: Pick<BoardRow, 'unloads' | 'loads' | 'driverId' | 'loadDriverId'>) =>
+  missingDriver(r, 'unload') || missingDriver(r, 'load');
+
 export function shipTime(snap: Snapshot, name: string | null): string {
   if (!name) return '99:99';
   return shipTimeOf(snap.ships, name) || '99:98';
@@ -267,7 +273,7 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
       unloads: dayOrders.filter((o) => o.kind === 'unload').length,
       loads: dayOrders.filter((o) => o.kind === 'load').length,
       registered: snap.vehicles.filter((v) => v.usage === '배차').length,
-      noDriver: main.filter((r) => (r.unloads.length || r.loads.length) && !r.driverId).length,
+      noDriver: main.filter(needsDriver).length,
     },
   };
 }

@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { buildBoard, lastStart, setDriverSeq, setRowDriver, setRowHelper, setRowStart, startText } from '../board.ts';
+import { buildBoard, lastStart, missingDriver, needsDriver, setDriverSeq, setRowDriver, setRowHelper, setRowStart, startText } from '../board.ts';
 import { blankOrder, saveOrder } from '../orders.ts';
 import { Tx } from '../tx.ts';
-import { ON_CALL_SHIFT, type Driver } from '../types.ts';
-import { assignedDriverIds, fixedOffDays, weeklyOffOn, workDaysFromOff } from '../workforce.ts';
+import { ON_CALL_SHIFT, type Driver, type Weekday } from '../types.ts';
+import { assignedDriverIds, fixedOffDays, offByZone, weeklyOffOn, workDaysFromOff } from '../workforce.ts';
 import { baseSnapshot, resetIds } from './fixtures.ts';
 
 beforeEach(resetIds);
@@ -149,5 +149,31 @@ describe('출근 시간·장소', () => {
     expect(startText(r)).toBe('07:00 부두');
     expect(lastStart(tx.result(), 'v9915', '2026-10-21')).toEqual({ time: '07:00', place: '부두' });
     expect(lastStart(tx.result(), 'v9914', '2026-10-21')).toBeNull();
+  });
+});
+
+describe('미배치 (차량은 있는데 기사 없음)', () => {
+  it('오더가 있는 쪽만 미배치, 오후 기사가 따로 없으면 오전 기사로 채워짐', () => {
+    const tx = setup();
+    let r = row(tx, 'v9915');
+    expect([missingDriver(r, 'unload'), missingDriver(r, 'load'), needsDriver(r)]).toEqual([true, true, true]);
+    set(tx, 'v9915', 'dA');
+    r = row(tx, 'v9915');
+    expect(needsDriver(r)).toBe(false);
+  });
+});
+
+describe('휴무 육지·제주 구분', () => {
+  it('근무 지역별로 나누고, 지역을 안 정했으면 근무조·소속으로 추정', () => {
+    const s = baseSnapshot();
+    const base = { phone: '', work_days: [1, 2, 3, 4, 5, 6] as Weekday[], affiliation: '', staff_type: '기사' as const, memo: '' };
+    s.drivers = [
+      { ...base, id: 'd1', name: '가', shift: '', zone: 'jeju' },
+      { ...base, id: 'd2', name: '나', shift: '부산상주' },
+      { ...base, id: 'd3', name: '다', shift: '', zone: 'land' },
+    ];
+    const off = offByZone(s, '2026-10-25');
+    expect(off.jeju.map((d) => d.id)).toEqual(['d1']);
+    expect(off.land.map((d) => d.id)).toEqual(['d2', 'd3']);
   });
 });

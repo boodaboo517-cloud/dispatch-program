@@ -1,6 +1,6 @@
 // PC 넓은 표: 하차일정 | 상차일정, 차량 기준 같은 줄, 차량별 빨간 구분선, 4글자 축약 + 클릭 시 전체 보기
 import { useState } from 'react';
-import { abbrev, assignVehicle, isExternal, rowDriver, seqMark, type BoardRow, type DriverSide, type DailyOrder, type Zone } from '../../domain/index.ts';
+import { abbrev, assignVehicle, isExternal, missingDriver, rowDriver, seqMark, type BoardRow, type DriverSide, type DailyOrder, type Zone } from '../../domain/index.ts';
 import { store } from '../../data/store.ts';
 import { useRole, useSnap } from '../../ui/hooks.ts';
 import { Cell } from '../../ui/Cell.tsx';
@@ -87,7 +87,7 @@ function VehicleGroup({ row, zone, a, staff, focus }: { row: BoardRow; zone: Zon
     return (
       <td rowSpan={n}>
         <Cell onTap={() => (drv || !staff ? a.tapVehicle(row) : a.editDriver(row, side))} onLong={staff ? () => a.editDriver(row, side) : undefined}>
-          <span style={{ color: !drv && hasOrders ? 'var(--red)' : undefined, fontSize: 13 }}>{drv ? `${abbrev(drv)}${seqMark(seq)}` : hasOrders ? '미지정' : ''}</span>
+          {drv ? <span style={{ fontSize: 13 }}>{abbrev(drv)}{seqMark(seq)}</span> : missingDriver(row, side) ? <span className="nodrv-badge">미배치</span> : null}
           {side === 'unload' && (row.startTime || row.startPlace) && <span style={{ fontSize: 12, color: '#1d4ed8' }}>{row.startTime} {row.startPlace}</span>}
           {row.helperId && <span style={{ fontSize: 12, color: '#b45309' }}>+{abbrev(driverName(snap, row.helperId), 3)} {row.helperRole}</span>}
         </Cell>

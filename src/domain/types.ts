@@ -104,7 +104,13 @@ export interface Driver extends Base {
   memo?: string;
   /** 팀 (기사 선택 목록 묶음). 비우면 근무조로 묶는다 */
   team?: string;
+  /** 근무 지역 (일정표 휴무 줄을 육지·제주로 나눔). 비우면 따로 표시 */
+  zone?: Zone | null;
 }
+
+/** 근무 지역 추정: 상주(부산·서울)·목포 소속은 육지, 나머지는 제주 */
+export const guessDriverZone = (d: Pick<Driver, 'shift' | 'affiliation'>): Zone =>
+  /상주|부산|서울|목포/.test(`${d.shift} ${d.affiliation}`) ? 'land' : 'jeju';
 
 /** 기사 선택·근무현황에서 묶는 기준: 팀 → 근무조 → "팀 없음" */
 export const driverGroup = (d: Pick<Driver, 'team' | 'shift'>) => d.team?.trim() || d.shift || '팀 없음';
