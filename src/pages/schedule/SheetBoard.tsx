@@ -22,10 +22,10 @@ function Cols() {
   );
 }
 
-/** 30자 넘는 긴 내용은 줄을 바꿔 글씨가 너무 작아지지 않게 한다 */
-const WRAP_AT = 30;
+/** 25자 넘는 긴 내용은 줄을 바꿔 글씨가 너무 작아지지 않게 한다 */
+const WRAP_AT = 25;
 
-/** 칸 안에서 줄을 바꾸지 않고, 길면 글자를 줄여 한 줄에 맞춘다 (최소 6px, 그래도 길면 옆으로 눌러서). 30자 넘으면 줄바꿈 */
+/** 칸 안에서 줄을 바꾸지 않고, 길면 글자를 줄여 한 줄에 맞춘다 (최소 6px, 그래도 길면 옆으로 눌러서). 25자 넘으면 줄바꿈 */
 function Fit({ children }: { children: ReactNode }) {
   const ref = useRef<HTMLSpanElement>(null);
   useLayoutEffect(() => {
