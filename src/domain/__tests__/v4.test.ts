@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildBoard, lastStart, missingDriver, needsDriver, setDriverSeq, setRowDriver, setRowHelper, setRowStart, startText } from '../board.ts';
-import { blankOrder, saveOrder, workText } from '../orders.ts';
+import { blankOrder, saveOrder, setRowShip, workText } from '../orders.ts';
 import { Tx, applyMutations } from '../tx.ts';
 import { copyOrder, createOrder, splitPerVehicle } from '../actions.ts';
 import { planCreateRecurring, planRecurringChange } from '../recurring.ts';
@@ -361,5 +361,24 @@ describe('휴무 기간 (휴가·병가)', () => {
     expect(leaveRanges(tx.result(), 'dA', D)).toEqual([{ from: D, to: '2026-10-22', reason: '휴가' }]);
     cancelLeave(tx, { staffId: 'dA', from: D, to: '2026-10-22' });
     expect(leaveRanges(tx.result(), 'dA', D)).toEqual([]);
+  });
+});
+
+describe('선박 "대기" = 배 안 탐', () => {
+  it('출발 선박이 대기면 다음 날도 같은 지역, 반대편 하차·도착 선박이 생기지 않는다', () => {
+    const tx = new Tx(baseSnapshot());
+    const load = createOrder(tx, blankOrder({ date: D, zone: 'land', kind: 'load', client_id: 'c-dm', vehicle_id: 'v9915', departure_ship: '대기' }));
+    const next = buildBoard(tx.result(), '2026-10-21').rows.find((r) => r.vehicle.id === 'v9915')!;
+    expect(next.zone).toBe('land');
+    expect(next.arrivalShip).toBeNull();
+    expect(tx.list('daily_orders').filter((o) => o.linked_from_id === load.id)).toEqual([]);
+  });
+  it('대기 → 실제 선박으로 바꾸면 그때 반대편 하차가 생기고 차량이 넘어간다', () => {
+    const tx = new Tx(baseSnapshot());
+    const load = createOrder(tx, blankOrder({ date: D, zone: 'land', kind: 'load', client_id: 'c-dm', vehicle_id: 'v9915', departure_ship: '대기' }));
+    saveOrder(tx, { ...tx.get('daily_orders', load.id)!, departure_ship: '제이엘' });
+    setRowShip(tx, { date: D, vehicle_id: 'v9915', zone: 'land', which: 'departure', ship: '제이엘', tag: '' });
+    expect(tx.list('daily_orders').filter((o) => o.linked_from_id === load.id)).toHaveLength(1);
+    expect(buildBoard(tx.result(), '2026-10-21').rows.find((r) => r.vehicle.id === 'v9915' && !r.secondary)!.zone).toBe('jeju');
   });
 });

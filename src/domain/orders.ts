@@ -1,7 +1,7 @@
 // 오더 저장·삭제와 "상차 → 다음 날 반대 지역 하차", "선박 자동 이어짐" 연결 로직.
 import { addDays } from './dates.ts';
 import { newId } from './ids.ts';
-import { findShip } from './ships.ts';
+import { findShip, isWaitShip } from './ships.ts';
 import { CARRIER_LABEL } from './types.ts';
 import type { Tx } from './tx.ts';
 import type {
@@ -143,8 +143,13 @@ export function findLinkedUnload(tx: Tx, loadId: string): DailyOrder | undefined
 export function syncLinkedUnload(tx: Tx, loadId: string): DailyOrder | undefined {
   const load = tx.get('daily_orders', loadId);
   if (!load || load.kind !== 'load') return undefined;
-  const want = linkedValues(tx, load);
   const cur = findLinkedUnload(tx, load.id);
+  // 선박이 "대기"면 아직 배를 안 타므로 반대편 하차를 만들지 않는다 (자동으로 만든 것은 지움, 직접 고친 것은 둠)
+  if (isWaitShip(load.departure_ship)) {
+    if (cur && !cur.edited_manually) tx.remove('daily_orders', cur.id);
+    return undefined;
+  }
+  const want = linkedValues(tx, load);
   if (!cur) {
     const siblings = tx.list('daily_orders').filter(
       (o) => o.date === want.date && o.zone === opposite(load.zone) && o.kind === 'unload',
@@ -215,7 +220,8 @@ export function syncShipCarryover(tx: Tx, vehicleDayId: string) {
     for (const p of previous) clearCarried(tx, p.id);
     return;
   }
-  if (!vd.departure_ship) {
+  // 출발 선박이 없거나 "대기"면 다음 날로 넘어가지 않는다 (대기 = 그 지역에 그대로)
+  if (!vd.departure_ship || isWaitShip(vd.departure_ship)) {
     for (const p of previous) clearCarried(tx, p.id);
     return;
   }

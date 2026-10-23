@@ -3,7 +3,7 @@ import { addDays, weekdayOf } from './dates.ts';
 import { newId } from './ids.ts';
 import { activeRepair, repairMemo, saveMaintenance } from './maintenance.ts';
 import { ensureVehicleDay, opposite } from './orders.ts';
-import { shipTimeOf } from './ships.ts';
+import { isWaitShip, shipTimeOf } from './ships.ts';
 import type { Tx } from './tx.ts';
 import { ON_CALL_SHIFT } from './types.ts';
 import type {
@@ -47,14 +47,14 @@ function explicitZone(idx: Index, vehicleId: string, date: string): Zone | null 
 }
 
 /** 이 상차로 차량이 배를 타는지 */
-export const vehicleSails = (o: DailyOrder) => o.kind === 'load' && !!o.departure_ship && !o.same_day && o.shipment !== 'bulk';
+export const vehicleSails = (o: DailyOrder) => o.kind === 'load' && !!o.departure_ship && !isWaitShip(o.departure_ship) && !o.same_day && o.shipment !== 'bulk';
 
 /** 용차·화주배차 오더 (직영 차량 배차 대상 아님) */
 export const isExternal = (o: DailyOrder) => !!o.carrier_type && o.carrier_type !== 'own';
 
 function departsOn(idx: Index, vehicleId: string, date: string): boolean {
   const vd = idx.vd.get(`${date}|${vehicleId}`);
-  if (vd?.departure_ship) return true;
+  if (vd?.departure_ship && !isWaitShip(vd.departure_ship)) return true;
   // 당일 왕복 상차는 그날 밤 위치를 바꾸지 않는다
   // 당일 왕복 상차, 벌크(화물만 선적) 상차는 그날 밤 차량 위치를 바꾸지 않는다
   return (idx.ordersByVehicleDate.get(`${date}|${vehicleId}`) ?? []).some((o) => vehicleSails(o));

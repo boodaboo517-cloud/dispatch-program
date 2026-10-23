@@ -8,6 +8,9 @@ export function parseShip(value: string | null | undefined): { name: string; por
   return m ? { name: m[1], port: m[2].trim() } : { name: value.trim(), port: '' };
 }
 
+/** 선박 칸이 "대기"면 배를 타지 않음 → 다음 날도 그 지역에 그대로 */
+export const isWaitShip = (value: string | null | undefined) => !!value && value.includes('대기');
+
 export const formatShip = (name: string, port = '') => (port ? `${name} (${port})` : name);
 
 export function findShip(ships: Ship[], value: string | null | undefined): Ship | undefined {
