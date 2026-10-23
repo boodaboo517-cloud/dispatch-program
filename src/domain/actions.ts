@@ -17,6 +17,7 @@ export const isPerVehicleSplittable = (o: Pick<DailyOrder, 'unit' | 'quantity' |
 
 /**
  * 대 단위 오더를 1대씩 나눈다. 첫 건은 차량·기사를 그대로 두고, 나머지는 배차 대기(차량 없음)로.
+ * 반복 발주 오더면 나눈 건도 같은 반복 발주에 속한다.
  * 상차면 나뉜 건마다 반대편 하차도 따로 생긴다. 돌려주는 값 = 나뉜 오더 id (원래 것 포함)
  */
 export function splitPerVehicle(tx: Tx, orderId: string): string[] {
@@ -33,7 +34,8 @@ export function splitPerVehicle(tx: Tx, orderId: string): string[] {
     const copy = createOrder(tx, {
       ...tx.get('daily_orders', o.id)!,
       id: newId(), quantity: 1, vehicle_id: null, driver_id: null,
-      source: 'manual', recurring_order_id: null, recurring_version_id: null, edited_manually: false,
+      // 반복 발주에서 나온 건은 나눈 것도 반복 발주 소속으로 (변경·종료 때 함께 다시 만들어짐)
+      source: o.source, recurring_order_id: o.recurring_order_id, recurring_version_id: o.recurring_version_id, edited_manually: o.edited_manually,
       linked_from_id: null, link_status: 'none', link_pending: null, sort_order: o.sort_order + i,
     });
     ids.push(copy.id);

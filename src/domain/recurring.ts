@@ -4,6 +4,7 @@ import { addDays, eachDay, inRange, maxDate, weekdayOf, weekdaysLabel } from './
 import { newId } from './ids.ts';
 import { blankOrder, deleteOrder, findLinkedUnload, saveOrder } from './orders.ts';
 import { attachDefaultRevenue } from './revenue.ts';
+import { isPerVehicleSplittable, splitPerVehicle } from './actions.ts';
 import { Tx } from './tx.ts';
 import type {
   DailyOrder, Mutation, RecurringOrder, RecurringOrderVersion, Snapshot, Weekday,
@@ -100,7 +101,8 @@ function generate(tx: Tx, rec: RecurringOrder, from: string, to: string): number
     if (!ver || !ver.weekdays.includes(weekdayOf(d))) continue;
     const order = saveOrder(tx, buildOrder(tx, rec, ver, d), { userEdit: false });
     attachDefaultRevenue(tx, order);
-    n++;
+    n += splitPerVehicle(tx, order.id).length; // "3대" → 1대씩 따로 배차
+
   }
   return n;
 }
@@ -233,6 +235,10 @@ export function planRecurringExtension(snap: Snapshot, today: string, actor: str
   let created = 0;
   for (const rec of tx.list('recurring_orders')) {
     if (!rec.active) continue;
+    // 이미 만들어 둔 앞으로의 "N대" 오더도 1대씩 나눈다 (직접 고친 건은 그대로)
+    for (const o of ordersOf(tx, rec.id)) {
+      if (o.date >= today && o.source === 'recurring' && !o.edited_manually && isPerVehicleSplittable(o)) created += splitPerVehicle(tx, o.id).length - 1;
+    }
     const from = rec.generated_until ? addDays(rec.generated_until, 1) : today;
     if (from > until) continue;
     created += generate(tx, rec, maxDate(from, today), until);

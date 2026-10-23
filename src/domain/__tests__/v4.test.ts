@@ -3,6 +3,7 @@ import { buildBoard, lastStart, missingDriver, needsDriver, setDriverSeq, setRow
 import { blankOrder, saveOrder, workText } from '../orders.ts';
 import { Tx, applyMutations } from '../tx.ts';
 import { createOrder, splitPerVehicle } from '../actions.ts';
+import { planCreateRecurring, planRecurringChange } from '../recurring.ts';
 import { blankField, planCreateFieldRecurring, saveFieldAssignment } from '../fieldwork.ts';
 import { ON_CALL_SHIFT, repairSnapshot, type Driver, type Weekday } from '../types.ts';
 import { assignedDriverIds, fixedOffDays, offByZone, planStaffFixedOff, weeklyOffOn, workDaysFromOff } from '../workforce.ts';
@@ -271,5 +272,29 @@ describe('대 단위 2대 이상 → 1대씩 나눠 배차', () => {
     expect(splitPerVehicle(tx, a.id)).toEqual([a.id]);
     expect(splitPerVehicle(tx, b.id)).toEqual([b.id]);
     expect(tx.list('daily_orders')).toHaveLength(2);
+  });
+});
+
+describe('반복 오더도 대당 자동 나누기', () => {
+  const today = '2026-10-19';
+  const make = () => planCreateRecurring(baseSnapshot(), {
+    client_id: 'c-dm', product_id: null, zone: 'land', kind: 'load', startDate: today, today,
+    fields: { weekdays: [1], quantity: 2, unit: '대', region: '', memo: '', vehicle_id: 'v9915', ship: '제이엘', ship_tag: '' },
+  });
+  it('생성할 때 날짜마다 1대씩 2건 (첫 건만 차량), 반대편 하차도 2건', () => {
+    const snap = applyMutations(baseSnapshot(), make().mutations);
+    const mon = snap.daily_orders.filter((o) => o.date === today && o.kind === 'load');
+    expect(mon.map((o) => [o.quantity, o.vehicle_id, o.source])).toEqual([[1, 'v9915', 'recurring'], [1, null, 'recurring']]);
+    expect(snap.daily_orders.filter((o) => o.date === '2026-10-20' && o.kind === 'unload')).toHaveLength(2);
+  });
+  it('반복 변경하면 나눈 건까지 함께 다시 만들어진다 (중복 없음)', () => {
+    let snap = applyMutations(baseSnapshot(), make().mutations);
+    const recId = snap.recurring_orders[0].id;
+    snap = applyMutations(snap, planRecurringChange(snap, {
+      recurringId: recId, startDate: today, today,
+      fields: { weekdays: [1], quantity: 3, unit: '대', region: '', memo: '', vehicle_id: 'v9915', ship: '제이엘', ship_tag: '' },
+    }).mutations);
+    expect(snap.daily_orders.filter((o) => o.date === today && o.kind === 'load')).toHaveLength(3);
+    expect(snap.daily_orders.filter((o) => o.date === '2026-10-26' && o.kind === 'load')).toHaveLength(3);
   });
 });
