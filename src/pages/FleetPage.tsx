@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   activeRepair, newId, planCreateFieldRecurring, planFieldRecurringChange, planFieldRecurringEnd,
-  setDayOff, versionOn, weekdaysLabel, fixedOffDays, workDaysFromOff,
+  setDayOff, versionOn, weekdaysLabel, fixedOffDays, planStaffFixedOff,
   ON_CALL_SHIFT, SHIFT_PRESETS, driverGroup, guessDriverZone, type Driver, type Ship, type Vehicle, type VehicleType, type Weekday, type Zone,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
@@ -65,15 +65,22 @@ function TeamField({ value, onSave }: { value: string; onSave: (v: string) => vo
   );
 }
 
-/** 고정 휴무일 (매주): 누른 요일 = 휴무. 저장은 근무 요일(나머지)로 */
-function OffDaysField({ d, onSave }: { d: Driver; onSave: (workDays: Weekday[]) => void }) {
+/** 고정 휴무일 저장: 근무 요일 + 고정 현장근무 요일을 오늘부터 함께 맞춘다 */
+function saveFixedOff(d: Driver, off: Weekday[]) {
+  const r = planStaffFixedOff(store.getState().snap, { staffId: d.id, off, today: seoulToday() });
+  store.commit(r.mutations);
+  if (r.recurringChanged) store.toast(`${d.name} 고정 현장근무도 오늘부터 이 요일로 맞췄습니다`);
+}
+
+/** 고정 휴무일 (매주): 누른 요일 = 휴무 */
+function OffDaysField({ d }: { d: Driver }) {
   const off = fixedOffDays(d);
   return (
     <label className="field">
       <span>고정 휴무일 (매주) {off.length ? <b style={{ color: 'var(--red)' }}>{weekdaysLabel(off)}</b> : <span className="muted">없음 · 매일 근무</span>}</span>
       <WeekdayChips value={off} onChange={(w) => {
         if (w.length >= 7) return store.toast('모든 요일을 휴무로 할 수 없습니다. 원할 때만 나오면 근무조를 "알바"로 하세요.', 'warn');
-        onSave(workDaysFromOff(w as Weekday[]));
+        saveFixedOff(d, w as Weekday[]);
       }} />
     </label>
   );
@@ -90,7 +97,7 @@ function OffDaysTable({ close }: { close: () => void }) {
     const off = fixedOffDays(d);
     const next = off.includes(w) ? off.filter((x) => x !== w) : [...off, w];
     if (next.length >= 7) return store.toast('모든 요일을 휴무로 할 수 없습니다', 'warn');
-    store.run((tx) => tx.update('drivers', d.id, { work_days: workDaysFromOff(next) }));
+    saveFixedOff(d, next);
   };
   return (
     <Sheet title="고정 휴무일 (매주)" onClose={close} footer={<button className="primary" onClick={close}>닫기</button>}>
@@ -134,7 +141,7 @@ function DriverSheet({ d, close }: { d: Driver; close: () => void }) {
       {cur.shift === ON_CALL_SHIFT ? (
         <p className="muted small">알바는 정해진 근무일이 없습니다. 출근하는 날 일정표의 기사 칸이나 근무현황에서 근무형태를 넣으면 그날 근무로 잡힙니다.</p>
       ) : (
-        <OffDaysField d={cur} onSave={(w) => save({ work_days: w })} />
+        <OffDaysField d={cur} />
       )}
       <Editable label="근무 지역" value={cur.zone ?? guessDriverZone(cur)} options={[{ value: 'jeju', label: '제주' }, { value: 'land', label: '육지' }]} onSave={(v) => save({ zone: v as Zone })} />
       <TeamField value={cur.team ?? ''} onSave={(v) => save({ team: v })} />
@@ -270,8 +277,22 @@ function ShipsPanel() {
   );
 }
 
+/** 한 사람 고정 휴무일 고치기 (현장 설정에서) */
+function OffSheet({ staffId, close }: { staffId: string; close: () => void }) {
+  const snap = useSnap();
+  const d = snap.drivers.find((x) => x.id === staffId);
+  if (!d) return null;
+  return (
+    <Sheet title={`${d.name} 휴무 수정`} onClose={close} footer={<button className="primary" onClick={close}>닫기</button>}>
+      <OffDaysField d={d} />
+      <p className="muted small">누르면 바로 저장됩니다. 고정 현장근무도 오늘부터 휴무 요일을 빼고 다시 만들어집니다 (지난 날짜·직접 고친 줄은 그대로). 하루만 쉬는 날은 배차 화면 › 현장근무 탭에서 "＋ 휴무 지정"을 쓰세요.</p>
+    </Sheet>
+  );
+}
+
 function FieldSetupPanel() {
   const snap = useSnap();
+  const sheet = useSheet();
   const { staff } = useRole();
   const pick = usePickers();
   const today = seoulToday();
@@ -299,7 +320,8 @@ function FieldSetupPanel() {
     const site = await pick.site();
     const task = prompt('업무') ?? '';
     const vid = await pick.anyVehicle();
-    store.commit(planCreateFieldRecurring(snap, { staff_id: staffId, today, startDate: today, fields: { weekdays: [1, 2, 3, 4, 5, 6], site_id: site, task, vehicle_id: vid ?? null } }).mutations);
+    const wd = snap.drivers.find((d) => d.id === staffId)?.work_days ?? [];
+    store.commit(planCreateFieldRecurring(snap, { staff_id: staffId, today, startDate: today, fields: { weekdays: wd.length ? wd : [1, 2, 3, 4, 5, 6], site_id: site, task, vehicle_id: vid ?? null } }).mutations);
   };
   return (
     <>
@@ -320,11 +342,17 @@ function FieldSetupPanel() {
       <h3>고정 근무 (매일 자동 표시 · 변경 시 지난 날짜는 그대로)</h3>
       {snap.recurring_field_work.map((r) => {
         const v = versionOn(snap.recurring_field_versions.filter((x) => x.recurring_field_id === r.id), today);
+        const person = snap.drivers.find((d) => d.id === r.staff_id);
         return (
           <div key={r.id} className="card">
             <div className="row"><b className="grow">{driverName(snap, r.staff_id)}</b>{!r.active && <span className="badge">종료</span>}</div>
             {v && <div className="muted">{snap.field_sites.find((s) => s.id === v.site_id)?.name} · {v.task} {v.vehicle_id && `· ${vehicleNo(snap, v.vehicle_id)}`} · {weekdaysLabel(v.weekdays)}</div>}
-            {staff && r.active && <div className="row" style={{ marginTop: 6 }}><button className="grow" onClick={() => change(r.id, 'change')}>변경</button><button className="grow danger" onClick={() => change(r.id, 'end')}>종료</button></div>}
+            {person && <div className="small">휴무 {fixedOffDays(person).length ? <b style={{ color: 'var(--red)' }}>{weekdaysLabel(fixedOffDays(person))}</b> : <span className="muted">없음</span>}</div>}
+            {staff && r.active && <div className="row" style={{ marginTop: 6 }}>
+              <button className="grow" onClick={() => change(r.id, 'change')}>변경</button>
+              {person && <button className="grow" onClick={() => sheet.open((c) => <OffSheet staffId={person.id} close={c} />)}>휴무 수정</button>}
+              <button className="grow danger" onClick={() => change(r.id, 'end')}>종료</button>
+            </div>}
           </div>
         );
       })}

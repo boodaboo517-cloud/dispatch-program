@@ -1,5 +1,6 @@
 // 현장근무 탭: 근무지별 · 이름 · 업무 · 지급 차량 / 휴무자
-import { blankField, saveFieldAssignment, setDayOff, sitesGrouped, type FieldAssignment } from '../../domain/index.ts';
+import { blankField, offByZone, saveFieldAssignment, setDayOff, sitesGrouped, type FieldAssignment } from '../../domain/index.ts';
+import { useNavigate } from 'react-router-dom';
 import { store } from '../../data/store.ts';
 import { useRole, useSnap } from '../../ui/hooks.ts';
 import { Cell } from '../../ui/Cell.tsx';
@@ -14,6 +15,11 @@ export function FieldTab({ date }: { date: string }) {
   const sheet = useSheet();
   const rows = snap.field_assignments.filter((f) => f.date === date);
   const { groups, off } = sitesGrouped(snap, rows);
+  // 하루 휴무 지정이 아닌, 매주 고정 휴무·고정 근무 요일이 아닌 사람
+  const offIds = new Set(off.map((f) => f.staff_id));
+  const byZone = offByZone(snap, date);
+  const regularOff = [...byZone.jeju, ...byZone.land].filter((d) => !offIds.has(d.id));
+  const nav = useNavigate();
   const save = (f: FieldAssignment) => store.run((tx) => saveFieldAssignment(tx, f));
 
   const show = (title: string, text: string, edit?: () => void) =>
@@ -85,12 +91,19 @@ export function FieldTab({ date }: { date: string }) {
       {staff && <button style={{ width: '100%' }} onClick={() => add(null)}>＋ 현장근무 추가</button>}
       <div className="card">
         <div className="row"><b className="grow">휴무자</b>{staff && <button className="ghost" onClick={addOff}>＋ 휴무 지정</button>}</div>
-        {off.length ? off.map((f) => (
+        {off.map((f) => (
           <div key={f.id} className="row" style={{ minHeight: 44 }}>
             <span className="grow">{driverName(snap, f.staff_id)}</span>
             {staff && <button className="ghost" onClick={() => store.run((tx) => setDayOff(tx, date, f.staff_id!, false))}>휴무 취소</button>}
           </div>
-        )) : <p className="muted">없음</p>}
+        ))}
+        {regularOff.map((d) => (
+          <div key={d.id} className="row" style={{ minHeight: 44 }}>
+            <span className="grow">{d.name} <span className="badge">고정 휴무</span></span>
+            {staff && <button className="ghost" onClick={() => nav(`/fleet/drivers`)}>휴무 수정 ›</button>}
+          </div>
+        ))}
+        {!off.length && !regularOff.length && <p className="muted">없음</p>}
       </div>
     </div>
   );

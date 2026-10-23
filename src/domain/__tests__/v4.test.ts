@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildBoard, lastStart, missingDriver, needsDriver, setDriverSeq, setRowDriver, setRowHelper, setRowStart, startText } from '../board.ts';
 import { blankOrder, saveOrder, workText } from '../orders.ts';
-import { Tx } from '../tx.ts';
-import { blankField, saveFieldAssignment } from '../fieldwork.ts';
+import { Tx, applyMutations } from '../tx.ts';
+import { blankField, planCreateFieldRecurring, saveFieldAssignment } from '../fieldwork.ts';
 import { ON_CALL_SHIFT, repairSnapshot, type Driver, type Weekday } from '../types.ts';
-import { assignedDriverIds, fixedOffDays, offByZone, weeklyOffOn, workDaysFromOff } from '../workforce.ts';
+import { assignedDriverIds, fixedOffDays, offByZone, planStaffFixedOff, weeklyOffOn, workDaysFromOff } from '../workforce.ts';
 import { baseSnapshot, resetIds } from './fixtures.ts';
 
 beforeEach(resetIds);
@@ -228,5 +228,24 @@ describe('예전 버전 데이터 보정', () => {
     expect(s.vehicles).toEqual([]);
     expect(s.recurring_field_work).toEqual([]);
     expect(() => offByZone(s, D)).not.toThrow();
+  });
+});
+
+describe('현장근무자 휴무 수정', () => {
+  it('고정 휴무일을 바꾸면 고정 현장근무도 오늘부터 그 요일을 빼고, 일정표 현장 휴무에 나온다', () => {
+    const s = baseSnapshot();
+    s.drivers = [{ id: 'f1', name: '현장A', phone: '', work_days: [1, 2, 3, 4, 5, 6], shift: '', affiliation: '', staff_type: '현장', memo: '', zone: 'jeju' }];
+    const today = '2026-10-19'; // 월
+    let snap = applyMutations(s, planCreateFieldRecurring(s, { staff_id: 'f1', today, startDate: today, fields: { weekdays: [1, 2, 3, 4, 5, 6], site_id: null, task: '출고', vehicle_id: null } }).mutations);
+    const wed = '2026-10-21';
+    expect(snap.field_assignments.some((f) => f.date === wed && f.staff_id === 'f1')).toBe(true);
+    const r = planStaffFixedOff(snap, { staffId: 'f1', off: [0, 3], today });
+    snap = applyMutations(snap, r.mutations);
+    expect(r.recurringChanged).toBe(1);
+    expect(snap.drivers[0].work_days).toEqual([1, 2, 4, 5, 6]);
+    expect(snap.field_assignments.some((f) => f.date === wed && f.staff_id === 'f1')).toBe(false);
+    expect(snap.field_assignments.some((f) => f.date === '2026-10-22' && f.staff_id === 'f1')).toBe(true);
+    expect(offByZone(snap, wed).jeju.map((d) => d.id)).toEqual(['f1']);
+    expect(offByZone(snap, '2026-10-22').jeju).toEqual([]);
   });
 });

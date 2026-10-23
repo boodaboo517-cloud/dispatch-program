@@ -2,8 +2,10 @@
 import { eachDay, weekdayOf } from './dates.ts';
 import { newId } from './ids.ts';
 import { isDriverWorking } from './board.ts';
-import type { Tx } from './tx.ts';
-import { ON_CALL_SHIFT, WORK_TYPES, guessDriverZone, type Driver, type DriverWorkLog, type Snapshot, type Weekday, type WorkType, type Zone } from './types.ts';
+import { planFieldRecurringChange } from './fieldwork.ts';
+import { versionOn } from './recurring.ts';
+import { Tx, applyMutations } from './tx.ts';
+import { ON_CALL_SHIFT, WORK_TYPES, guessDriverZone, type Driver, type DriverWorkLog, type Mutation, type Snapshot, type Weekday, type WorkType, type Zone } from './types.ts';
 
 const ALL_WEEKDAYS: Weekday[] = [0, 1, 2, 3, 4, 5, 6];
 
@@ -116,4 +118,32 @@ export function monthlyDriverStatus(snap: Snapshot, from: string, to: string, dr
     });
     return { driver, days: cells, workedDays, byType, missingType };
   });
+}
+
+/**
+ * 고정 휴무일 바꾸기. 직원의 근무 요일을 고치고, 고정 현장근무가 있으면 오늘부터 그 요일로 맞춘다
+ * (휴무 요일에는 현장근무 줄이 생기지 않아 일정표 "현장 휴무"에 나온다. 지난 날짜·직접 고친 줄은 그대로).
+ */
+export function planStaffFixedOff(snap: Snapshot, p: { staffId: string; off: Weekday[]; today: string }): { mutations: Mutation[]; recurringChanged: number } {
+  const workDays = workDaysFromOff(p.off);
+  const tx = new Tx(snap);
+  tx.update('drivers', p.staffId, { work_days: workDays });
+  const mutations = tx.mutations();
+  let s = applyMutations(snap, mutations);
+  const want = workDays.length ? workDays : ALL_WEEKDAYS;
+  let recurringChanged = 0;
+  for (const rec of s.recurring_field_work.filter((r) => r.active && r.staff_id === p.staffId)) {
+    const versions = s.recurring_field_versions.filter((v) => v.recurring_field_id === rec.id).sort((a, b) => a.effective_from.localeCompare(b.effective_from));
+    const v = versionOn(versions, p.today) ?? versions[versions.length - 1];
+    if (!v) continue;
+    if (v.weekdays.length === want.length && want.every((w) => v.weekdays.includes(w))) continue;
+    const r = planFieldRecurringChange(s, {
+      recurringId: rec.id, startDate: p.today, today: p.today,
+      fields: { weekdays: want, site_id: v.site_id, task: v.task, vehicle_id: v.vehicle_id },
+    });
+    mutations.push(...r.mutations);
+    s = applyMutations(s, r.mutations);
+    recurringChanged++;
+  }
+  return { mutations, recurringChanged };
 }
