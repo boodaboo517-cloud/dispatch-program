@@ -170,7 +170,7 @@ export function SheetBoard(p: { zone: Zone; date: string; rows: BoardRow[]; wait
   const fieldRows = sitesGrouped(snap, p.field).groups.filter((g) => g.site.zone === p.zone).flatMap((g) => g.rows);
   const offAll = offByZone(snap, p.date);
   const off = offAll[p.zone];
-  // 현장(현장·사무 직원) 휴무는 지역 구분 없이 제주 표 맨 아래 한 줄로
+  // 현장(현장·사무 직원) 휴무는 지역 구분 없이 육지 표 현장근무(목포센터) 바로 밑 한 줄로
   const fieldOff = [...offAll.jeju, ...offAll.land].filter((d) => d.staff_type !== '기사').sort((a, b) => a.name.localeCompare(b.name, 'ko'));
   return (
     <table className={`paper ${p.zone}`}>
@@ -184,18 +184,19 @@ export function SheetBoard(p: { zone: Zone; date: string; rows: BoardRow[]; wait
         {p.waiting.map((o) => <WaitingRow key={o.id} snap={snap} o={o} />)}
         {p.external.map((o) => <WaitingRow key={o.id} snap={snap} o={o} />)}
         <FieldRows snap={snap} rows={fieldRows} />
+        {p.zone === 'land' && fieldOff.length > 0 && (
+          <tr className={`fieldrow offrow${fieldRows.length ? '' : ' first'}`}>
+            <td className="site"><Fit>현장 휴무</Fit></td>
+            <td className="body" colSpan={7}><Fit>{fieldOff.map((d) => d.name).join(', ')}</Fit></td>
+          </tr>
+        )}
         {off.some((d) => d.staff_type === '기사') && (
           <tr className="fieldrow offrow first">
             <td className="site"><Fit>기사 휴무</Fit></td>
             <td className="body" colSpan={7}><Fit>{off.filter((d) => d.staff_type === '기사').map((d) => d.name).join(', ')}</Fit></td>
           </tr>
         )}
-        {p.zone === 'jeju' && fieldOff.length > 0 && (
-          <tr className={`fieldrow offrow${off.some((d) => d.staff_type === '기사') ? '' : ' first'}`}>
-            <td className="site"><Fit>현장 휴무</Fit></td>
-            <td className="body" colSpan={7}><Fit>{fieldOff.map((d) => d.name).join(', ')}</Fit></td>
-          </tr>
-        )}
+
       </tbody>
     </table>
   );
