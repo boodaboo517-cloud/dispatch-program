@@ -4,7 +4,7 @@ import { blankOrder, findVehicleDay, saveOrder } from '../orders.ts';
 import { formatShip, parseShip, shipChoices, shipTimeOf } from '../ships.ts';
 import { Tx } from '../tx.ts';
 import type { Driver } from '../types.ts';
-import { monthlyDriverStatus, setWorkLog } from '../workforce.ts';
+import { monthlyDriverStatus, paySummary, setPayRate, setWorkLog } from '../workforce.ts';
 import { baseSnapshot, resetIds, ship } from './fixtures.ts';
 
 beforeEach(resetIds);
@@ -129,6 +129,24 @@ describe('기사 근무', () => {
     expect(m.byType.주간근무).toBe(1);
     expect(m.missingType).toBe(1);
     expect(m.days.find((c) => c.date === '2026-10-12')!.assigned).toBe(true);
+  });
+  it('근무별 수당: 횟수 × 수당, 수당 없는 형태는 따로 알림', () => {
+    const s = baseSnapshot();
+    s.drivers = [driver({})];
+    const tx = new Tx(s);
+    setWorkLog(tx, { date: '2026-10-05', driver_id: 'd1', work_types: ['주간근무'] });
+    setWorkLog(tx, { date: '2026-10-06', driver_id: 'd1', work_types: ['주간근무', '시간외근무'] });
+    setWorkLog(tx, { date: '2026-10-07', driver_id: 'd1', work_types: ['야간근무'] });
+    setPayRate(tx, { driver_id: 'd1', type: '주간근무', amount: 120000 });
+    setPayRate(tx, { driver_id: 'd1', type: '시간외근무', amount: 20000 });
+    const [m] = monthlyDriverStatus(tx.result(), '2026-10-01', '2026-10-31');
+    const p = paySummary(tx.result(), m);
+    expect(p.byType).toEqual({ 주간근무: 240000, 시간외근무: 20000 });
+    expect(p.total).toBe(260000);
+    expect(p.missingRate).toEqual(['야간근무']);
+    setPayRate(tx, { driver_id: 'd1', type: '시간외근무', amount: null });
+    expect(tx.list('driver_pay_rates')).toHaveLength(1);
+    expect(tx.list('driver_pay_rates')[0].rates).toEqual({ 주간근무: 120000 });
   });
 });
 

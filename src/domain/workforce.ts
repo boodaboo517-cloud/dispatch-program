@@ -5,7 +5,7 @@ import { isDriverWorking, setRowDriver, setRowHelper } from './board.ts';
 import { planFieldRecurringChange, setDayOff } from './fieldwork.ts';
 import { versionOn } from './recurring.ts';
 import { Tx, applyMutations } from './tx.ts';
-import { ON_CALL_SHIFT, WORK_TYPES, guessDriverZone, type Driver, type DriverWorkLog, type Mutation, type Snapshot, type Weekday, type WorkType, type Zone } from './types.ts';
+import { ON_CALL_SHIFT, WORK_TYPES, guessDriverZone, type Driver, type DriverPayRate, type DriverWorkLog, type Mutation, type Snapshot, type Weekday, type WorkType, type Zone } from './types.ts';
 
 const ALL_WEEKDAYS: Weekday[] = [0, 1, 2, 3, 4, 5, 6];
 
@@ -82,7 +82,10 @@ export interface DayCell {
   date: string;
   types: WorkType[];
   memo: string;
+  /** 차량 배차 또는 현장근무가 잡힌 날 */
   assigned: boolean;
+  /** 현장근무로 잡힌 날 */
+  field: boolean;
   /** 근무일(근무조 기준·특근 기록 포함)인지 */
   scheduled: boolean;
   off: boolean;
@@ -102,19 +105,21 @@ export interface DriverMonth {
 export function monthlyDriverStatus(snap: Snapshot, from: string, to: string, drivers: Driver[] = snap.drivers): DriverMonth[] {
   const days = [...eachDay(from, to)];
   const assigned = new Map(days.map((d) => [d, assignedDriverIds(snap, d)]));
+  const fieldOn = new Set(snap.field_assignments.filter((f) => !f.is_off && f.staff_id && f.date >= from && f.date <= to).map((f) => `${f.date}|${f.staff_id}`));
   return drivers.map((driver) => {
     const byType = Object.fromEntries(WORK_TYPES.map((t) => [t, 0])) as Record<WorkType, number>;
     let workedDays = 0;
     let missingType = 0;
     const cells = days.map((date): DayCell => {
       const log = workLogOf(snap, driver.id, date);
-      const isAssigned = assigned.get(date)!.has(driver.id);
+      const field = fieldOn.has(`${date}|${driver.id}`);
+      const isAssigned = assigned.get(date)!.has(driver.id) || field;
       const off = snap.field_assignments.some((f) => f.date === date && f.staff_id === driver.id && f.is_off);
       const types = log?.work_types ?? [];
       if (types.length || isAssigned) workedDays++;
       if (isAssigned && !types.length) missingType++;
       for (const t of types) byType[t]++;
-      return { date, types, memo: log?.memo ?? '', assigned: isAssigned, scheduled: isDriverWorking(snap, driver, date), off };
+      return { date, types, memo: log?.memo ?? '', assigned: isAssigned, field, scheduled: isDriverWorking(snap, driver, date), off };
     });
     return { driver, days: cells, workedDays, byType, missingType };
   });
@@ -193,4 +198,44 @@ export function leaveRanges(snap: Pick<Snapshot, 'field_assignments'>, staffId: 
     else out.push({ from: f.date, to: f.date, reason: f.task || '휴무' });
   }
   return out;
+}
+
+/** 그 사람의 근무별 수당 */
+export function payRatesOf(snap: Pick<Snapshot, 'driver_pay_rates'>, driverId: string): DriverPayRate | undefined {
+  return (snap.driver_pay_rates ?? []).find((r) => r.driver_id === driverId);
+}
+
+/** 근무별 수당 한 칸 저장 (빈 값 = 지움) */
+export function setPayRate(tx: Tx, p: { driver_id: string; type: WorkType; amount: number | null }) {
+  const cur = tx.list('driver_pay_rates').find((r) => r.driver_id === p.driver_id);
+  const rates = { ...(cur?.rates ?? {}) };
+  if (p.amount == null || !Number.isFinite(p.amount)) delete rates[p.type];
+  else rates[p.type] = Math.round(p.amount);
+  if (cur) tx.update('driver_pay_rates', cur.id, { rates });
+  else tx.insert('driver_pay_rates', { id: newId(), driver_id: p.driver_id, rates, memo: '' });
+}
+
+export interface PaySummary {
+  /** 형태별 금액 = 횟수 × 수당 */
+  byType: Partial<Record<WorkType, number>>;
+  total: number;
+  /** 횟수는 있는데 수당이 안 정해진 형태 */
+  missingRate: WorkType[];
+}
+
+/** 기간 근무현황 → 수당 합계 */
+export function paySummary(snap: Pick<Snapshot, 'driver_pay_rates'>, m: DriverMonth): PaySummary {
+  const rates = payRatesOf(snap, m.driver.id)?.rates ?? {};
+  const byType: Partial<Record<WorkType, number>> = {};
+  const missingRate: WorkType[] = [];
+  let total = 0;
+  for (const t of WORK_TYPES) {
+    const n = m.byType[t];
+    if (!n) continue;
+    const rate = rates[t];
+    if (rate == null) { missingRate.push(t); continue; }
+    byType[t] = n * rate;
+    total += n * rate;
+  }
+  return { byType, total, missingRate };
 }

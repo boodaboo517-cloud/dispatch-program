@@ -16,6 +16,7 @@ import { usePickers } from '../ui/pickers.tsx';
 import { Sheet, useSheet } from '../ui/Sheet.tsx';
 import { ShipEditSheet, blankShip } from '../ui/ShipEditSheet.tsx';
 import { AttendancePanel } from './AttendancePanel.tsx';
+import { PayRatesCard } from '../ui/PayRates.tsx';
 
 type Tab = 'vehicles' | 'drivers' | 'attendance' | 'ships' | 'field';
 const TYPES: VehicleType[] = ['5톤', '통윙', '통윙2냉', '1톤', '승용'];
@@ -179,6 +180,7 @@ function LeaveSheet({ close }: { close: () => void }) {
 
 function DriverSheet({ d, close }: { d: Driver; close: () => void }) {
   const snap = useSnap();
+  const { staff } = useRole();
   const cur = snap.drivers.find((x) => x.id === d.id) ?? d;
   const save = (p: Partial<Driver>) => store.run((tx) => (tx.get('drivers', d.id) ? tx.update('drivers', d.id, p) : tx.insert('drivers', { ...d, ...p })));
   return (
@@ -200,6 +202,7 @@ function DriverSheet({ d, close }: { d: Driver; close: () => void }) {
       <Editable label="소속" value={cur.affiliation} onSave={(v) => save({ affiliation: v })} />
       <Editable label="비고" value={cur.memo ?? ''} placeholder="예: 대형면허, 야간 가능, 주 3일만" multiline onSave={(v) => save({ memo: v })} />
       <LeaveCard staffId={d.id} />
+      {staff && <PayRatesCard driverId={d.id} />}
       <button className="danger" style={{ width: '100%' }} onClick={() => { if (confirm('삭제할까요?')) { store.run((tx) => tx.remove('drivers', d.id)); close(); } }}>삭제</button>
     </Sheet>
   );
