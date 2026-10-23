@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildBoard, lastStart, missingDriver, needsDriver, setDriverSeq, setRowDriver, setRowHelper, setRowStart, startText } from '../board.ts';
-import { blankOrder, saveOrder, setRowShip, workText } from '../orders.ts';
+import { blankOrder, repairShipLinks, saveOrder, setRowShip, workText } from '../orders.ts';
 import { Tx, applyMutations } from '../tx.ts';
 import { copyOrder, createOrder, splitPerVehicle } from '../actions.ts';
 import { planCreateRecurring, planRecurringChange } from '../recurring.ts';
@@ -427,5 +427,22 @@ describe('대기 상차짐 [[ 상차짐 ]] 이어가기', () => {
     setRowShip(tx, { date: D2, vehicle_id: 'v9915', zone: 'land', which: 'departure', ship: '대기', tag: '' });
     expect(rowOn(tx, D3).carried.map((x) => x.id)).toEqual([load.id]);
     expect(rowOn(tx, D3).zone).toBe('land');
+  });
+});
+
+describe('예전에 저장된 대기·익일선적 짐 바로잡기', () => {
+  it('대기인데 예전 규칙으로 반대편 하차가 남아 차량이 육지에 나오던 것을 바로잡는다', () => {
+    const tx = new Tx(baseSnapshot());
+    const load = createOrder(tx, blankOrder({ date: D, zone: 'jeju', kind: 'load', client_id: 'c-dm', vehicle_id: 'v9914', departure_ship: '제이엘' }));
+    setRowShip(tx, { date: D, vehicle_id: 'v9914', zone: 'jeju', which: 'departure', ship: '제이엘', tag: '' });
+    // 예전 버전처럼 선박만 "대기"로 바뀌고 연결 하차·도착 선박은 그대로 남은 상태
+    tx.update('daily_orders', load.id, { departure_ship: '대기' });
+    const vd = tx.list('vehicle_days').find((v) => v.date === D && v.vehicle_id === 'v9914')!;
+    tx.update('vehicle_days', vd.id, { departure_ship: '대기' });
+    const zoneNext = () => buildBoard(tx.result(), '2026-10-21').rows.find((r) => r.vehicle.id === 'v9914' && !r.secondary)!.zone;
+    expect(zoneNext()).toBe('land'); // 고치기 전: 남은 하차 때문에 육지
+    repairShipLinks(tx, D);
+    expect(tx.list('daily_orders').filter((o) => o.linked_from_id === load.id)).toEqual([]);
+    expect(zoneNext()).toBe('jeju');
   });
 });

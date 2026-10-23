@@ -457,3 +457,18 @@ export function transportSummary(s: Pick<Snapshot, 'ships'>, o: DailyOrder): str
 export function workText(o: Pick<DailyOrder, 'kind' | 'work_time' | 'work_detail'>): string {
   return [o.work_time ? `${o.work_time} ${o.kind === 'load' ? '상차' : '하차'}` : '', o.work_detail?.trim() ?? ''].filter(Boolean).join(' · ');
 }
+
+/**
+ * 선박 "대기"·"익일선적"·나중 선적 규칙이 생기기 전에 저장된 짐 바로잡기 (앱 열 때 한 번).
+ * 연결 하차를 다시 맞춰서(대기면 자동 하차 지움, 익일선적이면 날짜 +2) 차량이 엉뚱한 지역에 나오지 않게 한다.
+ */
+export function repairShipLinks(tx: Tx, fromDate: string) {
+  for (const o of tx.list('daily_orders')) {
+    if (o.kind !== 'load' || o.date < fromDate) continue;
+    if (isWaitShip(o.departure_ship) || isNextDayShip(o.departure_ship) || o.ship_date) syncLinkedUnload(tx, o.id);
+  }
+  for (const vd of tx.list('vehicle_days')) {
+    if (vd.date < fromDate) continue;
+    if (isWaitShip(vd.departure_ship) || isNextDayShip(vd.departure_ship)) syncShipCarryover(tx, vd.id);
+  }
+}

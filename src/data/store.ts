@@ -3,7 +3,7 @@
 import { del, get, set } from 'idb-keyval';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import {
-  TABLES, Tx, addDays, applyMutations, emptySnapshot, planFieldExtension, repairSnapshot, planRecurringExtension, toBatches,
+  TABLES, Tx, addDays, applyMutations, emptySnapshot, planFieldExtension, repairShipLinks, repairSnapshot, planRecurringExtension, toBatches,
   type Mutation, type Role, type Snapshot, type TableName,
 } from '../domain/index.ts';
 import { seoulToday } from '../lib/time.ts';
@@ -145,7 +145,10 @@ class Store {
     const today = seoulToday();
     const a = planRecurringExtension(this.state.snap, today, this.actor());
     const b = planFieldExtension(a.snapshot, today, this.actor());
-    const muts = [...a.mutations, ...b.mutations];
+    // 예전에 저장된 "대기"·"익일선적" 짐의 반대편 하차·도착 선박 바로잡기
+    const fix = new Tx(b.snapshot, { actor: this.actor() });
+    repairShipLinks(fix, addDays(today, -14));
+    const muts = [...a.mutations, ...b.mutations, ...fix.mutations()];
     if (muts.length) this.commit(muts);
   }
 
