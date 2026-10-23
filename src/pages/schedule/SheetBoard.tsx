@@ -147,32 +147,10 @@ function WaitingRow({ snap, o }: { snap: Snapshot; o: DailyOrder }) {
   );
 }
 
-/** 현장근무 줄: 근무지 | 차량 | 이름 | 업무 | · | · | · | · */
-function FieldRows({ snap, rows }: { snap: Snapshot; rows: FieldAssignment[] }) {
-  const siteName = (f: FieldAssignment) => snap.field_sites.find((s) => s.id === f.site_id)?.name ?? '근무지 미정';
-  return (
-    <>
-      {rows.map((f, i) => (
-        <tr key={f.id} className={`fieldrow ${i === 0 ? 'first' : ''}`}>
-          <td className="site"><Fit>{i === 0 || siteName(rows[i - 1]) !== siteName(f) ? siteName(f) : ''}</Fit></td>
-          <td className="veh">{f.vehicle_id && <Fit><span className="ps-pill veh">{vehicleNo(snap, f.vehicle_id)}</span></Fit>}</td>
-          <td className="drv"><Fit>{driverName(snap, f.staff_id)}</Fit></td>
-          <td className="body"><Fit>{f.task}</Fit></td>
-          <td className="veh" /><td className="drv" /><td className="body" /><td className="ship" />
-        </tr>
-      ))}
-    </>
-  );
-}
-
 export function SheetBoard(p: { zone: Zone; date: string; rows: BoardRow[]; waiting: DailyOrder[]; external: DailyOrder[]; field: FieldAssignment[] }) {
   const snap = useSnap();
-  // 육지 표에는 육지 근무지(목포센터 등)만. 제주 근무지는 아래 "현장근무" 표로 따로
-  const fieldRows = p.zone === 'land' ? sitesGrouped(snap, p.field).groups.filter((g) => g.site.zone === 'land').flatMap((g) => g.rows) : [];
-  const offAll = offByZone(snap, p.date);
-  const off = offAll[p.zone];
-  // 현장(현장·사무 직원) 휴무는 지역 구분 없이 육지 표 현장근무(목포센터) 바로 밑 한 줄로
-  const fieldOff = [...offAll.jeju, ...offAll.land].filter((d) => d.staff_type !== '기사').sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+
+  const off = offByZone(snap, p.date)[p.zone];
   return (
     <table className={`paper ${p.zone}`}>
       <Cols />
@@ -184,13 +162,7 @@ export function SheetBoard(p: { zone: Zone; date: string; rows: BoardRow[]; wait
         {p.rows.map((r) => <VehicleRow key={r.vehicle.id + (r.secondary ? '-2' : '')} snap={snap} row={r} />)}
         {p.waiting.map((o) => <WaitingRow key={o.id} snap={snap} o={o} />)}
         {p.external.map((o) => <WaitingRow key={o.id} snap={snap} o={o} />)}
-        <FieldRows snap={snap} rows={fieldRows} />
-        {p.zone === 'land' && fieldOff.length > 0 && (
-          <tr className={`fieldrow offrow${fieldRows.length ? '' : ' first'}`}>
-            <td className="site"><Fit>현장 휴무</Fit></td>
-            <td className="body" colSpan={7}><Fit>{fieldOff.map((d) => d.name).join(', ')}</Fit></td>
-          </tr>
-        )}
+
         {off.some((d) => d.staff_type === '기사') && (
           <tr className="fieldrow offrow first">
             <td className="site"><Fit>기사 휴무</Fit></td>
@@ -203,16 +175,18 @@ export function SheetBoard(p: { zone: Zone; date: string; rows: BoardRow[]; wait
   );
 }
 
-/** 현장근무 표 (제주 표와 분리, 근무자가 없어도 표시): 근무지 | 차량 | 이름 | 업무 */
-export function SheetExtras({ field }: { date?: string; field: FieldAssignment[] }) {
+/** 현장 표 (육지·제주와 따로, 근무자가 없어도 표시): 근무지 | 차량 | 이름 | 업무, 맨 밑에 현장 휴무 */
+export function SheetExtras({ date, field }: { date: string; field: FieldAssignment[] }) {
   const snap = useSnap();
-  const rows = sitesGrouped(snap, field).groups.filter((g) => g.site.zone !== 'land').flatMap((g) => g.rows);
+  const rows = sitesGrouped(snap, field).groups.flatMap((g) => g.rows);
+  const offAll = offByZone(snap, date);
+  const fieldOff = [...offAll.jeju, ...offAll.land].filter((d) => d.staff_type !== '기사').sort((a, b) => a.name.localeCompare(b.name, 'ko'));
   const siteName = (f: FieldAssignment) => snap.field_sites.find((x) => x.id === f.site_id)?.name ?? '근무지 미정';
   return (
     <table className="paper fieldwork">
       <colgroup><col style={{ width: '20%' }} /><col style={{ width: '13%' }} /><col style={{ width: '15%' }} /><col /></colgroup>
       <thead>
-        <tr><th colSpan={4} className="zone">현장근무</th></tr>
+        <tr><th colSpan={4} className="zone">현장</th></tr>
         <tr><th>근무지</th><th>차량</th><th>이름</th><th>업무</th></tr>
       </thead>
       <tbody>
@@ -225,6 +199,10 @@ export function SheetExtras({ field }: { date?: string; field: FieldAssignment[]
           </tr>
         ))}
         {!rows.length && <tr><td colSpan={4} className="body" style={{ color: '#888', textAlign: 'center' }}>근무자 없음</td></tr>}
+        <tr className="fieldrow offrow first">
+          <td className="site"><Fit>현장 휴무</Fit></td>
+          <td className="body" colSpan={3}><Fit>{fieldOff.map((d) => d.name).join(', ') || '없음'}</Fit></td>
+        </tr>
       </tbody>
     </table>
   );
