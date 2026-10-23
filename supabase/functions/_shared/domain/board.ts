@@ -2,7 +2,7 @@
 import { addDays, weekdayOf } from './dates.ts';
 import { newId } from './ids.ts';
 import { activeRepair, repairMemo, saveMaintenance } from './maintenance.ts';
-import { carriedLoads, ensureVehicleDay, opposite } from './orders.ts';
+import { carriedLoads, ensureVehicleDay, opposite, waitsForShip } from './orders.ts';
 import { departDelay, isWaitShip, shipTimeOf } from './ships.ts';
 import type { Tx } from './tx.ts';
 import { ON_CALL_SHIFT } from './types.ts';
@@ -156,7 +156,7 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
   const fieldVehicleIds = new Set(field.filter((f) => f.vehicle_id && !f.is_off).map((f) => f.vehicle_id!));
   const dayOrders = idx.ordersByDate.get(date) ?? [];
   // 선박 "대기"로 싣고 있거나 나중 날 선적하는 상차 (다음 날 [[ 상차짐 ]] 표시용)
-  const waitingLoads = snap.daily_orders.filter((o) => o.kind === 'load' && o.vehicle_id && o.date < date && (o.ship_date ? o.ship_date >= date : isWaitShip(o.departure_ship)));
+  const waitingLoads = snap.daily_orders.filter((o) => o.kind === 'load' && o.vehicle_id && o.date < date && (o.ship_date ? o.ship_date >= date : waitsForShip(o)));
   const rows: BoardRow[] = [];
   const unknownLocation: Vehicle[] = [];
   const vehicles = [...snap.vehicles].sort((a, b) => a.sort_order - b.sort_order || a.short_no.localeCompare(b.short_no));

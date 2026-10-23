@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  assignVehicle, blankOrder, buildBoard, createOrder, isPerVehicleSplittable, newId, splitPerVehicle, planCreateRecurring, weekdayOf,
+  assignVehicle, waitsForShip, blankOrder, buildBoard, createOrder, isPerVehicleSplittable, newId, splitPerVehicle, planCreateRecurring, weekdayOf,
   type DailyOrder, type Kind, type Product, type Unit, type Weekday, type Zone,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
@@ -101,7 +101,7 @@ export function OrderInputPage() {
       });
       if (all.length > 1) store.toast(`${all.length}개 품목 저장`);
       if (split) store.toast(`대 단위는 1대씩 나눠 배차 대기로 ${split}건 더 만들었습니다`);
-      store.toast(!isLoad ? '저장' : `저장 · 반대 지역 하차도 ${o.same_day || o.arrival_offset === 0 ? '같은 날' : o.arrival_offset ? `${o.arrival_offset}일 뒤` : '다음 날'} 자동 입력${o.shipment === 'bulk' ? ' (벌크: 차량 없이 → 도착지에서 배차)' : ''}`);
+      store.toast(!isLoad ? '저장' : waitsForShip(o) ? '저장 · 선박 미정 → 내일 [[ 상차짐 ]]으로 이어짐' : `저장 · 반대 지역 하차도 ${o.same_day || o.arrival_offset === 0 ? '같은 날' : o.arrival_offset ? `${o.arrival_offset}일 뒤` : '다음 날'} 자동 입력${o.shipment === 'bulk' ? ' (벌크: 차량 없이 → 도착지에서 배차)' : ''}`);
     }
     nav(`/?date=${o.date}&zone=${o.zone}&focus=${o.id}`);
   };
@@ -168,7 +168,9 @@ export function OrderInputPage() {
         <span className="grow"><b>매주 반복으로 등록</b><br /><span className="muted">{fmtDate(o.date)}부터 앞으로 8주 자동 입력</span></span>
       </label>
       {repeat && <WeekdayChips value={weekdays} onChange={(v) => setWeekdays(v as Weekday[])} />}
-      {isLoad && <div className="banner blue">상차를 저장하면 반대편 {o.zone === 'land' ? '제주 오전 하차' : '육지 하차'}에 자동으로 들어갑니다 (기사는 비워 둠{o.shipment === 'bulk' ? ', 벌크라 차량도 비워 둠' : ''}).</div>}
+      {isLoad && (waitsForShip(o)
+        ? <div className="banner yellow">선박이 없거나 "대기"면 차량은 이 지역에 그대로 있고, 다음 날 일정에 <b>[[ 상차짐 ]]</b>으로 이어집니다. 선박을 정하면 그때 반대편 하차가 생깁니다.</div>
+        : <div className="banner blue">상차를 저장하면 반대편 {o.zone === 'land' ? '제주 오전 하차' : '육지 하차'}에 자동으로 들어갑니다 (기사는 비워 둠{o.shipment === 'bulk' ? ', 벌크라 차량도 비워 둠' : ''}).</div>)}
       <div className="row" style={{ marginTop: 16 }}>
         <button className="grow" onClick={() => nav(-1)}>취소</button>
         <button className="grow primary" onClick={save}>저장</button>

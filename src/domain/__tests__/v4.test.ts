@@ -446,3 +446,20 @@ describe('예전에 저장된 대기·익일선적 짐 바로잡기', () => {
     expect(zoneNext()).toBe('jeju');
   });
 });
+
+describe('선박 없는 상차 = 대기와 같음', () => {
+  it('선박이 없으면 반대편 하차 없이 그 지역에 그대로, 다음 날 [[ 상차짐 ]], 선박을 정하면 그때 하차', () => {
+    const tx = new Tx(baseSnapshot());
+    const load = createOrder(tx, blankOrder({ date: D, zone: 'land', kind: 'load', client_id: 'c-dm', vehicle_id: 'v9915' }));
+    expect(tx.list('daily_orders').filter((o) => o.linked_from_id === load.id)).toEqual([]);
+    const r = buildBoard(tx.result(), '2026-10-21').rows.find((x) => x.vehicle.id === 'v9915' && !x.secondary)!;
+    expect([r.zone, r.carried.map((o) => o.id)]).toEqual(['land', [load.id]]);
+    setRowShip(tx, { date: '2026-10-21', vehicle_id: 'v9915', zone: 'land', which: 'departure', ship: '제이엘', tag: '' });
+    expect(tx.list('daily_orders').find((o) => o.linked_from_id === load.id)!.date).toBe('2026-10-22');
+  });
+  it('당일 왕복은 선박 없어도 같은 날 하차', () => {
+    const tx = new Tx(baseSnapshot());
+    const load = createOrder(tx, blankOrder({ date: D, zone: 'land', kind: 'load', client_id: 'c-dm', vehicle_id: 'v9914', same_day: true }));
+    expect(tx.list('daily_orders').find((o) => o.linked_from_id === load.id)!.date).toBe(D);
+  });
+});

@@ -67,7 +67,7 @@ describe('용차 · 화주배차', () => {
 describe('상차 등록 후 품목 변경', () => {
   it('품목을 바꾸면 연결 하차 품목도 바뀐다', () => {
     const tx = new Tx(baseSnapshot());
-    const load = saveOrder(tx, blankOrder({ date: '2026-10-20', zone: 'land', kind: 'load', client_id: 'c-dm', product_id: 'p-gam' }));
+    const load = saveOrder(tx, blankOrder({ date: '2026-10-20', zone: 'land', kind: 'load', client_id: 'c-dm', product_id: 'p-gam', departure_ship: '제이엘' }));
     saveOrder(tx, { ...load, product_id: 'p-sin' });
     expect(linked(tx, load.id).product_id).toBe('p-sin');
   });

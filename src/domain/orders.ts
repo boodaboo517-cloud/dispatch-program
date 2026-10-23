@@ -148,8 +148,8 @@ export function syncLinkedUnload(tx: Tx, loadId: string): DailyOrder | undefined
   const load = tx.get('daily_orders', loadId);
   if (!load || load.kind !== 'load') return undefined;
   const cur = findLinkedUnload(tx, load.id);
-  // 선박이 "대기"면 아직 배를 안 타므로 반대편 하차를 만들지 않는다 (자동으로 만든 것은 지움, 직접 고친 것은 둠)
-  if (isWaitShip(load.departure_ship)) {
+  // 선박이 없거나 "대기"면 아직 배를 안 타므로 반대편 하차를 만들지 않는다 (자동으로 만든 것은 지움, 직접 고친 것은 둠)
+  if (waitsForShip(load)) {
     if (cur && !cur.edited_manually) tx.remove('daily_orders', cur.id);
     return undefined;
   }
@@ -329,11 +329,15 @@ export function setRowShip(
   syncShipCarryover(tx, vd.id);
 }
 
+/** 상차했는데 선박이 아직 없거나 "대기" (당일 왕복·벌크 제외): 차량은 그 지역에 그대로, 반대편 하차는 선박을 정할 때 */
+export const waitsForShip = (o: Pick<DailyOrder, 'kind' | 'same_day' | 'shipment' | 'ship_date' | 'departure_ship'>) =>
+  o.kind === 'load' && !o.same_day && o.shipment !== 'bulk' && !o.ship_date && (!o.departure_ship || isWaitShip(o.departure_ship));
+
 /** 그날 이 차량에 실려 있는 "대기" 짐: 이전 날 같은 지역에서 상차했고, 아직 배를 안 탔거나 이 날 선적하는 것 (최대 14일) */
 export function carriedLoads(orders: DailyOrder[], vehicleId: string, date: string, zone: Zone | null): DailyOrder[] {
   return orders.filter((o) => o.kind === 'load' && o.vehicle_id === vehicleId && o.date < date && diffDays(date, o.date) <= 14
     && (!zone || o.zone === zone)
-    && (o.ship_date ? o.ship_date >= date : isWaitShip(o.departure_ship)));
+    && (o.ship_date ? o.ship_date >= date : waitsForShip(o)));
 }
 
 function rowOrders(tx: Tx, date: string, vehicleId: string, kind: Kind) {
@@ -465,7 +469,7 @@ export function workText(o: Pick<DailyOrder, 'kind' | 'work_time' | 'work_detail
 export function repairShipLinks(tx: Tx, fromDate: string) {
   for (const o of tx.list('daily_orders')) {
     if (o.kind !== 'load' || o.date < fromDate) continue;
-    if (isWaitShip(o.departure_ship) || isNextDayShip(o.departure_ship) || o.ship_date) syncLinkedUnload(tx, o.id);
+    if (waitsForShip(o) || isNextDayShip(o.departure_ship) || o.ship_date) syncLinkedUnload(tx, o.id);
   }
   for (const vd of tx.list('vehicle_days')) {
     if (vd.date < fromDate) continue;
