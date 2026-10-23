@@ -323,3 +323,8 @@ tr.err td { background: var(--red-soft); }
 /* 오전·오후 칸 비고만 */
 .cell.rownote { background: #fffbeb; color: #92400e; font-weight: 600; white-space: normal; font-size: 12px; line-height: 1.3; }
 .paper .ps-rownote { color: #92400e; font-weight: 600; font-size: .72em; }
+
+/* 더보기 메뉴: 아이콘 위, 글자 아래 (긴 글자는 줄바꿈) */
+.menu-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.menu-tiles button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 76px; padding: 8px 4px; font-size: 14px; line-height: 1.25; text-align: center; word-break: keep-all; white-space: normal; }
+.menu-tiles .ic { font-size: 26px; line-height: 1; }
