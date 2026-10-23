@@ -10,6 +10,35 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // 앱 파일을 못 읽어 흰 화면만 남으면(예: 업데이트 직후 옛 캐시) 복구 버튼을 보여 준다. 데이터는 그대로.
+      (function () {
+        var errs = [];
+        window.addEventListener('error', function (e) { errs.push(e.message || (e.target && e.target.src) || 'error'); }, true);
+        window.addEventListener('unhandledrejection', function (e) { errs.push(String(e.reason && e.reason.message || e.reason)); });
+        setTimeout(function () {
+          var root = document.getElementById('root');
+          if (window.__appStarted && root && root.children.length) return;
+          if (root && root.children.length) return;
+          var box = document.createElement('div');
+          box.style.cssText = 'padding:20px;font-size:17px;line-height:1.5;font-family:sans-serif';
+          box.innerHTML = '<h2 style="color:#b91c1c">화면을 불러오지 못했습니다</h2><p>입력한 데이터는 지워지지 않았습니다.</p>' +
+            '<button id="rf" style="width:100%;min-height:56px;font-size:18px;background:#b91c1c;color:#fff;border:0;border-radius:10px">앱 다시 받기 (데이터 유지)</button>' +
+            '<p style="color:#666;font-size:14px">계속 안 되면 이 화면을 캡처해서 보내 주세요.</p><pre id="er" style="white-space:pre-wrap;font-size:12px;background:#f3f4f6;padding:10px"></pre>';
+          document.body.appendChild(box);
+          document.getElementById('er').textContent = errs.join('\n') || '(오류 메시지 없음)';
+          document.getElementById('rf').onclick = function () {
+            var done = function () { location.replace(location.pathname + '?r=' + Date.now()); };
+            try {
+              Promise.all([
+                navigator.serviceWorker ? navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); }) : null,
+                window.caches ? caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); }) : null,
+              ]).then(done, done);
+            } catch (x) { done(); }
+          };
+        }, 8000);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

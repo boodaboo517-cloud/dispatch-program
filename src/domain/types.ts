@@ -434,6 +434,21 @@ export type Mutation =
   | { table: TableName; op: 'upsert'; row: { id: string } & Record<string, unknown> }
   | { table: TableName; op: 'delete'; id: string };
 
+/** 예전 버전이 저장한 데이터 보정: 빠진 표는 빈 목록, 배열이어야 할 칸이 비어 있으면 [] */
+export function repairSnapshot(raw: Partial<Snapshot> | null | undefined): Snapshot {
+  const s = emptySnapshot();
+  for (const t of TABLES) {
+    const rows = (raw as Record<string, unknown> | null | undefined)?.[t];
+    if (Array.isArray(rows)) (s as unknown as Record<string, unknown[]>)[t] = rows.filter((r) => r && typeof r === 'object');
+  }
+  s.drivers = s.drivers.map((d) => ({ ...d, name: d.name ?? '', shift: d.shift ?? '', affiliation: d.affiliation ?? '', work_days: Array.isArray(d.work_days) ? d.work_days : [] }));
+  s.ships = s.ships.map((x) => ({ ...x, name: x.name ?? '', port_times: Array.isArray(x.port_times) ? x.port_times : [] }));
+  s.clients = s.clients.map((c) => ({ ...c, name: c.name ?? '' }));
+  s.products = s.products.map((p) => ({ ...p, name: p.name ?? '' }));
+  s.vehicles = s.vehicles.map((v) => ({ ...v, short_no: v.short_no ?? '', plate: v.plate ?? '' }));
+  return s;
+}
+
 export function emptySnapshot(): Snapshot {
   const s = {} as Snapshot;
   for (const t of TABLES) (s as unknown as Record<string, unknown[]>)[t] = [];

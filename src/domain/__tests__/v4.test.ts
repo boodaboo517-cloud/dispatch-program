@@ -3,7 +3,7 @@ import { buildBoard, lastStart, missingDriver, needsDriver, setDriverSeq, setRow
 import { blankOrder, saveOrder, workText } from '../orders.ts';
 import { Tx } from '../tx.ts';
 import { blankField, saveFieldAssignment } from '../fieldwork.ts';
-import { ON_CALL_SHIFT, type Driver, type Weekday } from '../types.ts';
+import { ON_CALL_SHIFT, repairSnapshot, type Driver, type Weekday } from '../types.ts';
 import { assignedDriverIds, fixedOffDays, offByZone, weeklyOffOn, workDaysFromOff } from '../workforce.ts';
 import { baseSnapshot, resetIds } from './fixtures.ts';
 
@@ -216,5 +216,17 @@ describe('현장근무자 휴무', () => {
     expect(offByZone(tx.result(), D).jeju.map((d) => d.id)).toEqual(['f2']);
     // 생성 기간 밖(먼 미래)은 추정하지 않음
     expect(offByZone(tx.result(), '2027-02-01').jeju).toEqual([]);
+  });
+});
+
+describe('예전 버전 데이터 보정', () => {
+  it('빠진 표·null 배열·빈 행을 채워서 화면이 깨지지 않게', () => {
+    const raw = { drivers: [{ id: 'd1', name: null, work_days: null, shift: null }, null], ships: [{ id: 's1', name: '제이엘', port_times: null }], vehicles: undefined } as never;
+    const s = repairSnapshot(raw);
+    expect(s.drivers).toEqual([expect.objectContaining({ id: 'd1', name: '', work_days: [], shift: '' })]);
+    expect(s.ships[0].port_times).toEqual([]);
+    expect(s.vehicles).toEqual([]);
+    expect(s.recurring_field_work).toEqual([]);
+    expect(() => offByZone(s, D)).not.toThrow();
   });
 });

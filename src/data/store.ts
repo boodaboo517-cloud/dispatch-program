@@ -3,7 +3,7 @@
 import { del, get, set } from 'idb-keyval';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import {
-  TABLES, Tx, addDays, applyMutations, emptySnapshot, planFieldExtension, planRecurringExtension, toBatches,
+  TABLES, Tx, addDays, applyMutations, emptySnapshot, planFieldExtension, repairSnapshot, planRecurringExtension, toBatches,
   type Mutation, type Role, type Snapshot, type TableName,
 } from '../domain/index.ts';
 import { seoulToday } from '../lib/time.ts';
@@ -103,7 +103,7 @@ class Store {
     const cached = await get<Snapshot>(this.cacheKey()).catch(() => undefined);
     const outbox = await get<Mutation[]>(`outbox:${session.userId}`).catch(() => undefined);
     for (const m of outbox ?? []) this.outbox.set(key(m), m);
-    if (cached) this.setState({ snap: { ...emptySnapshot(), ...cached }, ready: true, pending: this.outbox.size });
+    if (cached) this.setState({ snap: repairSnapshot(cached), ready: true, pending: this.outbox.size });
 
     if (session.demo) {
       if (!cached) this.setState({ snap: initialSnapshot(demoDataKind(), seoulToday()), ready: true });
@@ -136,7 +136,7 @@ class Store {
   /** 백업 파일 복원 (데모 모드: 이 기기 데이터를 통째로 바꾼다) */
   replaceSnapshot(snap: Snapshot) {
     this.outbox.clear();
-    this.setState({ snap: { ...emptySnapshot(), ...snap }, pending: 0 });
+    this.setState({ snap: repairSnapshot(snap), pending: 0 });
     void this.persist();
   }
 
@@ -252,7 +252,7 @@ class Store {
   private async refreshTable(t: TableName) {
     const rows = await this.fetchTable(t, this.state.loadedFrom);
     if (!rows) return;
-    this.setState({ snap: { ...this.state.snap, [t]: this.mergeWithOutbox(t, rows.map((r) => normalize(t, r))) } });
+    this.setState({ snap: repairSnapshot({ ...this.state.snap, [t]: this.mergeWithOutbox(t, rows.map((r) => normalize(t, r))) }) });
   }
 
   async refresh() {
