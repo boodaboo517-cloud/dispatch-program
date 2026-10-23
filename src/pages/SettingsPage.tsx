@@ -1,7 +1,7 @@
 // 엑셀·설정·사용자 권한
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Tx, newId, type Role, type Snapshot } from '../domain/index.ts';
+import { Tx, type Role, type Snapshot } from '../domain/index.ts';
 import { BackupError, backupSummary, downloadBackup, lastBackupAt, parseBackup, readBackupFile, uploadPlan } from '../data/backup.ts';
 import { emailStatus, lastEmailBackupAt, sendBackupEmail, type EmailStatus } from '../data/emailBackup.ts';
 import { store } from '../data/store.ts';
@@ -13,16 +13,10 @@ import { Editable } from '../ui/Editable.tsx';
 import { useRole, useSnap, useStore } from '../ui/hooks.ts';
 import { setting } from '../ui/labels.ts';
 import { InstallCard } from '../ui/InstallCard.tsx';
+import { saveSetting } from '../ui/Phrases.tsx';
 import { reloadFresh } from '../lib/recover.ts';
 import { Sheet, useSheet } from '../ui/Sheet.tsx';
 
-function saveSetting(key: string, value: unknown) {
-  store.run((tx) => {
-    const cur = tx.list('settings').find((s) => s.key === key);
-    if (cur) tx.update('settings', cur.id, { value });
-    else tx.insert('settings', { id: newId(), key, value });
-  });
-}
 
 function UploadPreview({ rows, data, close }: { rows: PreviewRow[]; data: Awaited<ReturnType<typeof parseUpload>>; close: () => void }) {
   const errors = rows.filter((r) => r.errors.length).length;

@@ -9,6 +9,7 @@ import { STORAGE_LABEL, ZONE_LABEL, setting } from './labels.ts';
 import { PickerList, Seg, type PickSection } from './Picker.tsx';
 import { Sheet, useSheet } from './Sheet.tsx';
 import { WorkTypeSheet } from './WorkTypeSheet.tsx';
+import { PhraseChips } from './Phrases.tsx';
 import { ShipEditSheet, blankShip } from './ShipEditSheet.tsx';
 import { useRole, useSnap } from './hooks.ts';
 
@@ -147,8 +148,15 @@ function ShipSheet(p: { zone: Zone | null; which: 'arrival' | 'departure'; curre
         free={{ label: '직접 쓰기 (예: 제주로지 예약)', onFree: (t) => t.trim() && finish({ ship: t.trim(), tag }) }}
         top={<>
           {p.current.ship && <div className="list-item" onClick={() => finish({ ship: null, tag: '' })}><span style={{ color: 'var(--red)' }}>선박 지우기 (현재: {p.current.ship})</span></div>}
-          {p.which === 'departure' && <div className="list-item" onClick={() => finish({ ship: '익일선적', tag })}><span><b>📅 익일선적</b> <span className="muted small">다음 날 선적 → 그다음 날 도착 (+2일)</span></span></div>}
-          {p.which === 'departure' && <div className="list-item" onClick={() => finish({ ship: '대기', tag })}><span><b>⏸ 대기</b> <span className="muted small">배를 안 탐 · 다음 날도 이 지역에 그대로</span></span></div>}
+          {p.which === 'departure' && (
+            <div style={{ padding: '6px 12px' }}>
+              <PhraseChips settingKey="ship_phrases" label="자주 쓰는 문구 · 📅 익일선적 = 다음 날 선적(+2일 도착), ⏸ 대기 = 배 안 탐" onPick={(ph) => finish({ ship: ph, tag })}
+                fixed={<>
+                  <button type="button" className="chip" onClick={() => finish({ ship: '익일선적', tag })}>📅 익일선적</button>
+                  <button type="button" className="chip" onClick={() => finish({ ship: '대기', tag })}>⏸ 대기</button>
+                </>} />
+            </div>
+          )}
           {staff && <div className="list-item" onClick={() => sheet.open((c) => <ShipEditSheet ship={blankShip(s.ships.length)} close={c} />)}><span style={{ color: 'var(--blue)' }}>＋ 새 선박 등록 (선박명·시간)</span></div>}
         </>}
       />
@@ -156,7 +164,7 @@ function ShipSheet(p: { zone: Zone | null; which: 'arrival' | 'departure'; curre
   );
 }
 
-function TextSheet(p: { title: string; initial: string; phrases: string[]; close: () => void; done: (r: string | null) => void }) {
+function TextSheet(p: { title: string; initial: string; settingKey: string; close: () => void; done: (r: string | null) => void }) {
   const [v, setV] = useState(p.initial);
   const finish = (r: string | null) => {
     p.done(r);
@@ -165,11 +173,8 @@ function TextSheet(p: { title: string; initial: string; phrases: string[]; close
   return (
     <Sheet title={p.title} onClose={() => finish(null)} footer={<><button onClick={() => finish('')}>비우기</button><button className="primary" onClick={() => finish(v)}>입력</button></>}>
       <textarea value={v} onChange={(e) => setV(e.target.value)} style={{ marginTop: 10 }} />
-      <div className="section-label" style={{ background: 'transparent', padding: '8px 0 4px' }}>자주 쓰는 문구 (누르면 추가)</div>
-      <div className="row wrap">
-        {p.phrases.map((ph) => (
-          <button key={ph} className="chip" onClick={() => setV((x) => (x ? `${x} ${ph}` : ph))}>{ph}</button>
-        ))}
+      <div style={{ marginTop: 8 }}>
+        <PhraseChips settingKey={p.settingKey} label="자주 쓰는 문구 (누르면 넣기)" onPick={(ph) => setV((x) => (x ? `${x} ${ph}` : ph))} />
       </div>
     </Sheet>
   );
@@ -250,7 +255,7 @@ export function usePickers() {
       ask<{ ship: string | null; tag: ShipTag } | null>((close, done) => <ShipSheet zone={zone} which={which} current={current} close={close} done={done} />),
 
     memo: (initial: string, title = '비고') =>
-      ask<string | null>((close, done) => <TextSheet title={title} initial={initial} phrases={setting<string[]>(snap(), 'memo_phrases', [])} close={close} done={done} />),
+      ask<string | null>((close, done) => <TextSheet title={title} initial={initial} settingKey={title === '업무' ? 'task_phrases' : 'memo_phrases'} close={close} done={done} />),
 
     status: (date: string, zone: Zone | null, current: { status: DayStatus | 'field'; memo: string }, staff: boolean) =>
       ask<StatusResult | null>((close, done) => <StatusSheet date={date} zone={zone} current={current} staff={staff} close={close} done={done} />),

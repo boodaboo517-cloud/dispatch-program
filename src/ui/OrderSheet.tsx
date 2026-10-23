@@ -9,6 +9,7 @@ import {
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
 import { QtyInput } from './QtyInput.tsx';
+import { PhraseChips } from './Phrases.tsx';
 import { fmtDate, fmtStamp } from '../lib/time.ts';
 import { useRole, useSnap, useWatch } from './hooks.ts';
 import {
@@ -371,6 +372,7 @@ export function PlaceFields(p: { pickup: string; dropoff: string; onChange: (v: 
 export function WorkFields(p: { kind: DailyOrder['kind']; time: string; detail: string; onChange: (v: { work_time?: string; work_detail?: string }) => void }) {
   const word = p.kind === 'load' ? '상차' : '하차';
   return (
+    <>
     <div className="row" style={{ alignItems: 'flex-end' }}>
       <label className="field" style={{ width: 130, flex: 'none' }}><span>{word} 시간</span>
         <input type="time" value={p.time} onChange={(e) => p.onChange({ work_time: e.target.value })} />
@@ -379,6 +381,8 @@ export function WorkFields(p: { kind: DailyOrder['kind']; time: string; detail: 
         <input value={p.detail} placeholder={`예: 막걸리공병 ${word}지원`} onChange={(e) => p.onChange({ work_detail: e.target.value })} />
       </label>
     </div>
+    <PhraseChips settingKey="work_phrases" defaults={['하차지원', '상차지원', '공병 회수']} label="자주 쓰는 세부 내용" onPick={(ph) => p.onChange({ work_detail: p.detail ? `${p.detail} ${ph}` : ph })} />
+    </>
   );
 }
 
