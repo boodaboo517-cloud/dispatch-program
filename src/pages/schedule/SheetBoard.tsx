@@ -156,15 +156,16 @@ function WaitingRow({ snap, o }: { snap: Snapshot; o: DailyOrder }) {
 export function SheetBoard(p: { zone: Zone; date: string; rows: BoardRow[]; waiting: DailyOrder[]; external: DailyOrder[]; field: FieldAssignment[] }) {
   const snap = useSnap();
 
-  const off = offByZone(snap, p.date)[p.zone];
+  // 비지정 근무자(자유롭게 일함)는 근무·대기·휴무 명단에서 뺀다 (배차된 차량 줄에는 그대로 나옴)
+  const off = offByZone(snap, p.date)[p.zone].filter((d) => !d.unlisted);
   // 근무자: 이 표 차량에 배차된 기사(오전·오후·동승) + 이 지역 근무일인데 아직 차량 없는 기사(대기)
   const offIds = new Set(off.map((d) => d.id));
   const assignedIds = new Set(p.rows.flatMap((r) => [r.driverId, r.loadDriverId, r.helperId]).filter((x): x is string => !!x));
   const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'ko');
-  const working = snap.drivers.filter((d) => assignedIds.has(d.id)).sort(byName);
+  const working = snap.drivers.filter((d) => assignedIds.has(d.id) && !d.unlisted).sort(byName);
   const busyElsewhere = new Set(snap.vehicle_days.filter((v) => v.date === p.date).flatMap((v) => [v.driver_id, v.load_driver_id, v.helper_driver_id]));
   const standby = snap.drivers
-    .filter((d) => d.staff_type === '기사' && d.shift !== ON_CALL_SHIFT && driverZone(d) === p.zone && !offIds.has(d.id) && !assignedIds.has(d.id) && !busyElsewhere.has(d.id) && isDriverWorking(snap, d, p.date))
+    .filter((d) => d.staff_type === '기사' && d.shift !== ON_CALL_SHIFT && !d.unlisted && driverZone(d) === p.zone && !offIds.has(d.id) && !assignedIds.has(d.id) && !busyElsewhere.has(d.id) && isDriverWorking(snap, d, p.date))
     .sort(byName);
   return (
     <table className={`paper ${p.zone}`}>
@@ -181,7 +182,7 @@ export function SheetBoard(p: { zone: Zone; date: string; rows: BoardRow[]; wait
         {(working.length > 0 || standby.length > 0) && (
           <tr className="fieldrow workrow first">
             <td className="site"><Fit>기사 근무</Fit></td>
-            <td className="body" colSpan={7}><Fit>{working.map((d) => d.name).join(', ')}{standby.length ? <span className="muted">{working.length ? '  ·  ' : ''}대기: {standby.map((d) => d.name).join(', ')}</span> : null}</Fit></td>
+            <td className="body" colSpan={7}><Fit>{working.map((d) => d.name).join(', ')}{standby.length ? <span className="ps-standby">{working.length ? '  ·  ' : ''}대기: {standby.map((d) => d.name).join(', ')}</span> : null}</Fit></td>
           </tr>
         )}
         {off.some((d) => d.staff_type === '기사') && (
@@ -201,7 +202,7 @@ export function SheetExtras({ date, field }: { date: string; field: FieldAssignm
   const snap = useSnap();
   const rows = sitesGrouped(snap, field).groups.flatMap((g) => g.rows);
   const offAll = offByZone(snap, date);
-  const fieldOff = [...offAll.jeju, ...offAll.land].filter((d) => d.staff_type !== '기사').sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  const fieldOff = [...offAll.jeju, ...offAll.land].filter((d) => d.staff_type !== '기사' && !d.unlisted).sort((a, b) => a.name.localeCompare(b.name, 'ko'));
   const siteName = (f: FieldAssignment) => snap.field_sites.find((x) => x.id === f.site_id)?.name ?? '근무지 미정';
   return (
     <table className="paper fieldwork">

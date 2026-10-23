@@ -195,6 +195,7 @@ function DriverSheet({ d, close }: { d: Driver; close: () => void }) {
         <OffDaysField d={cur} />
       )}
       <Editable label="근무 지역" value={cur.zone ?? guessDriverZone(cur)} options={[{ value: 'jeju', label: '제주' }, { value: 'land', label: '육지' }]} onSave={(v) => save({ zone: v as Zone })} />
+      <Editable label="비지정 근무자" value={cur.unlisted ? 'yes' : 'no'} options={[{ value: 'no', label: '아니오 (일정표 근무·휴무 명단에 표시)' }, { value: 'yes', label: '예 (자유 근무 · 명단에서 빼기)' }]} onSave={(v) => save({ unlisted: v === 'yes' })} />
       <TeamField value={cur.team ?? ''} onSave={(v) => save({ team: v })} />
       <Editable label="소속" value={cur.affiliation} onSave={(v) => save({ affiliation: v })} />
       <Editable label="비고" value={cur.memo ?? ''} placeholder="예: 대형면허, 야간 가능, 주 3일만" multiline onSave={(v) => save({ memo: v })} />
@@ -273,7 +274,7 @@ export function FleetPage() {
                         const off = snap.field_assignments.some((f) => f.date === today && f.staff_id === d.id && f.is_off);
                         return (
                           <div key={d.id} className="list-item" onClick={() => staff && sheet.open((c) => <DriverSheet d={d} close={c} />)}>
-                            <div className="grow"><b>{d.name}</b> <span className="muted">{d.shift} {d.affiliation}</span>
+                            <div className="grow"><b>{d.name}</b> {d.unlisted && <span className="badge">비지정</span>} <span className="muted">{d.shift} {d.affiliation}</span>
                               <div className="muted small">{d.shift === ON_CALL_SHIFT ? '원할 때만 출근' : fixedOffDays(d).length ? <>휴무 <b style={{ color: 'var(--red)' }}>{weekdaysLabel(fixedOffDays(d))}</b></> : '매일 근무'} {d.phone}</div>
                               {d.memo && <div className="small" style={{ color: '#92400e' }}>📝 {d.memo}</div>}
                             </div>

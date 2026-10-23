@@ -106,6 +106,8 @@ export interface Driver extends Base {
   team?: string;
   /** 근무 지역 (일정표 휴무 줄을 육지·제주로 나눔). 비우면 따로 표시 */
   zone?: Zone | null;
+  /** 비지정 근무자: 자유롭게 일해서 일정표 근무·대기·휴무 명단에 넣지 않음 */
+  unlisted?: boolean;
 }
 
 /** 근무 지역 추정: 상주(부산·서울)·목포 소속은 육지, 나머지는 제주 */
