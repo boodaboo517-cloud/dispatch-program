@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  blankOrder, buildBoard, createOrder, newId, planCreateRecurring, weekdayOf,
+  blankOrder, buildBoard, createOrder, newId, splitPerVehicle, planCreateRecurring, weekdayOf,
   type DailyOrder, type Kind, type Product, type Unit, type Weekday, type Zone,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
@@ -85,8 +85,15 @@ export function OrderInputPage() {
       store.toast(`매주 반복 등록 · ${created}건 생성`);
     } else {
       const all = [o, ...extraOrders()];
-      store.run((tx) => { for (const x of all) createOrder(tx, x); });
+      let split = 0;
+      store.run((tx) => {
+        for (const x of all) {
+          createOrder(tx, x);
+          split += splitPerVehicle(tx, x.id).length - 1;
+        }
+      });
       if (all.length > 1) store.toast(`${all.length}개 품목 저장`);
+      if (split) store.toast(`대 단위는 1대씩 나눠 배차 대기로 ${split}건 더 만들었습니다`);
       store.toast(!isLoad ? '저장' : `저장 · 반대 지역 하차도 ${o.same_day || o.arrival_offset === 0 ? '같은 날' : o.arrival_offset ? `${o.arrival_offset}일 뒤` : '다음 날'} 자동 입력${o.shipment === 'bulk' ? ' (벌크: 차량 없이 → 도착지에서 배차)' : ''}`);
     }
     nav(`/?date=${o.date}&zone=${o.zone}&focus=${o.id}`);

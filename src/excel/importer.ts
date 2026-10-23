@@ -1,7 +1,7 @@
 // 엑셀 업로드 (거래처·품목 / 차량·기사 / 오더 일괄) — 미리보기 후 반영, 오류 행 표시
 import type { Worksheet } from 'exceljs';
 import {
-  SHIFT_PRESETS, Tx, blankOrder, createOrder, newId,
+  SHIFT_PRESETS, Tx, blankOrder, createOrder, newId, splitPerVehicle,
   type CalcMethod, type Kind, type ShipTag, type Snapshot, type Storage, type Unit, type VehicleType, type Weekday, type Zone,
 } from '../domain/index.ts';
 import { download, header, newWorkbook } from './common.ts';
@@ -196,13 +196,14 @@ export function planUpload(snap: Snapshot, data: Record<string, { line: number; 
     const shipFields = kind === 'load'
       ? { departure_ship: ship || null, departure_ship_tag: (tag || '') as ShipTag }
       : { arrival_ship: ship || null, arrival_ship_tag: (tag || '') as ShipTag };
-    createOrder(t, blankOrder({
+    const created = createOrder(t, blankOrder({
       date, zone, kind, client_id: client?.id ?? null, client_text: client ? '' : cname,
       product_id: product?.id ?? null, product_text: product ? '' : pname,
       region: region || product?.default_region || '', quantity: num(qty) ?? product?.default_quantity ?? null,
       unit: (unit || product?.default_unit || '') as Unit, memo,
       vehicle_id: vehicle?.id ?? null, driver_id: findDriver(drv)?.id ?? null, ...shipFields,
     }));
+    splitPerVehicle(t, created.id); // "3대" → 1대씩 따로 배차
   }
   return preview;
 }

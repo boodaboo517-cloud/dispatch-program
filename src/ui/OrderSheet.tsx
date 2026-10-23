@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   CALC_LABEL, CARRIER_LABEL, EXTRA_PRESETS, Tx, acceptLinkPending, arrivalOffset, buildBoard, transportSummary,
   type CarrierType, type Shipment, computeRevenue, deleteOrder, findLinkedUnload, ignoreLinkPending, newId,
-  createOrder, saveOrder, saveRevenue, workText, setProductDefaultPrice, won,
+  createOrder, isPerVehicleSplittable, saveOrder, saveRevenue, splitPerVehicle, workText, setProductDefaultPrice, won,
   type BillingStatus, type CalcMethod, type DailyOrder, type OrderRevenue, type Unit,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
@@ -91,11 +91,13 @@ export function OrderSheet({ orderId, close, startEditing = false }: { orderId: 
   const calc = computeRevenue({ ...r, quantity: r.quantity ?? o.quantity });
 
   const save = () => {
+    let split = 0;
     store.run((tx) => {
       if (draft) saveOrder(tx, draft);
       if (rev) saveRevenue(tx, { ...rev, quantity: rev.quantity ?? (draft ?? order).quantity });
+      if (draft) split = splitPerVehicle(tx, draft.id).length - 1;
     });
-    store.toast('저장됨');
+    store.toast(split ? `저장됨 · 1대씩 나눠 배차 대기 ${split}건 추가` : '저장됨');
     setDraft(null);
     setRev(null);
   };
@@ -140,6 +142,7 @@ export function OrderSheet({ orderId, close, startEditing = false }: { orderId: 
               <button className="danger" onClick={remove}>삭제</button>
               {order.client_id && order.source !== 'linked' && <button onClick={() => void addSameClient()}>＋ 같은 거래처 품목</button>}
               {!order.vehicle_id && <button onClick={() => void moveDate()}>📅 날짜 변경</button>}
+              {isPerVehicleSplittable(order) && <button onClick={() => { let n = 0; store.run((tx) => { n = splitPerVehicle(tx, order.id).length; }); store.toast(`1대씩 ${n}건으로 나눴습니다 (나머지는 배차 대기)`); close(); }}>대당 나누기</button>}
               <button className="primary" onClick={() => setDraft({ ...order })}>수정</button>
             </>
           )}
@@ -399,6 +402,11 @@ export function QuickQtySheet({ orderId, close, onAddMore }: { orderId: string; 
   const done = () => {
     if (remember && product && (o.quantity != null || o.unit)) {
       store.run((tx) => tx.update('products', product.id, { default_quantity: o.quantity, default_unit: o.unit }));
+    }
+    if (isPerVehicleSplittable(o)) {
+      const n = o.quantity!;
+      store.run((tx) => { splitPerVehicle(tx, o.id); });
+      store.toast(`${n}대 → 1대씩 ${n}건으로 나눴습니다 (나머지는 배차 대기)`);
     }
     close();
   };

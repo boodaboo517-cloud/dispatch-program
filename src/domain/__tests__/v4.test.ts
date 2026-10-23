@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { buildBoard, lastStart, missingDriver, needsDriver, setDriverSeq, setRowDriver, setRowHelper, setRowStart, startText } from '../board.ts';
 import { blankOrder, saveOrder, workText } from '../orders.ts';
 import { Tx, applyMutations } from '../tx.ts';
+import { createOrder, splitPerVehicle } from '../actions.ts';
 import { blankField, planCreateFieldRecurring, saveFieldAssignment } from '../fieldwork.ts';
 import { ON_CALL_SHIFT, repairSnapshot, type Driver, type Weekday } from '../types.ts';
 import { assignedDriverIds, fixedOffDays, offByZone, planStaffFixedOff, weeklyOffOn, workDaysFromOff } from '../workforce.ts';
@@ -247,5 +248,28 @@ describe('현장근무자 휴무 수정', () => {
     expect(snap.field_assignments.some((f) => f.date === '2026-10-22' && f.staff_id === 'f1')).toBe(true);
     expect(offByZone(snap, wed).jeju.map((d) => d.id)).toEqual(['f1']);
     expect(offByZone(snap, '2026-10-22').jeju).toEqual([]);
+  });
+});
+
+describe('대 단위 2대 이상 → 1대씩 나눠 배차', () => {
+  it('3대 상차 → 1대씩 3건, 첫 건만 차량 유지, 나머지는 배차 대기, 반대편 하차도 3건', () => {
+    const tx = new Tx(baseSnapshot());
+    const load = createOrder(tx, blankOrder({ date: D, zone: 'land', kind: 'load', client_id: 'c-dm', quantity: 3, unit: '대', vehicle_id: 'v9915', departure_ship: '제이엘' }));
+    const ids = splitPerVehicle(tx, load.id);
+    expect(ids).toHaveLength(3);
+    const loads = ids.map((id) => tx.get('daily_orders', id)!);
+    expect(loads.map((o) => [o.quantity, o.unit, o.vehicle_id])).toEqual([[1, '대', 'v9915'], [1, '대', null], [1, '대', null]]);
+    const unloads = tx.list('daily_orders').filter((o) => o.kind === 'unload');
+    expect(unloads).toHaveLength(3);
+    expect(unloads.every((u) => u.quantity === 1)).toBe(true);
+    expect(buildBoard(tx.result(), D).waiting.land).toHaveLength(2);
+  });
+  it('1대·파렛트는 나누지 않음', () => {
+    const tx = new Tx(baseSnapshot());
+    const a = createOrder(tx, blankOrder({ date: D, zone: 'land', kind: 'unload', client_id: 'c-dm', quantity: 1, unit: '대' }));
+    const b = createOrder(tx, blankOrder({ date: D, zone: 'land', kind: 'unload', client_id: 'c-dm', quantity: 10, unit: '파렛트' }));
+    expect(splitPerVehicle(tx, a.id)).toEqual([a.id]);
+    expect(splitPerVehicle(tx, b.id)).toEqual([b.id]);
+    expect(tx.list('daily_orders')).toHaveLength(2);
   });
 });
