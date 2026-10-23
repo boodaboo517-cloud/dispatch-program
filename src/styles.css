@@ -298,7 +298,6 @@ tr.err td { background: var(--red-soft); }
 .paper tr.offrow td { background: #fef2f2; }
 /* 차량은 배정됐는데 기사가 없음 */
 .nodrv-badge { display: inline-block; background: var(--red); color: #fff; font-weight: 800; border-radius: 6px; padding: 1px 6px; font-size: 13px; }
-.paper.fieldoff th.zone { background: #475569; }
 /* 현장근무 사람별 */
 .fp-row { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 6px 0; }
 .fp-row.off { background: #fef2f2; }

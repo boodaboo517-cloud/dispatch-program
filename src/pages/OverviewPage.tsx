@@ -6,7 +6,7 @@ import { seoulToday } from '../lib/time.ts';
 import { useBoard, useIsWide, useRole, useSnap } from '../ui/hooks.ts';
 import { setting } from '../ui/labels.ts';
 import { DateBar } from './SchedulePage.tsx';
-import { FieldOffTable, SheetBoard, SheetExtras } from './schedule/SheetBoard.tsx';
+import { SheetBoard, SheetExtras } from './schedule/SheetBoard.tsx';
 
 export function OverviewPage({ embedded }: { embedded?: boolean } = {}) {
   const [params, setParams] = useSearchParams();
@@ -25,7 +25,6 @@ export function OverviewPage({ embedded }: { embedded?: boolean } = {}) {
       <SheetBoard zone="land" date={date} rows={board.land} waiting={board.waiting.land} external={board.external.land} field={board.field} />
       <SheetBoard zone="jeju" date={date} rows={board.jeju} waiting={board.waiting.jeju} external={board.external.jeju} field={board.field} />
       <SheetExtras date={date} field={board.field} />
-      <FieldOffTable date={date} />
       {wide && staff && (
         <div className="row" style={{ justifyContent: 'flex-end', marginTop: 8 }}>
           <button className="chip" onClick={() => exportSchedule(snap, date, date)}>⬇ 엑셀</button>

@@ -168,7 +168,10 @@ function FieldRows({ snap, rows }: { snap: Snapshot; rows: FieldAssignment[] }) 
 export function SheetBoard(p: { zone: Zone; date: string; rows: BoardRow[]; waiting: DailyOrder[]; external: DailyOrder[]; field: FieldAssignment[] }) {
   const snap = useSnap();
   const fieldRows = sitesGrouped(snap, p.field).groups.filter((g) => g.site.zone === p.zone).flatMap((g) => g.rows);
-  const off = offByZone(snap, p.date)[p.zone];
+  const offAll = offByZone(snap, p.date);
+  const off = offAll[p.zone];
+  // 현장(현장·사무 직원) 휴무는 지역 구분 없이 제주 표 맨 아래 한 줄로
+  const fieldOff = [...offAll.jeju, ...offAll.land].filter((d) => d.staff_type !== '기사').sort((a, b) => a.name.localeCompare(b.name, 'ko'));
   return (
     <table className={`paper ${p.zone}`}>
       <Cols />
@@ -187,6 +190,12 @@ export function SheetBoard(p: { zone: Zone; date: string; rows: BoardRow[]; wait
             <td className="body" colSpan={7}><Fit>{off.filter((d) => d.staff_type === '기사').map((d) => d.name).join(', ')}</Fit></td>
           </tr>
         )}
+        {p.zone === 'jeju' && fieldOff.length > 0 && (
+          <tr className={`fieldrow offrow${off.some((d) => d.staff_type === '기사') ? '' : ' first'}`}>
+            <td className="site"><Fit>현장 휴무</Fit></td>
+            <td className="body" colSpan={7}><Fit>{fieldOff.map((d) => d.name).join(', ')}</Fit></td>
+          </tr>
+        )}
       </tbody>
     </table>
   );
@@ -202,30 +211,6 @@ export function SheetExtras({ field }: { date?: string; field: FieldAssignment[]
       <Cols />
       <tbody>
         <FieldRows snap={snap} rows={rest} />
-      </tbody>
-    </table>
-  );
-}
-
-/** 일정표 맨 밑: 현장(현장·사무 직원) 휴무 표 — 육지·제주 줄로 */
-export function FieldOffTable({ date }: { date: string }) {
-  const snap = useSnap();
-  const byZone = offByZone(snap, date);
-  const rows = (['jeju', 'land'] as Zone[])
-    .map((z) => [z, byZone[z].filter((d) => d.staff_type !== '기사')] as const)
-    .filter(([, list]) => list.length > 0);
-  if (!rows.length) return null;
-  return (
-    <table className="paper fieldoff">
-      <colgroup><col style={{ width: '16%' }} /><col /></colgroup>
-      <thead><tr><th colSpan={2} className="zone">현장 휴무</th></tr></thead>
-      <tbody>
-        {rows.map(([z, list]) => (
-          <tr key={z} className="offrow">
-            <td className="site">{ZONE_NAME[z]}</td>
-            <td className="body"><Fit>{list.map((d) => d.name).join(', ')}</Fit></td>
-          </tr>
-        ))}
       </tbody>
     </table>
   );
