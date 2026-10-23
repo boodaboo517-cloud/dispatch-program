@@ -312,3 +312,4 @@ tr.err td { background: var(--red-soft); }
 .site-row { gap: 6px; min-height: 56px; }
 .site-btn { min-width: 40px; padding: 0 8px; font-size: 16px; }
 .site-btn:disabled { opacity: .25; }
+.paper tr.workrow td { background: #eff6ff; }

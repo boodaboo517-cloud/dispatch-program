@@ -1,6 +1,6 @@
 // 종이 일정표 모양 (확인용, 누르기 없음): 차량 한 대 = 한 줄. 선박 | 차량 | 기사 | 하차 | 차량 | 기사 | 상차 | 선박 (제주는 오전·오후)
 import {
-  DAY_STATUS_LABEL, isExternal, missingDriver, workText, offByZone, parseShip, seqMark, sitesGrouped,
+  DAY_STATUS_LABEL, ON_CALL_SHIFT, driverZone, isDriverWorking, isExternal, missingDriver, workText, offByZone, parseShip, seqMark, sitesGrouped,
   type BoardRow, type DailyOrder, type FieldAssignment, type Snapshot, type Zone,
 } from '../../domain/index.ts';
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
@@ -157,6 +157,15 @@ export function SheetBoard(p: { zone: Zone; date: string; rows: BoardRow[]; wait
   const snap = useSnap();
 
   const off = offByZone(snap, p.date)[p.zone];
+  // 근무자: 이 표 차량에 배차된 기사(오전·오후·동승) + 이 지역 근무일인데 아직 차량 없는 기사(대기)
+  const offIds = new Set(off.map((d) => d.id));
+  const assignedIds = new Set(p.rows.flatMap((r) => [r.driverId, r.loadDriverId, r.helperId]).filter((x): x is string => !!x));
+  const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'ko');
+  const working = snap.drivers.filter((d) => assignedIds.has(d.id)).sort(byName);
+  const busyElsewhere = new Set(snap.vehicle_days.filter((v) => v.date === p.date).flatMap((v) => [v.driver_id, v.load_driver_id, v.helper_driver_id]));
+  const standby = snap.drivers
+    .filter((d) => d.staff_type === '기사' && d.shift !== ON_CALL_SHIFT && driverZone(d) === p.zone && !offIds.has(d.id) && !assignedIds.has(d.id) && !busyElsewhere.has(d.id) && isDriverWorking(snap, d, p.date))
+    .sort(byName);
   return (
     <table className={`paper ${p.zone}`}>
       <Cols />
@@ -169,8 +178,14 @@ export function SheetBoard(p: { zone: Zone; date: string; rows: BoardRow[]; wait
         {p.waiting.map((o) => <WaitingRow key={o.id} snap={snap} o={o} />)}
         {p.external.map((o) => <WaitingRow key={o.id} snap={snap} o={o} />)}
 
+        {(working.length > 0 || standby.length > 0) && (
+          <tr className="fieldrow workrow first">
+            <td className="site"><Fit>기사 근무</Fit></td>
+            <td className="body" colSpan={7}><Fit>{working.map((d) => d.name).join(', ')}{standby.length ? <span className="muted">{working.length ? '  ·  ' : ''}대기: {standby.map((d) => d.name).join(', ')}</span> : null}</Fit></td>
+          </tr>
+        )}
         {off.some((d) => d.staff_type === '기사') && (
-          <tr className="fieldrow offrow first">
+          <tr className={`fieldrow offrow${working.length || standby.length ? '' : ' first'}`}>
             <td className="site"><Fit>기사 휴무</Fit></td>
             <td className="body" colSpan={7}><Fit>{off.filter((d) => d.staff_type === '기사').map((d) => offName(snap, p.date, d)).join(', ')}</Fit></td>
           </tr>
