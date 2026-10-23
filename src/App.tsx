@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BrowserRouter, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { addDays, type Role } from './domain/index.ts';
 import { backupOverdue } from './data/backup.ts';
 import { autoWeeklyEmail } from './data/emailBackup.ts';
 import { store } from './data/store.ts';
 import { isDemo, supabase } from './data/supabase.ts';
+import { lastUrl, menuOf, menuUrl, remember, saveScroll, scrollOf } from './lib/navMemory.ts';
 import { seoulToday } from './lib/time.ts';
 import { useStore } from './ui/hooks.ts';
 import { SheetProvider } from './ui/Sheet.tsx';
@@ -61,10 +62,10 @@ function TopMenu({ role }: { role: Role }) {
           <NavLink to="/fleet/ships">선박 등록</NavLink>
           <span style={{ width: 16 }} />
           <button onClick={() => go(addDays(date, -1))}>◀ 전일</button>
-          <NavLink to="/all">전체 일정표</NavLink>
+          <NavLink to={loc.pathname === '/all' ? '/all' : menuUrl('/all')}>전체 일정표</NavLink>
           <button onClick={() => go(addDays(date, 1))}>익일 ▶</button>
           <span style={{ width: 16 }} />
-          <NavLink to="/" end className={() => (loc.pathname === '/' ? 'active' : '')}>배차</NavLink>
+          <NavLink to={loc.pathname === '/' ? '/' : menuUrl('/')} end className={() => (loc.pathname === '/' ? 'active' : '')}>배차</NavLink>
           <NavLink to="/fleet/maintenance">정비</NavLink>
           <NavLink to="/revenue">매출</NavLink>
           <NavLink to="/settings">설정</NavLink>
@@ -79,7 +80,52 @@ function TopMenu({ role }: { role: Role }) {
   );
 }
 
+/** 화면 위치 기억: 주소(날짜·탭)는 메뉴별로, 스크롤은 화면별로. 앱을 다시 열면 마지막 화면으로 */
+function NavMemory() {
+  const loc = useLocation();
+  const nav = useNavigate();
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      const last = lastUrl();
+      // 처음 열 때 주소가 기본 화면이면 마지막으로 보던 화면으로
+      if (loc.pathname === '/' && !loc.search && last && last !== '/') {
+        nav(last, { replace: true });
+        return;
+      }
+    }
+    remember(loc.pathname, loc.search);
+    const key = loc.pathname + loc.search;
+    const y = scrollOf(key);
+    // 화면이 다 그려진 뒤에 한 번 더 (느린 휴대폰)
+    const t = setTimeout(() => window.scrollTo(0, y), 60);
+    const t2 = setTimeout(() => { if (Math.abs(window.scrollY - y) > 5 && lastY === y) window.scrollTo(0, y); }, 350);
+    // 화면을 떠날 때는 이미 다음 화면으로 바뀌어 scrollY 가 0일 수 있으므로, 마지막으로 스크롤한 위치를 저장
+    let lastY = y;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onScroll = () => {
+      // 다른 화면으로 넘어가는 순간의 스크롤(새 화면 높이에 맞춰 줄어듦)은 무시
+      if (window.location.pathname + window.location.search !== key) return;
+      lastY = window.scrollY;
+      clearTimeout(timer);
+      timer = setTimeout(() => saveScroll(key, lastY), 150);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      clearTimeout(t);
+      clearTimeout(t2);
+      clearTimeout(timer);
+      window.removeEventListener('scroll', onScroll);
+      saveScroll(key, lastY);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loc.pathname, loc.search]);
+  return null;
+}
+
 function TabBar({ role }: { role: Role }) {
+  const loc = useLocation();
   if (role === 'viewer') return null;
   const tabs: [string, string, string][] = [
     ['/', '📋', '배차'], ['/all', '🗓', '일정표'], ['/order', '➕', '오더'], ['/clients', '🏢', '거래처'], ['/settings', '🚚', '차량·설정'],
@@ -87,7 +133,7 @@ function TabBar({ role }: { role: Role }) {
   return (
     <nav className="tabbar">
       {tabs.map(([to, ic, l]) => (
-        <NavLink key={to} to={to} end={to === '/'} className={({ isActive }) => (isActive ? 'active' : '')}>
+        <NavLink key={to} to={menuOf(loc.pathname) === to ? to : menuUrl(to)} end={to === '/'} className={() => (menuOf(loc.pathname) === to ? 'active' : '')}>
           <span className="ic">{ic}</span>{l}
         </NavLink>
       ))}
@@ -114,6 +160,7 @@ function Shell() {
   const viewer = session.role === 'viewer';
   return (
     <div className="app">
+      <NavMemory />
       <TopMenu role={session.role} />
       <StatusLine />
       <Routes>
