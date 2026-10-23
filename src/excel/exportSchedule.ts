@@ -35,8 +35,12 @@ function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: 
   ]);
   r++;
   for (const row of rows) {
-    const n = Math.max(row.unloads.length, row.loads.length, 1);
-    const hasOrders = row.unloads.length + row.loads.length > 0;
+    // 전날 대기 짐 [[ ]] 과 칸 비고(오더 없이)도 줄로 넣는다
+    const loadList = [...row.carried, ...row.loads];
+    const uLines = row.unloads.length + (row.unloadNote ? 1 : 0);
+    const lLines = loadList.length + (row.loadNote ? 1 : 0);
+    const n = Math.max(uLines, lLines, 1);
+    const hasOrders = uLines + lLines > 0;
     const seq = (n: number | null) => (n ? ` ${seqMark(n)}` : '');
     const drv = driverName(s, row.driverId) ? driverName(s, row.driverId) + seq(row.unloadSeq) : missingDriver(row, 'unload') ? '미배치' : '';
     const helper = row.helperId ? ` +${driverName(s, row.helperId)}${row.helperRole ? `(${row.helperRole})` : ''}` : '';
@@ -45,7 +49,10 @@ function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: 
       const line = ws.getRow(r + i);
       if (hasOrders) {
         orderVals(s, row.unloads[i]).forEach((v, k) => (line.getCell(4 + k).value = v));
-        orderVals(s, row.loads[i]).forEach((v, k) => (line.getCell(11 + k).value = v));
+        orderVals(s, loadList[i]).forEach((v, k) => (line.getCell(11 + k).value = v));
+        if (row.carried.includes(loadList[i])) line.getCell(11).value = `[[ ${line.getCell(11).value ?? ''} ]]`;
+        if (row.unloadNote && i === row.unloads.length) line.getCell(4).value = row.unloadNote;
+        if (row.loadNote && i === loadList.length) line.getCell(11).value = row.loadNote;
       }
     }
     const first = ws.getRow(r);

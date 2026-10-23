@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { buildBoard, lastStart, missingDriver, needsDriver, setDriverSeq, setRowDriver, setRowHelper, setRowStart, startText } from '../board.ts';
+import { buildBoard, lastStart, missingDriver, needsDriver, setRowNote, setDriverSeq, setRowDriver, setRowHelper, setRowStart, startText } from '../board.ts';
 import { blankOrder, repairShipLinks, saveOrder, setRowShip, workText } from '../orders.ts';
 import { Tx, applyMutations } from '../tx.ts';
 import { copyOrder, createOrder, splitPerVehicle } from '../actions.ts';
@@ -461,5 +461,17 @@ describe('선박 없는 상차 = 대기와 같음', () => {
     const tx = new Tx(baseSnapshot());
     const load = createOrder(tx, blankOrder({ date: D, zone: 'land', kind: 'load', client_id: 'c-dm', vehicle_id: 'v9914', same_day: true }));
     expect(tx.list('daily_orders').find((o) => o.linked_from_id === load.id)!.date).toBe(D);
+  });
+});
+
+describe('오전·오후 칸 비고만', () => {
+  it('오더 없이 칸에 비고, 공차로 세지 않음, 빈 글자면 지움', () => {
+    const tx = new Tx(baseSnapshot());
+    setRowNote(tx, { date: D, vehicle_id: 'v9914', zone: 'jeju', kind: 'unload', note: '부두 대기 후 출고' });
+    let r = buildBoard(tx.result(), D).rows.find((x) => x.vehicle.id === 'v9914')!;
+    expect([r.unloadNote, r.status]).toEqual(['부두 대기 후 출고', '']);
+    setRowNote(tx, { date: D, vehicle_id: 'v9914', zone: 'jeju', kind: 'unload', note: '' });
+    r = buildBoard(tx.result(), D).rows.find((x) => x.vehicle.id === 'v9914')!;
+    expect([r.unloadNote, r.status]).toEqual(['', 'empty']);
   });
 });

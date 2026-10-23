@@ -317,3 +317,6 @@ tr.err td { background: var(--red-soft); }
 /* 전날 선박 대기로 싣고 있는 짐 [[ 상차짐 ]] */
 .cell.carried { background: #f1f5f9; border: 1px dashed #64748b; }
 .paper .ps-carried { font-weight: 700; color: #334155; }
+/* 오전·오후 칸 비고만 */
+.cell.rownote { background: #fffbeb; color: #92400e; font-weight: 600; white-space: normal; }
+.paper .ps-rownote { color: #92400e; font-weight: 600; }

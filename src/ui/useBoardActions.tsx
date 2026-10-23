@@ -1,7 +1,7 @@
 // 일정표 칸 동작 (휴대폰·PC 공통)
 import {
   ON_CALL_SHIFT, abbrev, acceptShipPending, nudgeVehicle, workLogOf, assignVehicle, blankOrder, buildBoard, createOrder, ignoreShipPending, opposite, saveOrder,
-  HELPER_ROLE_LABEL, START_PLACES, lastStart, startText, setRowStart, rowDriver, seqMark, setDriverSeq, setRowDriver, setRowHelper, setRowShip, setVehicleDayStatus, setVehicleZone, shipTime,
+  HELPER_ROLE_LABEL, START_PLACES, setRowNote, lastStart, startText, setRowStart, rowDriver, seqMark, setDriverSeq, setRowDriver, setRowHelper, setRowShip, setVehicleDayStatus, setVehicleZone, shipTime,
   type Board, type BoardRow, type DailyOrder, type DriverSide, type HelperRole, type Kind, type Zone,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
@@ -28,8 +28,9 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
   /** startClient: 같은 거래처의 다른 품목을 이어서 넣을 때 (품목 고르기부터) */
   const addOrder = async (zone: Zone, kind: Kind, row?: BoardRow, startClient?: { id: string; text: string }) => {
     if (!staff) return;
-    const c = await pick.clientProduct(row?.vehicle.id ?? null, startClient);
+    const c = await pick.clientProduct(row?.vehicle.id ?? null, startClient, !!row && !startClient);
     if (!c) return;
+    if (c.noteOnly && row) return editNote(row, kind);
     const ship = kind === 'load'
       ? { departure_ship: row?.departureShip ?? null, departure_ship_tag: row?.departureTag ?? '' }
       : { arrival_ship: row?.arrivalShip ?? null, arrival_ship_tag: row?.arrivalTag ?? '' };
@@ -140,6 +141,15 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
       </Sheet>
     )));
     if (role) store.run((tx) => setRowHelper(tx, { date, vehicle_id: row.vehicle.id, zone: row.zone, driver_id: d, role }));
+  };
+
+  /** 오전(하차)·오후(상차) 칸 비고만 (오더 없이). 빈 글자로 저장하면 지움 */
+  const editNote = async (row: BoardRow, kind: Kind) => {
+    if (!staff) return;
+    const cur = kind === 'unload' ? row.unloadNote : row.loadNote;
+    const t = await pick.memo(cur, `${row.vehicle.short_no} ${sideLabel(row, kind === 'unload' ? 'unload' : 'load')} 비고`);
+    if (t === null) return;
+    store.run((tx) => setRowNote(tx, { date, vehicle_id: row.vehicle.id, zone: row.zone, kind, note: t }));
   };
 
   /** 출근 시간·장소: 비어 있으면 같은 차량의 최근 값으로 채워 둔다 */
@@ -258,7 +268,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     if (r) store.run((tx) => saveOrder(tx, { ...o, ...(isLoad ? { departure_ship: r.ship, departure_ship_tag: r.tag } : { arrival_ship: r.ship, arrival_ship_tag: r.tag }) }));
   };
 
-  return { addOrder, moveDate, tapCarried, openOrder, editShip, tapShip, editDriver, editSeq, editHelper, editStart, editStatus, tapVehicle, assign, editWaitingShip, showText, abbrev };
+  return { addOrder, editNote, moveDate, tapCarried, openOrder, editShip, tapShip, editDriver, editSeq, editHelper, editStart, editStatus, tapVehicle, assign, editWaitingShip, showText, abbrev };
 }
 
 /** 출근 시간·장소 입력 */

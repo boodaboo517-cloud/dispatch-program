@@ -117,14 +117,18 @@ function VehicleRow({ snap, row }: { snap: Snapshot; row: BoardRow }) {
       <td className="ship"><ShipText snap={snap} ship={row.arrivalShip} tag={row.arrivalTag} /></td>
       {veh}
       <td className={`drv${noUnload ? ' nodrv' : ''}`}>{name}</td>
-      <td className="body">{row.unloads.length ? <Orders snap={snap} list={row.unloads} /> : <Fit>{statusText}</Fit>}</td>
+      <td className="body">
+        {row.unloads.length ? <Orders snap={snap} list={row.unloads} /> : !row.unloadNote ? <Fit>{statusText}</Fit> : null}
+        {row.unloadNote && <div className="ps-oline"><Fit><span className="ps-rownote">{row.unloadNote}</span></Fit></div>}
+      </td>
       {veh}
       <td className={`drv${noLoad ? ' nodrv' : ''}`}>{loadName}</td>
       <td className="body">
         {row.carried.map((o) => (
           <div key={o.id} className="ps-oline"><Fit><span className="ps-carried">[[ {[clientName(snap, o), productName(snap, o), qtyText(o)].filter(Boolean).join(' ')} ]]</span></Fit></div>
         ))}
-        {row.loads.length ? <Orders snap={snap} list={row.loads} /> : row.unloads.length && !row.carried.length ? <Fit>{statusText}</Fit> : null}
+        {row.loads.length ? <Orders snap={snap} list={row.loads} /> : row.unloads.length && !row.carried.length && !row.loadNote ? <Fit>{statusText}</Fit> : null}
+        {row.loadNote && <div className="ps-oline"><Fit><span className="ps-rownote">{row.loadNote}</span></Fit></div>}
       </td>
       <td className="ship"><ShipText snap={snap} ship={row.departureShip} tag={row.departureTag} /></td>
     </tr>

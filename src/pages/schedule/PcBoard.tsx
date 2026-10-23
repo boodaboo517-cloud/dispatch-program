@@ -72,8 +72,11 @@ function VehicleGroup({ row, zone, a, staff, focus }: { row: BoardRow; zone: Zon
   const snap = useSnap();
   const [over, setOver] = useState(false);
   const loadList = [...row.carried, ...row.loads];
-  const hasOrders = row.unloads.length + loadList.length > 0;
-  const n = hasOrders ? Math.max(row.unloads.length, loadList.length) + (staff ? 1 : 0) : 1;
+  const hasOrders = row.unloads.length + loadList.length > 0 || !!row.unloadNote || !!row.loadNote;
+  const n = hasOrders ? Math.max(row.unloads.length + (row.unloadNote ? 1 : 0), loadList.length + (row.loadNote ? 1 : 0)) + (staff ? 1 : 0) : 1;
+  const noteCell = (kind: 'unload' | 'load') => (
+    <td colSpan={5}><Cell className="rownote" onTap={() => (staff ? void a.editNote(row, kind) : undefined)}>📝 {kind === 'unload' ? row.unloadNote : row.loadNote}</Cell></td>
+  );
   const focused = !!focus && (focus === row.vehicle.id || [...row.unloads, ...row.loads].some((o) => o.id === focus));
   const vehicleCell = (
     <td rowSpan={n}>
@@ -123,10 +126,10 @@ function VehicleGroup({ row, zone, a, staff, focus }: { row: BoardRow; zone: Zon
         {i === 0 && driverCell('unload')}
         {hasOrders ? (
           <>
-            {u ? <OrderFields o={u} a={a} staff={staff} /> : <EmptyFields onAdd={staff ? () => a.addOrder(zone, 'unload', row) : undefined} />}
+            {u ? <OrderFields o={u} a={a} staff={staff} /> : row.unloadNote && i === row.unloads.length ? noteCell('unload') : <EmptyFields onAdd={staff ? () => a.addOrder(zone, 'unload', row) : undefined} />}
             {i === 0 && <td rowSpan={n} className="sep"><Cell className="vehicle" onTap={() => a.tapVehicle(row)}>{row.vehicle.short_no}</Cell></td>}
             {i === 0 && driverCell('load')}
-            {l ? <OrderFields o={l} a={a} staff={staff} carried={row.carried.includes(l) ? () => a.tapCarried(row, l) : undefined} /> : <EmptyFields onAdd={staff ? () => a.addOrder(zone, 'load', row) : undefined} />}
+            {l ? <OrderFields o={l} a={a} staff={staff} carried={row.carried.includes(l) ? () => a.tapCarried(row, l) : undefined} /> : row.loadNote && i === loadList.length ? noteCell('load') : <EmptyFields onAdd={staff ? () => a.addOrder(zone, 'load', row) : undefined} />}
           </>
         ) : (
           <td colSpan={12} className="sep">

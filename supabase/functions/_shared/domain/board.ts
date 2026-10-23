@@ -105,6 +105,9 @@ export interface BoardRow {
   /** 동승 기사 (선탑·지원) */
   helperId: string | null;
   helperRole: HelperRole | '';
+  /** 오전(하차)·오후(상차) 칸 비고 (오더 없이) */
+  unloadNote: string;
+  loadNote: string;
   /** 출근 시간·장소 */
   startTime: string;
   startPlace: string;
@@ -182,7 +185,7 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
     } else if (!status && v.status === '정비') status = 'repair';
     else if (!status && v.status === '휴차') status = 'rest';
     const carried = zone ? carriedLoads(waitingLoads, v.id, date, zone) : [];
-    if (!status && mine.length === 0 && carried.length === 0) status = 'empty';
+    if (!status && mine.length === 0 && carried.length === 0 && !vd?.unload_note && !vd?.load_note) status = 'empty';
     const driverId = vd?.driver_id ?? orders.find((o) => o.driver_id)?.driver_id ?? null;
     rows.push({
       vehicle: v,
@@ -197,6 +200,8 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
       loadSeq: vd?.load_seq ?? (vd?.load_driver_id ? null : vd?.unload_seq ?? null),
       helperId: vd?.helper_driver_id ?? null,
       helperRole: vd?.helper_role ?? '',
+      unloadNote: vd?.unload_note ?? '',
+      loadNote: vd?.load_note ?? '',
       startTime: vd?.start_time ?? '',
       startPlace: vd?.start_place ?? '',
       arrivalShip: vd?.arrival_ship ?? unloads.find((o) => o.arrival_ship)?.arrival_ship ?? null,
@@ -228,6 +233,8 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
         loadSeq: null,
         helperId: vd?.helper_driver_id ?? null,
         helperRole: vd?.helper_role ?? '',
+        unloadNote: '',
+        loadNote: '',
         startTime: '',
         startPlace: '',
         arrivalShip: arr?.arrival_ship ?? null,
@@ -423,6 +430,12 @@ export function setRowDriver(tx: Tx, p: { date: string; vehicle_id: string; zone
 export function setRowHelper(tx: Tx, p: { date: string; vehicle_id: string; zone: Zone | null; driver_id: string | null; role: HelperRole | '' }) {
   const vd = ensureVehicleDay(tx, p.date, p.vehicle_id, p.zone);
   tx.update('vehicle_days', vd.id, { helper_driver_id: p.driver_id, helper_role: p.driver_id ? p.role : '' });
+}
+
+/** 오전(하차)·오후(상차) 칸에 오더 없이 비고만 (빈 글자 = 지움) */
+export function setRowNote(tx: Tx, p: { date: string; vehicle_id: string; zone: Zone | null; kind: Kind; note: string }) {
+  const vd = ensureVehicleDay(tx, p.date, p.vehicle_id, p.zone);
+  tx.update('vehicle_days', vd.id, p.kind === 'unload' ? { unload_note: p.note.trim() } : { load_note: p.note.trim() });
 }
 
 /** 출근 시간·장소 */

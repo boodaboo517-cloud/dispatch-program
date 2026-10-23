@@ -246,6 +246,9 @@ export interface VehicleDay extends Base {
   /** 함께 타는 두 번째 기사 (선탑·교육 / 지원) */
   helper_driver_id?: string | null;
   helper_role?: HelperRole | '';
+  /** 오전(하차)·오후(상차) 칸에 오더 없이 적는 비고 */
+  unload_note?: string;
+  load_note?: string;
   /** 출근 시간(HH:mm)·장소 (제주: 부두, 차고지, 본사, 함덕, 고산, 현장 …) */
   start_time?: string;
   start_place?: string;

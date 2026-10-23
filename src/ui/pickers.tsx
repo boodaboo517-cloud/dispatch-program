@@ -14,6 +14,8 @@ import { ShipEditSheet, blankShip } from './ShipEditSheet.tsx';
 import { useRole, useSnap } from './hooks.ts';
 
 export interface ClientPick {
+  /** "비고만 적기"를 고름 (오더 없이 칸에 비고만) */
+  noteOnly?: boolean;
   client_id: string | null;
   client_text: string;
   product: Product | null;
@@ -35,7 +37,7 @@ function frequentClients(s: Snapshot, vehicleId: string | null) {
   return { frequent, recent };
 }
 
-function ClientProductSheet(p: { vehicleId: string | null; startClient?: { id: string; text: string }; close: () => void; done: (r: ClientPick | null) => void }) {
+function ClientProductSheet(p: { vehicleId: string | null; startClient?: { id: string; text: string }; allowNote?: boolean; close: () => void; done: (r: ClientPick | null) => void }) {
   const s = snap();
   const [client, setClient] = useState<{ id: string | null; text: string } | null>(p.startClient ?? null);
   const finish = (r: ClientPick | null) => {
@@ -59,6 +61,7 @@ function ClientProductSheet(p: { vehicleId: string | null; startClient?: { id: s
       <Sheet title="거래처 선택" onClose={() => finish(null)} flush>
         <PickerList
           sections={sections}
+          top={p.allowNote ? <div className="list-item" onClick={() => finish({ noteOnly: true, client_id: null, client_text: '', product: null, product_text: '' })}><span><b>📝 비고만 적기</b> <span className="muted small">오더 없이 이 칸에 메모만</span></span></div> : undefined}
           onPick={(it) => setClient({ id: it.id, text: it.label })}
           free={{ label: '직접 쓰기', onFree: (t) => t.trim() && finish({ client_id: null, client_text: t.trim(), product: null, product_text: '' }) }}
           create={{
@@ -248,8 +251,8 @@ export function usePickers() {
 
   return {
     /** startClient 를 주면 품목 고르기부터 (등록된 오더의 품목만 바꿀 때) */
-    clientProduct: (vehicleId: string | null, startClient?: { id: string; text: string }) =>
-      ask<ClientPick | null>((close, done) => <ClientProductSheet vehicleId={vehicleId} startClient={startClient} close={close} done={done} />),
+    clientProduct: (vehicleId: string | null, startClient?: { id: string; text: string }, allowNote = false) =>
+      ask<ClientPick | null>((close, done) => <ClientProductSheet vehicleId={vehicleId} startClient={startClient} allowNote={allowNote} close={close} done={done} />),
 
     ship: (zone: Zone | null, current: { ship: string | null; tag: ShipTag }, which: 'arrival' | 'departure' = 'departure') =>
       ask<{ ship: string | null; tag: ShipTag } | null>((close, done) => <ShipSheet zone={zone} which={which} current={current} close={close} done={done} />),

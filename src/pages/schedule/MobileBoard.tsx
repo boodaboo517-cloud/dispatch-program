@@ -33,7 +33,7 @@ export function MobileBoard(p: { date: string; zone: Zone; rows: BoardRow[]; wai
 function VehicleRow({ date, row, zone, a, focus }: { date: string; row: BoardRow; zone: Zone; a: Actions; focus: string | null }) {
   const snap = useSnap();
   const { staff } = useRole();
-  const hasOrders = row.unloads.length + row.loads.length + row.carried.length > 0;
+  const hasOrders = row.unloads.length + row.loads.length + row.carried.length > 0 || !!row.unloadNote || !!row.loadNote;
   const focused = !!focus && (focus === row.vehicle.id || [...row.unloads, ...row.loads].some((o) => o.id === focus));
   const orderCells = (list: DailyOrder[], kind: 'unload' | 'load') => (
     <div className="col">
@@ -49,6 +49,9 @@ function VehicleRow({ date, row, zone, a, focus }: { date: string; row: BoardRow
           <OrderCellText snap={snap} o={o} />
         </Cell>
       ))}
+      {(kind === 'unload' ? row.unloadNote : row.loadNote) && (
+        <Cell className="rownote" onTap={() => (staff ? void a.editNote(row, kind) : undefined)}>📝 {kind === 'unload' ? row.unloadNote : row.loadNote}</Cell>
+      )}
       {staff && <Cell className="add" onTap={() => a.addOrder(zone, kind, row)}>＋</Cell>}
     </div>
   );
