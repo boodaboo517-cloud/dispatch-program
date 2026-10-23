@@ -18,7 +18,8 @@ const won = (n: number) => n.toLocaleString('ko-KR');
 
 function cellText(c: DayCell) {
   if (c.off) return '휴';
-  if (c.types.length) return c.types.map((t) => WORK_TYPE_SHORT[t]).join('');
+  if (c.nonwork) return '－';
+  if (c.types.length) return c.types.map((t) => WORK_TYPE_SHORT[t] + (t === '시간외근무' && c.overtimeHours ? c.overtimeHours : '')).join('');
   if (c.field) return '현';
   if (c.assigned) return '배';
   return '';
@@ -89,13 +90,14 @@ async function exportAttendance(snap: Snapshot, title: string, rows: DriverMonth
   };
   sumRow('근무일', (r) => r.workedDays);
   for (const t of WORK_TYPES) sumRow(t, (r) => r.byType[t]);
+  sumRow('시간외 시간', (r) => r.overtimeHours);
   sumRow('형태 미입력', (r) => r.missingType);
   if (withPay) {
     for (const t of WORK_TYPES) sumRow(`${t} 수당`, (r) => paySummary(snap, r).byType[t] ?? 0);
     sumRow('수당 합계', (r) => paySummary(snap, r).total);
   }
   boxBorder(ws, 3, 1, line - 1, cols, { style: 'thin', color: { argb: 'FF9CA3AF' } } as never);
-  ws.getCell(line + 1, 1).value = `약자: ${WORK_TYPES.map((t) => `${WORK_TYPE_SHORT[t]}=${t}`).join(', ')}, 배=배차(형태 미입력), 현=현장근무(형태 미입력), 휴=휴무`;
+  ws.getCell(line + 1, 1).value = `약자: ${WORK_TYPES.map((t) => `${WORK_TYPE_SHORT[t]}=${t}`).join(', ')}, 배=배차(형태 미입력), 현=현장근무(형태 미입력), 휴=휴무, －=근무일 아님, 시2=시간외 2시간`;
   await download(wb, `근무현황 ${title.replace(/[/~ ]+/g, '_')}.xlsx`);
 }
 
@@ -196,7 +198,7 @@ export function AttendancePanel() {
         {narrowed && <button className="chip" onClick={() => { setPicked(null); savePeople(null); }}>전체 보기</button>}
       </div>
       <p className="muted small" style={{ margin: '0 0 6px' }}>
-        칸을 누르면 근무형태를 넣습니다{staff ? ' · 이름을 누르면 근무별 수당' : ''}. {WORK_TYPES.map((t) => `${WORK_TYPE_SHORT[t]}=${t}`).join(' · ')} · <b style={{ background: 'var(--yellow-soft)' }}>배·현</b>=배차·현장 잡혔지만 형태 미입력 · 휴=휴무 · 회색=근무일 아님
+        칸을 누르면 근무형태를 넣습니다{staff ? ' · 이름을 누르면 근무별 수당' : ''}. {WORK_TYPES.map((t) => `${WORK_TYPE_SHORT[t]}=${t}`).join(' · ')} · <b style={{ background: 'var(--yellow-soft)' }}>배·현</b>=배차·현장 잡혔지만 형태 미입력 · 휴=휴무 · －=근무일 아님 · 시2=시간외 2시간 · 회색=근무일 아님(근무조 기준)
       </p>
       <div className="att-wrap">
         <table className="simple small att-table">
@@ -244,6 +246,9 @@ export function AttendancePanel() {
             {WORK_TYPES.filter((t) => rows.some((r) => r.byType[t])).map((t) => (
               <tr key={t} className="att-sum"><td style={sticky}>{t}</td>{rows.map((r) => <td key={r.driver.id}>{r.byType[t] || ''}</td>)}</tr>
             ))}
+            {rows.some((r) => r.overtimeHours) && (
+              <tr className="att-sum"><td style={sticky}>시간외 시간</td>{rows.map((r) => <td key={r.driver.id}>{r.overtimeHours || ''}</td>)}</tr>
+            )}
             {rows.some((r) => r.missingType) && (
               <tr className="att-sum"><td style={sticky}>미입력</td>{rows.map((r) => <td key={r.driver.id} style={{ color: '#a16207' }}>{r.missingType || ''}</td>)}</tr>
             )}
@@ -263,13 +268,13 @@ export function AttendancePanel() {
               <tbody>
                 {rows.map((r, i) => {
                   const p = pays[i];
-                  const parts = WORK_TYPES.filter((t) => p.byType[t] != null).map((t) => `${t} ${r.byType[t]}회 ${won(p.byType[t]!)}`);
+                  const parts = WORK_TYPES.filter((t) => p.byType[t] != null).map((t) => t === '시간외근무' ? `${t} ${r.byType[t]}회${r.overtimeHours ? ` ${r.overtimeHours}시간` : ''} ${won(p.byType[t]!)}` : `${t} ${r.byType[t]}회 ${won(p.byType[t]!)}`);
                   return (
                     <tr key={r.driver.id} onClick={() => openRates(r.driver)} style={{ cursor: 'pointer' }}>
                       <td style={{ whiteSpace: 'nowrap' }}><b>{r.driver.name}</b></td>
                       <td>
                         {parts.join(' · ') || <span className="muted">-</span>}
-                        {p.missingRate.length > 0 && <div style={{ color: '#a16207', fontSize: 12 }}>수당 미입력: {p.missingRate.map((t) => `${t} ${r.byType[t]}회`).join(', ')}</div>}
+                        {p.missingRate.length > 0 && <div style={{ color: '#a16207', fontSize: 12 }}>수당 미입력: {p.missingRate.map((t) => t === '시간외근무' ? `${t} (시간·금액)` : `${t} ${r.byType[t]}회`).join(', ')}</div>}
                         {r.missingType > 0 && <div style={{ color: '#a16207', fontSize: 12 }}>근무형태 미입력 {r.missingType}일 (계산 안 됨)</div>}
                       </td>
                       <td className="num"><b>{p.total ? won(p.total) : ''}</b></td>

@@ -141,6 +141,17 @@ export interface DriverWorkLog extends Base {
   driver_id: string;
   work_types: WorkType[];
   memo: string;
+  /** 'nonwork' = 근무일 아님으로 지정 (근무형태 없음, 근무일수에서 빠짐) */
+  day_status?: '' | 'nonwork';
+  /** 시간외근무 시간 */
+  overtime_hours?: number | null;
+}
+
+/** 그날 시간외근무 금액 (직접 입력). 금액이라 관리자·배차만 본다 */
+export interface DriverDayPay extends Base {
+  date: string;
+  driver_id: string;
+  amount: number;
 }
 
 /** 개인별 근로계약 근무별 수당 (원). 금액이라 관리자·배차만 본다 */
@@ -419,6 +430,7 @@ export interface Snapshot {
   drivers: Driver[];
   driver_work_logs: DriverWorkLog[];
   driver_pay_rates: DriverPayRate[];
+  driver_day_pay: DriverDayPay[];
   ships: Ship[];
   daily_orders: DailyOrder[];
   vehicle_days: VehicleDay[];
@@ -439,13 +451,13 @@ export interface Snapshot {
 export type TableName = keyof Snapshot;
 export const TABLES: TableName[] = [
   'clients', 'products', 'product_pricing', 'product_photos', 'product_suggestions',
-  'vehicles', 'drivers', 'driver_work_logs', 'driver_pay_rates', 'ships', 'daily_orders', 'vehicle_days', 'recurring_orders',
+  'vehicles', 'drivers', 'driver_work_logs', 'driver_pay_rates', 'driver_day_pay', 'ships', 'daily_orders', 'vehicle_days', 'recurring_orders',
   'recurring_order_versions', 'order_revenue', 'field_sites', 'field_assignments',
   'recurring_field_work', 'recurring_field_versions', 'maintenance_records',
   'maintenance_schedules', 'odometer_logs', 'settings', 'notices',
 ];
 /** 금액 테이블 — 조회(기사) 계정에는 서버에서 내려주지 않는다 */
-export const MONEY_TABLES: TableName[] = ['order_revenue', 'product_pricing', 'driver_pay_rates'];
+export const MONEY_TABLES: TableName[] = ['order_revenue', 'product_pricing', 'driver_pay_rates', 'driver_day_pay'];
 
 export type Mutation =
   | { table: TableName; op: 'upsert'; row: { id: string } & Record<string, unknown> }

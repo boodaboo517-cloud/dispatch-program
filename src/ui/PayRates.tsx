@@ -17,7 +17,7 @@ function RateInput({ driverId, type, value }: { driverId: string; type: WorkType
   };
   return (
     <label className="pay-rate">
-      <span>{type}</span>
+      <span>{type === '시간외근무' ? '시간외(시간당)' : type}</span>
       <input inputMode="numeric" value={text} placeholder="-" onChange={(e) => setText(e.target.value)} onBlur={save} onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} />
       <small>원</small>
     </label>
@@ -31,7 +31,7 @@ export function PayRatesCard({ driverId }: { driverId: string }) {
   return (
     <div className="card">
       <b>근무별 수당 (근로계약)</b>
-      <p className="muted small" style={{ margin: '4px 0 8px' }}>근무형태 1회당 금액. 근무현황에서 횟수 × 수당으로 합계가 나옵니다. 비우면 계산하지 않습니다.</p>
+      <p className="muted small" style={{ margin: '4px 0 8px' }}>근무형태 1회당 금액 (시간외근무는 1시간당). 근무현황에서 횟수 × 수당으로 합계가 나옵니다. 시간외는 그날 금액을 직접 적으면 그 금액으로 계산합니다.</p>
       <div className="pay-rates">
         {WORK_TYPES.map((t) => <RateInput key={`${driverId}-${t}-${rates[t] ?? ''}`} driverId={driverId} type={t} value={rates[t]} />)}
       </div>

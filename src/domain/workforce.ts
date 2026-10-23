@@ -5,7 +5,7 @@ import { isDriverWorking, setRowDriver, setRowHelper } from './board.ts';
 import { planFieldRecurringChange, setDayOff } from './fieldwork.ts';
 import { versionOn } from './recurring.ts';
 import { Tx, applyMutations } from './tx.ts';
-import { ON_CALL_SHIFT, WORK_TYPES, guessDriverZone, type Driver, type DriverPayRate, type DriverWorkLog, type Mutation, type Snapshot, type Weekday, type WorkType, type Zone } from './types.ts';
+import { ON_CALL_SHIFT, WORK_TYPES, guessDriverZone, type Driver, type DriverDayPay, type DriverPayRate, type DriverWorkLog, type Mutation, type Snapshot, type Weekday, type WorkType, type Zone } from './types.ts';
 
 const ALL_WEEKDAYS: Weekday[] = [0, 1, 2, 3, 4, 5, 6];
 
@@ -53,16 +53,44 @@ export function workLogOf(snap: Pick<Snapshot, 'driver_work_logs'>, driverId: st
 }
 
 /** 근무형태 저장. 형태도 메모도 없으면 기록을 지운다 (알바는 출근 취소) */
-export function setWorkLog(tx: Tx, p: { date: string; driver_id: string; work_types: WorkType[]; memo?: string }) {
+export function setWorkLog(tx: Tx, p: { date: string; driver_id: string; work_types: WorkType[]; memo?: string; day_status?: '' | 'nonwork'; overtime_hours?: number | null }) {
   const cur = tx.list('driver_work_logs').find((l) => l.driver_id === p.driver_id && l.date === p.date);
   const memo = p.memo ?? cur?.memo ?? '';
-  const types = WORK_TYPES.filter((t) => p.work_types.includes(t)); // 순서 고정 · 중복 제거
-  if (!types.length && !memo) {
+  const day_status = p.day_status ?? '';
+  const types = day_status === 'nonwork' ? [] : WORK_TYPES.filter((t) => p.work_types.includes(t)); // 순서 고정 · 중복 제거
+  const overtime_hours = types.includes('시간외근무') ? p.overtime_hours ?? cur?.overtime_hours ?? null : null;
+  if (!types.includes('시간외근무')) setDayPay(tx, { date: p.date, driver_id: p.driver_id, amount: null });
+  if (!types.length && !memo && !day_status) {
     if (cur) tx.remove('driver_work_logs', cur.id);
     return;
   }
-  if (cur) tx.update('driver_work_logs', cur.id, { work_types: types, memo });
-  else tx.insert('driver_work_logs', { id: newId(), date: p.date, driver_id: p.driver_id, work_types: types, memo });
+  const row = { work_types: types, memo, day_status, overtime_hours };
+  if (cur) tx.update('driver_work_logs', cur.id, row);
+  else tx.insert('driver_work_logs', { id: newId(), date: p.date, driver_id: p.driver_id, ...row });
+}
+
+/** 그날 시간외근무 금액 (직접 입력, 빈 값 = 지움 → 시간 × 시간당 수당으로 계산) */
+export function setDayPay(tx: Tx, p: { date: string; driver_id: string; amount: number | null }) {
+  const cur = tx.list('driver_day_pay').find((r) => r.driver_id === p.driver_id && r.date === p.date);
+  if (p.amount == null || !Number.isFinite(p.amount)) { if (cur) tx.remove('driver_day_pay', cur.id); return; }
+  const amount = Math.round(p.amount);
+  if (cur) tx.update('driver_day_pay', cur.id, { amount });
+  else tx.insert('driver_day_pay', { id: newId(), date: p.date, driver_id: p.driver_id, amount });
+}
+
+export function dayPayOf(snap: Pick<Snapshot, 'driver_day_pay'>, driverId: string, date: string): DriverDayPay | undefined {
+  return (snap.driver_day_pay ?? []).find((r) => r.driver_id === driverId && r.date === date);
+}
+
+/** 그날 근무 처리: 근무(형태) / 휴무 / 근무일 아님 */
+export function setDayKind(tx: Tx, p: { date: string; driver_id: string; kind: 'work' | 'off' | 'nonwork'; work_types?: WorkType[]; memo?: string; overtime_hours?: number | null }) {
+  if (p.kind === 'off') {
+    setWorkLog(tx, { date: p.date, driver_id: p.driver_id, work_types: [], memo: '' });
+    setLeave(tx, { staffId: p.driver_id, from: p.date, to: p.date, reason: p.memo?.trim() || '휴무' });
+    return;
+  }
+  cancelLeave(tx, { staffId: p.driver_id, from: p.date, to: p.date });
+  setWorkLog(tx, { date: p.date, driver_id: p.driver_id, work_types: p.kind === 'work' ? p.work_types ?? [] : [], memo: p.memo, day_status: p.kind === 'nonwork' ? 'nonwork' : '', overtime_hours: p.overtime_hours });
 }
 
 /** 그날 차량 줄·오더에 배차된 기사 */
@@ -86,6 +114,10 @@ export interface DayCell {
   assigned: boolean;
   /** 현장근무로 잡힌 날 */
   field: boolean;
+  /** 근무일 아님으로 지정 */
+  nonwork: boolean;
+  /** 시간외근무 시간 */
+  overtimeHours: number | null;
   /** 근무일(근무조 기준·특근 기록 포함)인지 */
   scheduled: boolean;
   off: boolean;
@@ -99,6 +131,8 @@ export interface DriverMonth {
   byType: Record<WorkType, number>;
   /** 배차는 됐지만 근무형태를 안 고른 날 */
   missingType: number;
+  /** 시간외근무 시간 합계 */
+  overtimeHours: number;
 }
 
 /** 월간 기사 근무현황 (from~to 포함) */
@@ -110,18 +144,22 @@ export function monthlyDriverStatus(snap: Snapshot, from: string, to: string, dr
     const byType = Object.fromEntries(WORK_TYPES.map((t) => [t, 0])) as Record<WorkType, number>;
     let workedDays = 0;
     let missingType = 0;
+    let overtimeHours = 0;
     const cells = days.map((date): DayCell => {
       const log = workLogOf(snap, driver.id, date);
+      const nonwork = log?.day_status === 'nonwork';
       const field = fieldOn.has(`${date}|${driver.id}`);
-      const isAssigned = assigned.get(date)!.has(driver.id) || field;
+      const isAssigned = !nonwork && (assigned.get(date)!.has(driver.id) || field);
       const off = snap.field_assignments.some((f) => f.date === date && f.staff_id === driver.id && f.is_off);
       const types = log?.work_types ?? [];
+      const hours = types.includes('시간외근무') ? log?.overtime_hours ?? null : null;
       if (types.length || isAssigned) workedDays++;
       if (isAssigned && !types.length) missingType++;
       for (const t of types) byType[t]++;
-      return { date, types, memo: log?.memo ?? '', assigned: isAssigned, field, scheduled: isDriverWorking(snap, driver, date), off };
+      overtimeHours += hours ?? 0;
+      return { date, types, memo: log?.memo ?? '', assigned: isAssigned, field, nonwork, overtimeHours: hours, scheduled: isDriverWorking(snap, driver, date), off };
     });
-    return { driver, days: cells, workedDays, byType, missingType };
+    return { driver, days: cells, workedDays, byType, missingType, overtimeHours };
   });
 }
 
@@ -223,8 +261,11 @@ export interface PaySummary {
   missingRate: WorkType[];
 }
 
-/** 기간 근무현황 → 수당 합계 */
-export function paySummary(snap: Pick<Snapshot, 'driver_pay_rates'>, m: DriverMonth): PaySummary {
+/**
+ * 기간 근무현황 → 수당 합계. 시간외근무는 날마다: 직접 넣은 금액 → 없으면 시간 × 시간당 수당
+ * (시간도 금액도 없으면 미입력으로 알림)
+ */
+export function paySummary(snap: Pick<Snapshot, 'driver_pay_rates' | 'driver_day_pay'>, m: DriverMonth): PaySummary {
   const rates = payRatesOf(snap, m.driver.id)?.rates ?? {};
   const byType: Partial<Record<WorkType, number>> = {};
   const missingRate: WorkType[] = [];
@@ -233,6 +274,20 @@ export function paySummary(snap: Pick<Snapshot, 'driver_pay_rates'>, m: DriverMo
     const n = m.byType[t];
     if (!n) continue;
     const rate = rates[t];
+    if (t === '시간외근무') {
+      let sum = 0;
+      let missing = false;
+      for (const c of m.days) {
+        if (!c.types.includes(t)) continue;
+        const direct = dayPayOf(snap, m.driver.id, c.date)?.amount;
+        if (direct != null) sum += direct;
+        else if (c.overtimeHours != null && rate != null) sum += c.overtimeHours * rate;
+        else missing = true;
+      }
+      if (missing) missingRate.push(t);
+      if (sum || !missing) { byType[t] = sum; total += sum; }
+      continue;
+    }
     if (rate == null) { missingRate.push(t); continue; }
     byType[t] = n * rate;
     total += n * rate;

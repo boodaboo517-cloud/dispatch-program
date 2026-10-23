@@ -318,7 +318,8 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
 export function isDriverWorking(snap: Snapshot, d: Driver, date: string): boolean {
   if (snap.field_assignments.some((f) => f.date === date && f.staff_id === d.id && f.is_off)) return false;
   // 근무 기록(특근·알바 출근 등)이 있으면 근무일
-  if ((snap.driver_work_logs ?? []).some((l) => l.date === date && l.driver_id === d.id)) return true;
+  const log = (snap.driver_work_logs ?? []).find((l) => l.date === date && l.driver_id === d.id);
+  if (log) return log.day_status !== 'nonwork'; // 근무일 아님으로 지정한 날은 쉰다
   if (d.shift === ON_CALL_SHIFT) return false; // 알바: 출근 기록이 있는 날만
   return d.work_days.length === 0 || d.work_days.includes(weekdayOf(date));
 }

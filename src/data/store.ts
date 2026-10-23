@@ -347,7 +347,7 @@ function isNetworkError(e: { message?: string; code?: string }) {
 /** DB numeric → number, 로컬 전용 필드 제거 */
 function normalize(t: TableName, r: Row): Row {
   const out = { ...r };
-  for (const k of ['quantity', 'default_quantity', 'unit_price', 'supply_amount', 'vat', 'total', 'cost', 'temp_min', 'temp_max']) {
+  for (const k of ['quantity', 'default_quantity', 'unit_price', 'supply_amount', 'vat', 'total', 'cost', 'temp_min', 'temp_max', 'overtime_hours', 'amount']) {
     if (typeof out[k] === 'string') out[k] = Number(out[k]);
   }
   void t;
