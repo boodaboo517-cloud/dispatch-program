@@ -118,7 +118,7 @@ function VehicleRow({ snap, row }: { snap: Snapshot; row: BoardRow }) {
   // 분홍 표시는 선박이 연결된 차량만 (대기·일정 없는 차량은 색 없이)
   // 분홍 표시: 오전 칸은 도착 선박, 오후 칸은 마감(출발) 선박이 연결됐을 때만
   const vehCell = (ship: string | null) => (
-    <td className="veh"><Fit><span className={`ps-pill veh ${ship && !isWaitShip(ship) ? '' : 'plain'} ${row.inRepair ? 'repair' : ''}`}>{row.vehicle.short_no}</span></Fit></td>
+    <td className="veh"><Fit><span className={`ps-pill veh ${ship && !isWaitShip(ship) ? '' : 'plain'} ${row.inRepair ? 'repair' : ''}`}>{row.vehicle.short_no}{row.quickRepair ? '⚡' : ''}</span></Fit></td>
   );
   return (
     <tr className={row.secondary ? 'secondary' : ''}>

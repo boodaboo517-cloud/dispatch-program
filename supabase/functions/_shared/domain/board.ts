@@ -113,6 +113,8 @@ export interface BoardRow {
   startPlace: string;
   /** 따로 적지 않아 기본값(07:00 부두)으로 보이는 중 */
   startDefault: boolean;
+  /** 그날 경미 수리 (운행은 계속) */
+  quickRepair: boolean;
   arrivalShip: string | null;
   arrivalTag: ShipTag;
   departureShip: string | null;
@@ -199,7 +201,8 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
     else if (!status && v.status === '휴차') status = 'rest';
     const carried = zone ? carriedLoads(waitingLoads, v.id, date, zone) : [];
     if (!status && mine.length === 0 && carried.length === 0 && !vd?.unload_note && !vd?.load_note) status = 'empty';
-    const driverId = vd?.driver_id ?? orders.find((o) => o.driver_id)?.driver_id ?? null;
+    // 오후 기사만 정해 둔 날은 오전을 비워 둔다 (오더에 적힌 오후 기사를 오전으로 끌어오지 않음)
+    const driverId = vd?.driver_id ?? (vd?.load_driver_id ? null : orders.find((o) => o.driver_id)?.driver_id ?? null);
     // 제주 기사는 따로 적지 않으면 기본 출근(07:00 부두)
     const startDefault = zone === 'jeju' && !!driverId && !vd?.start_time && !vd?.start_place && status !== 'rest' && status !== 'repair';
     rows.push({
@@ -220,6 +223,7 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
       startTime: startDefault ? DEFAULT_START.time : vd?.start_time ?? '',
       startPlace: startDefault ? DEFAULT_START.place : vd?.start_place ?? '',
       startDefault,
+      quickRepair: snap.maintenance_records.some((m) => m.quick && m.vehicle_id === v.id && m.start_date === date),
       arrivalShip: vd?.arrival_ship ?? unloads.find((o) => o.arrival_ship)?.arrival_ship ?? null,
       arrivalTag: vd?.arrival_ship ? vd.arrival_ship_tag : unloads.find((o) => o.arrival_ship)?.arrival_ship_tag ?? '',
       departureShip: vd?.departure_ship ?? loads.find(vehicleSails)?.departure_ship ?? null,
@@ -254,6 +258,7 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
         startTime: '',
         startPlace: '',
         startDefault: false,
+        quickRepair: false,
         arrivalShip: arr?.arrival_ship ?? null,
         arrivalTag: arr?.arrival_ship_tag ?? '',
         departureShip: dep?.departure_ship ?? null,
@@ -354,10 +359,20 @@ export function setVehicleDayStatus(
   tx: Tx,
   p: {
     date: string; vehicle_id: string; zone: Zone | null; status: DayStatus; memo: string;
-    maintenance?: { kind: MaintenanceKind; shop: string; end_date: string | null; staff_id?: string | null };
+    maintenance?: { kind: MaintenanceKind; shop: string; end_date: string | null; staff_id?: string | null; quick?: boolean };
   },
 ) {
   const vd = ensureVehicleDay(tx, p.date, p.vehicle_id, p.zone);
+  // 경미 수리: 정비 기록만 남기고 차량은 그날 그대로 운행 (수리 표시·배차 경고 없음)
+  if (p.status === 'repair' && p.maintenance?.quick) {
+    if (vd.status === 'repair') tx.update('vehicle_days', vd.id, { status: '', status_memo: '' });
+    saveMaintenance(tx, {
+      id: newId(), vehicle_id: p.vehicle_id, kind: p.maintenance.kind, shop: p.maintenance.shop,
+      start_date: p.date, end_date: p.date, odometer_km: null, cost: null,
+      staff_id: p.maintenance.staff_id ?? null, memo: p.memo, photo_paths: [], quick: true,
+    });
+    return;
+  }
   tx.update('vehicle_days', vd.id, { status: p.status, status_memo: p.memo });
   if (p.status === 'repair' && p.maintenance) {
     const existing = activeRepair(tx.list('maintenance_records'), p.vehicle_id, p.date);

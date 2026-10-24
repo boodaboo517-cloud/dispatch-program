@@ -774,3 +774,7 @@ revoke execute on function admin_users() from public, anon;
 revoke execute on function admin_set_password(uuid, text) from public, anon;
 grant execute on function admin_users() to authenticated;
 grant execute on function admin_set_password(uuid, text) to authenticated;
+
+-- ===== 20261025000019_quick_repair.sql =====
+-- 경미 수리: 1시간 안에 끝나 그날 운행에 지장 없음 (정비 기록만 남고 차량은 막지 않음)
+alter table maintenance_records add column if not exists quick boolean not null default false;

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { buildBoard, lastStart, missingDriver, needsDriver, setRowNote, setDriverSeq, setRowDriver, setRowHelper, setRowStart, startText } from '../board.ts';
+import { buildBoard, lastStart, setVehicleDayStatus, missingDriver, needsDriver, setRowNote, setDriverSeq, setRowDriver, setRowHelper, setRowStart, startText } from '../board.ts';
 import { blankOrder, repairShipLinks, saveOrder, setRowShip, workText } from '../orders.ts';
 import { Tx, applyMutations } from '../tx.ts';
 import { copyOrder, createOrder, splitPerVehicle } from '../actions.ts';
@@ -497,5 +497,26 @@ describe('상차 비고 → 하차에도 표시', () => {
     expect(r.unloadNote).toBe('박스 위 적재금지');
     setRowNote(tx, { date: '2026-10-21', vehicle_id: 'v9915', zone: 'jeju', kind: 'unload', note: '08시 하차' });
     expect(buildBoard(tx.result(), '2026-10-21').rows.find((x) => x.vehicle.id === 'v9915' && !x.secondary)!.unloadNote).toBe('08시 하차 · 박스 위 적재금지');
+  });
+});
+
+describe('오후만 기사 · 경미 수리', () => {
+  it('오후 기사만 정하면 오전은 비어 있고 오후에만 표시', () => {
+    const tx = setup();
+    set(tx, 'v9915', 'dB', 'load');
+    const r = row(tx, 'v9915');
+    expect([r.driverId, r.loadDriverId]).toEqual([null, 'dB']);
+    expect(missingDriver(r, 'unload')).toBe(true);
+    expect(r.loads.every((o) => o.driver_id === 'dB')).toBe(true);
+    expect(r.unloads.every((o) => o.driver_id === null)).toBe(true);
+  });
+  it('경미 수리는 정비 기록만 남고 차량은 그대로 운행', () => {
+    const tx = setup();
+    setVehicleDayStatus(tx, { date: D, vehicle_id: 'v9915', zone: 'jeju', status: 'repair', memo: '전조등', maintenance: { kind: '기타', shop: '', end_date: D, quick: true } });
+    const r = row(tx, 'v9915');
+    expect([r.inRepair, r.status, r.quickRepair]).toEqual([false, '', true]);
+    expect(tx.list('maintenance_records').filter((m) => m.quick)).toHaveLength(1);
+    setVehicleDayStatus(tx, { date: D, vehicle_id: 'v9914', zone: 'jeju', status: 'repair', memo: '', maintenance: { kind: '기타', shop: '', end_date: D } });
+    expect(row(tx, 'v9914').inRepair).toBe(true);
   });
 });

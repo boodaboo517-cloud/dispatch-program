@@ -16,7 +16,7 @@ export const OIL_ALERT_KM = 1000;
 /** 날짜에 정비 중인 기록 (종료일이 없으면 계속 정비 중) */
 export function activeRepair(records: MaintenanceRecord[], vehicleId: string, date: string) {
   return records.find(
-    (r) => r.vehicle_id === vehicleId && r.start_date <= date && (r.end_date === null || r.end_date >= date),
+    (r) => r.vehicle_id === vehicleId && !r.quick && r.start_date <= date && (r.end_date === null || r.end_date >= date),
   );
 }
 

@@ -186,7 +186,7 @@ function TextSheet(p: { title: string; initial: string; settingKey: string; clos
 export interface StatusResult {
   status: DayStatus;
   memo: string;
-  maintenance?: { kind: MaintenanceKind; shop: string; end_date: string | null };
+  maintenance?: { kind: MaintenanceKind; shop: string; end_date: string | null; quick?: boolean };
   action?: 'add-unload' | 'add-load' | 'move-zone';
 }
 
@@ -197,6 +197,7 @@ function StatusSheet(p: { date: string; zone: Zone | null; current: { status: Da
   const [kind, setKind] = useState<MaintenanceKind>('차량 점검');
   const [shop, setShop] = useState('');
   const [end, setEnd] = useState(p.date);
+  const [quick, setQuick] = useState(false);
   const shops = setting<string[]>(s, 'maintenance_shops', []);
   const finish = (r: StatusResult | null) => {
     p.done(r);
@@ -206,7 +207,7 @@ function StatusSheet(p: { date: string; zone: Zone | null; current: { status: Da
     <Sheet
       title="차량 상태"
       onClose={() => finish(null)}
-      footer={p.staff ? <button className="primary" onClick={() => finish({ status, memo, maintenance: status === 'repair' ? { kind, shop, end_date: end || null } : undefined })}>저장</button> : undefined}
+      footer={p.staff ? <button className="primary" onClick={() => finish({ status, memo, maintenance: status === 'repair' ? { kind, shop, end_date: quick ? p.date : end || null, quick } : undefined })}>저장</button> : undefined}
     >
       {p.staff && (
         <>
@@ -218,7 +219,11 @@ function StatusSheet(p: { date: string; zone: Zone | null; current: { status: Da
           <label className="field"><span>메모 (예: 목포 대기 · 내일 상차)</span><input value={memo} onChange={(e) => setMemo(e.target.value)} /></label>
           {status === 'repair' && (
             <div className="card" style={{ background: '#fef2f2' }}>
-              <div className="muted">정비 등록과 같이 저장됩니다 (기간 동안 매일 수리 표시)</div>
+              <div className="row" style={{ gap: 6, marginBottom: 6 }}>
+                <button className={`chip grow ${!quick ? 'on' : ''}`} style={{ minHeight: 44 }} onClick={() => setQuick(false)}>🔧 수리 입고 (운행 못 함)</button>
+                <button className={`chip grow ${quick ? 'on' : ''}`} style={{ minHeight: 44 }} onClick={() => setQuick(true)}>⚡ 경미 수리 (1시간 내 끝남)</button>
+              </div>
+              <div className="muted">{quick ? '정비 기록만 남고, 차량은 오늘 그대로 배차·운행합니다.' : '정비 등록과 같이 저장됩니다 (기간 동안 매일 수리 표시)'}</div>
               <label className="field"><span>정비 종류</span>
                 <select value={kind} onChange={(e) => setKind(e.target.value as MaintenanceKind)}>{MAINTENANCE_KINDS.map((k) => <option key={k}>{k}</option>)}</select>
               </label>
@@ -226,7 +231,7 @@ function StatusSheet(p: { date: string; zone: Zone | null; current: { status: Da
                 <input list="shops" value={shop} onChange={(e) => setShop(e.target.value)} />
                 <datalist id="shops">{shops.map((x) => <option key={x} value={x} />)}</datalist>
               </label>
-              <label className="field"><span>종료 예정일 (비우면 정비 중 계속)</span><input type="date" value={end} min={p.date} onChange={(e) => setEnd(e.target.value)} /></label>
+              {!quick && <label className="field"><span>종료 예정일 (비우면 정비 중 계속)</span><input type="date" value={end} min={p.date} onChange={(e) => setEnd(e.target.value)} /></label>}
             </div>
           )}
           <button style={{ width: '100%', marginTop: 8 }} onClick={() => finish({ status: '', memo: '', action: 'move-zone' })}>

@@ -64,7 +64,7 @@ function VehicleRow({ date, row, zone, a, focus }: { date: string; row: BoardRow
         </Cell>
       </div>
       <div className="col">
-        <Cell className="vehicle" onTap={() => (row.driverId || !staff ? a.tapVehicle(row) : a.editDriver(row))} onLong={staff ? () => a.editDriver(row) : undefined}>
+        <Cell className="vehicle" onTap={() => (row.driverId || row.loadDriverId || !staff ? a.tapVehicle(row) : void a.assignDriver(row))} onLong={staff ? () => a.editDriver(row) : undefined}>
           <VehicleCellText snap={snap} row={row} date={date} />
           {hasOrders && <StatusChip row={row} />}
         </Cell>

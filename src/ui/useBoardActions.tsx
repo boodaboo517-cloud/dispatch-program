@@ -111,6 +111,20 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     if (drv?.shift === ON_CALL_SHIFT && !workLogOf(snap, drv.id, date)) await pick.workType(date, drv.id);
   };
 
+  /** 기사 없는 차량: 오전·오후 같은 기사로 할지, 오후만 정할지 */
+  const assignDriver = async (row: BoardRow) => {
+    if (!staff) return;
+    const side = await sheet.confirm({
+      title: `${row.vehicle.short_no} 기사 배정`,
+      message: '',
+      actions: [
+        { label: `${sideLabel(row, 'unload')}·${sideLabel(row, 'load')} 같은 기사`, value: 'unload', kind: 'primary' },
+        { label: `${sideLabel(row, 'load')}만 (${sideLabel(row, 'unload')}은 비움)`, value: 'load' },
+      ],
+    });
+    if (side) await editDriver(row, side as DriverSide);
+  };
+
   const editStatus = async (row: BoardRow) => {
     const r = await pick.status(date, row.zone, { status: row.status, memo: row.statusMemo }, staff);
     if (!r) return;
@@ -268,7 +282,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     if (r) store.run((tx) => saveOrder(tx, { ...o, ...(isLoad ? { departure_ship: r.ship, departure_ship_tag: r.tag } : { arrival_ship: r.ship, arrival_ship_tag: r.tag }) }));
   };
 
-  return { addOrder, editNote, moveDate, tapCarried, openOrder, editShip, tapShip, editDriver, editSeq, editHelper, editStart, editStatus, tapVehicle, assign, editWaitingShip, showText, abbrev };
+  return { addOrder, assignDriver, editNote, moveDate, tapCarried, openOrder, editShip, tapShip, editDriver, editSeq, editHelper, editStart, editStatus, tapVehicle, assign, editWaitingShip, showText, abbrev };
 }
 
 /** 출근 시간·장소 입력 */
