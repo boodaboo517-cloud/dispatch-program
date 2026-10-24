@@ -108,6 +108,8 @@ export interface BoardRow {
   /** 오전(하차)·오후(상차) 칸 비고 (오더 없이) */
   unloadNote: string;
   loadNote: string;
+  /** 오전 기사 칸에 이름 대신: "오후도착" */
+  amLabel: string;
   /** 출근 시간·장소 */
   startTime: string;
   startPlace: string;
@@ -146,9 +148,9 @@ export interface Board {
 }
 
 /** 차량은 배정됐는데 그 쪽(하차/상차) 기사가 없음 → "미배치" */
-export const missingDriver = (r: Pick<BoardRow, 'unloads' | 'loads' | 'driverId' | 'loadDriverId'>, kind: Kind) =>
-  kind === 'unload' ? r.unloads.length > 0 && !r.driverId : r.loads.length > 0 && !r.loadDriverId;
-export const needsDriver = (r: Pick<BoardRow, 'unloads' | 'loads' | 'driverId' | 'loadDriverId'>) =>
+export const missingDriver = (r: Pick<BoardRow, 'unloads' | 'loads' | 'driverId' | 'loadDriverId'> & { amLabel?: string }, kind: Kind) =>
+  kind === 'unload' ? r.unloads.length > 0 && !r.driverId && !r.amLabel : r.loads.length > 0 && !r.loadDriverId;
+export const needsDriver = (r: Pick<BoardRow, 'unloads' | 'loads' | 'driverId' | 'loadDriverId'> & { amLabel?: string }) =>
   missingDriver(r, 'unload') || missingDriver(r, 'load');
 
 export function shipTime(snap: Snapshot, name: string | null): string {
@@ -202,7 +204,7 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
     const carried = zone ? carriedLoads(waitingLoads, v.id, date, zone) : [];
     if (!status && mine.length === 0 && carried.length === 0 && !vd?.unload_note && !vd?.load_note) status = 'empty';
     // 오후 기사만 정해 둔 날은 오전을 비워 둔다 (오더에 적힌 오후 기사를 오전으로 끌어오지 않음)
-    const driverId = vd?.driver_id ?? (vd?.load_driver_id ? null : orders.find((o) => o.driver_id)?.driver_id ?? null);
+    const driverId = vd?.driver_id ?? (vd?.load_driver_id || vd?.am_label ? null : orders.find((o) => o.driver_id)?.driver_id ?? null);
     // 제주 기사는 따로 적지 않으면 기본 출근(07:00 부두)
     const startDefault = zone === 'jeju' && !!driverId && !vd?.start_time && !vd?.start_place && status !== 'rest' && status !== 'repair';
     rows.push({
@@ -220,6 +222,7 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
       helperRole: vd?.helper_role ?? '',
       unloadNote: [vd?.unload_note ?? '', ...fromLoadNotes(snap, idx, unloads)].filter(Boolean).join(' · '),
       loadNote: vd?.load_note ?? '',
+      amLabel: vd?.am_label ?? '',
       startTime: startDefault ? DEFAULT_START.time : vd?.start_time ?? '',
       startPlace: startDefault ? DEFAULT_START.place : vd?.start_place ?? '',
       startDefault,
@@ -255,6 +258,7 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
         helperRole: vd?.helper_role ?? '',
         unloadNote: '',
         loadNote: '',
+        amLabel: '',
         startTime: '',
         startPlace: '',
         startDefault: false,
@@ -451,7 +455,7 @@ export function setRowDriver(tx: Tx, p: { date: string; vehicle_id: string; zone
   if (side === 'unload') {
     old = vd.driver_id;
     const merged = !vd.load_driver_id || vd.load_driver_id === d;
-    tx.update('vehicle_days', vd.id, { driver_id: d, unload_seq: null, ...(merged ? { load_driver_id: null, load_seq: null } : {}) });
+    tx.update('vehicle_days', vd.id, { driver_id: d, unload_seq: null, ...(d ? { am_label: '' } : {}), ...(merged ? { load_driver_id: null, load_seq: null } : {}) });
   } else {
     old = vd.load_driver_id || null;
     const ld = d === vd.driver_id ? null : d;
@@ -465,6 +469,22 @@ export function setRowDriver(tx: Tx, p: { date: string; vehicle_id: string; zone
   if (side === 'unload' && d) numberJobs(tx, p.date, d, vd.id, 'unload');
   if (side === 'load' && now.load_driver_id) numberJobs(tx, p.date, now.load_driver_id, vd.id, 'load');
   if (old && old !== d) tidyJobs(tx, p.date, old);
+}
+
+/**
+ * 오전(하차) 기사 칸에 "오후도착" 같은 말을 적는다 (빈 글자 = 지움). 오전 기사는 비우고,
+ * 그 기사가 오전·오후를 같이 맡고 있었으면 오후 기사로 남긴다.
+ */
+export function setRowAmLabel(tx: Tx, p: { date: string; vehicle_id: string; zone: Zone | null; label: string }) {
+  const vd = ensureVehicleDay(tx, p.date, p.vehicle_id, p.zone);
+  const label = p.label.trim();
+  if (!label) return void tx.update('vehicle_days', vd.id, { am_label: '' });
+  const pm = vd.load_driver_id || vd.driver_id || null;
+  tx.update('vehicle_days', vd.id, { am_label: label, driver_id: null, unload_seq: null, load_driver_id: pm, load_seq: vd.load_driver_id ? vd.load_seq : vd.unload_seq });
+  for (const o of tx.list('daily_orders').filter((o) => o.date === p.date && o.vehicle_id === p.vehicle_id)) {
+    const drv = o.kind === 'load' ? pm : null;
+    if (o.driver_id !== drv) tx.update('daily_orders', o.id, { driver_id: drv });
+  }
 }
 
 /** 동승 기사 (선탑·교육 / 지원) 지정. driver_id = null 이면 해제 */

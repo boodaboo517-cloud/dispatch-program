@@ -360,3 +360,7 @@ tr.err td { background: var(--red-soft); }
 
 .install-banner { display: flex; gap: 6px; align-items: center; max-width: 720px; margin: 8px auto; padding: 0 12px; }
 .install-banner .primary { min-height: 48px; font-size: 17px; }
+
+/* 오전 기사 칸 "오후도착" */
+.pm-arrival { color: #1d4ed8; font-weight: 700; }
+.paper .ps-pmarr { color: #1d4ed8; font-weight: 700; font-size: .85em; }

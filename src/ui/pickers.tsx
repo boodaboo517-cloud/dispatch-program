@@ -253,6 +253,8 @@ export const EXTERNAL_HIRED = '__hired__';
 export const EXTERNAL_SHIPPER = '__shipper__';
 /** 배차 대기 짐: 차량 대신 날짜를 옮김 */
 export const MOVE_DATE = '__move_date__';
+/** 오전 기사 칸: 기사 대신 "오후도착" */
+export const PM_ARRIVAL = '__pm_arrival__';
 
 export function usePickers() {
   const sheet = useSheet();
@@ -307,8 +309,9 @@ export function usePickers() {
       }),
 
     /** 팀별로 묶은 기사 목록: 오늘 근무 → 알바 → 근무일 아님(흐리게). 휴무 지정자는 제외 */
-    driver: (date: string, current: string | null) =>
-      ask<string | null | undefined>((close, done) => <DriverSheet date={date} current={current} close={close} done={done} />),
+    /** pmArrival: 맨 위에 "🚢 오후도착" (값 PM_ARRIVAL) — 오전 기사 칸에서 */
+    driver: (date: string, current: string | null, pmArrival = false) =>
+      ask<string | null | undefined>((close, done) => <DriverSheet date={date} current={current} pmArrival={pmArrival} close={close} done={done} />),
 
     workType: (date: string, driverId: string) =>
       ask<void>((close, done) => <WorkTypeSheet date={date} driverId={driverId} close={() => { done(); close(); }} />),
@@ -354,7 +357,7 @@ export function usePickers() {
 
 const groupOrder = (a: string, b: string) => (a === '팀 없음' ? 1 : b === '팀 없음' ? -1 : a.localeCompare(b, 'ko', { numeric: true }));
 
-function DriverSheet(p: { date: string; current: string | null; close: () => void; done: (v: string | null | undefined) => void }) {
+function DriverSheet(p: { date: string; current: string | null; pmArrival?: boolean; close: () => void; done: (v: string | null | undefined) => void }) {
   const s = snap();
   const [team, setTeam] = useState<string | null>(null);
   const finish = (v: string | null | undefined) => {
@@ -391,7 +394,10 @@ function DriverSheet(p: { date: string; current: string | null; close: () => voi
           ...byTeam(offDay, (t) => `근무일 아님 · ${t}`, true),
         ]}
         onPick={(it) => finish(it.id)}
-        top={p.current ? <div className="list-item" onClick={() => finish(null)}><span style={{ color: 'var(--red)' }}>기사 비우기 (미지정)</span></div> : undefined}
+        top={<>
+          {p.pmArrival && <div className="list-item" onClick={() => finish(PM_ARRIVAL)}><span><b style={{ color: '#1d4ed8' }}>🚢 오후도착</b> <span className="muted small">배가 오후에 들어와 오전 기사 없음 (미배치 아님)</span></span></div>}
+          {p.current && <div className="list-item" onClick={() => finish(null)}><span style={{ color: 'var(--red)' }}>기사 비우기 (미지정)</span></div>}
+        </>}
       />
     </Sheet>
   );

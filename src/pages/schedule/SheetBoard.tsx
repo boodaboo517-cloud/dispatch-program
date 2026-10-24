@@ -110,7 +110,9 @@ function VehicleRow({ snap, row }: { snap: Snapshot; row: BoardRow }) {
   const noUnload = missingDriver(row, 'unload');
   const noLoad = missingDriver(row, 'load');
   const MISSING = <div className="ps-oline center"><Fit><span className="ps-nodrv">미배치</span></Fit></div>;
-  const name = <>{start}{noUnload ? MISSING : <div className="ps-oline center"><Fit>{driverName(snap, row.driverId)}{seqMark(row.unloadSeq)}</Fit></div>}{helper}</>;
+  const name = <>{start}{noUnload ? MISSING : !row.driverId && row.amLabel
+    ? <div className="ps-oline center"><Fit><span className="ps-pmarr">{row.amLabel}</span></Fit></div>
+    : <div className="ps-oline center"><Fit>{driverName(snap, row.driverId)}{seqMark(row.unloadSeq)}</Fit></div>}{helper}</>;
   const loadName = <>{noLoad ? MISSING : <div className="ps-oline center"><Fit>{driverName(snap, row.loadDriverId)}{seqMark(row.loadSeq)}</Fit></div>}{helper}</>;
   const statusText = status || row.statusMemo
     ? <>{status && <span className={`st ${status}`}>{DAY_STATUS_LABEL[status]}</span>}{row.statusMemo && <span className="ps-red"> {row.statusMemo}</span>}</>

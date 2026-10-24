@@ -1,7 +1,7 @@
 // 일정표 칸 동작 (휴대폰·PC 공통)
 import {
   ON_CALL_SHIFT, abbrev, acceptShipPending, nudgeVehicle, workLogOf, assignVehicle, blankOrder, buildBoard, createOrder, ignoreShipPending, opposite, saveOrder,
-  DEFAULT_START, HELPER_ROLE_LABEL, START_PLACES, setRowNote, lastStart, startText, setRowStart, rowDriver, seqMark, setDriverSeq, setRowDriver, setRowHelper, setRowShip, setVehicleDayStatus, setVehicleZone, shipTime,
+  DEFAULT_START, PM_ARRIVAL_LABEL, setRowAmLabel, HELPER_ROLE_LABEL, START_PLACES, setRowNote, lastStart, startText, setRowStart, rowDriver, seqMark, setDriverSeq, setRowDriver, setRowHelper, setRowShip, setVehicleDayStatus, setVehicleZone, shipTime,
   type Board, type BoardRow, type DailyOrder, type DriverSide, type HelperRole, type Kind, type Zone,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
@@ -10,7 +10,7 @@ import { useRole, useSnap } from './hooks.ts';
 import { ZONE_LABEL, clientName, driverName, kindLabel, productName, qtyText, shipText, vehicleNo } from './labels.ts';
 import { fmtDate } from '../lib/time.ts';
 import { OrderSheet, QuickQtySheet } from './OrderSheet.tsx';
-import { EXTERNAL_HIRED, EXTERNAL_SHIPPER, MOVE_DATE, usePickers } from './pickers.tsx';
+import { EXTERNAL_HIRED, EXTERNAL_SHIPPER, MOVE_DATE, PM_ARRIVAL, usePickers } from './pickers.tsx';
 import { Sheet, useSheet } from './Sheet.tsx';
 
 export function useBoardActions(date: string, board: Board, onFocusVehicle?: (vehicleId: string) => void) {
@@ -102,8 +102,15 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
 
   const editDriver = async (row: BoardRow, side: DriverSide = 'unload') => {
     if (!staff) return;
-    const d = await pick.driver(date, side === 'unload' ? row.driverId : row.loadDriverId);
+    const d = await pick.driver(date, side === 'unload' ? row.driverId : row.loadDriverId, side === 'unload');
     if (d === undefined) return;
+    if (d === PM_ARRIVAL) {
+      store.run((tx) => setRowAmLabel(tx, { date, vehicle_id: row.vehicle.id, zone: row.zone, label: PM_ARRIVAL_LABEL }));
+      // 오후 기사가 아직 없으면 바로 고르기
+      const now = buildBoard(store.getState().snap, date).rows.find((r) => r.vehicle.id === row.vehicle.id && !r.secondary);
+      if (now && !now.loadDriverId) await editDriver(now, 'load');
+      return;
+    }
     store.run((tx) => setRowDriver(tx, { date, vehicle_id: row.vehicle.id, zone: row.zone, driver_id: d, side }));
     // 알바는 출근한 날 근무형태를 바로 입력
     const snap = store.getState().snap;
@@ -120,9 +127,14 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
       actions: [
         { label: `${sideLabel(row, 'unload')}·${sideLabel(row, 'load')} 같은 기사`, value: 'unload', kind: 'primary' },
         { label: `${sideLabel(row, 'load')}만 (${sideLabel(row, 'unload')}은 비움)`, value: 'load' },
+        { label: '🚢 오후도착 (오전 기사 없음)', value: 'pm' },
       ],
     });
-    if (side) await editDriver(row, side as DriverSide);
+    if (side === 'pm') {
+      store.run((tx) => setRowAmLabel(tx, { date, vehicle_id: row.vehicle.id, zone: row.zone, label: PM_ARRIVAL_LABEL }));
+      const now = buildBoard(store.getState().snap, date).rows.find((r) => r.vehicle.id === row.vehicle.id && !r.secondary);
+      if (now) await editDriver(now, 'load');
+    } else if (side) await editDriver(row, side as DriverSide);
   };
 
   const editStatus = async (row: BoardRow) => {

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { buildBoard, lastStart, setVehicleDayStatus, missingDriver, needsDriver, setRowNote, setDriverSeq, setRowDriver, setRowHelper, setRowStart, startText } from '../board.ts';
+import { buildBoard, lastStart, setRowAmLabel, setVehicleDayStatus, missingDriver, needsDriver, setRowNote, setDriverSeq, setRowDriver, setRowHelper, setRowStart, startText } from '../board.ts';
 import { blankOrder, repairShipLinks, saveOrder, setRowShip, workText } from '../orders.ts';
 import { Tx, applyMutations } from '../tx.ts';
 import { copyOrder, createOrder, splitPerVehicle } from '../actions.ts';
@@ -540,5 +540,20 @@ describe('현장근무 사람별 일정 바꾸기', () => {
     expect(tx.list('field_assignments').some((f) => f.staff_id === 'dA' && f.date === '2026-10-25')).toBe(false);
     setStaffRange(tx, { staffId: 'dA', from: '2026-10-21', to: '2026-10-22', plan: { off: true, site_id: null, task: '', vehicle_id: null } });
     expect(tx.list('field_assignments').filter((f) => f.staff_id === 'dA' && (f.date === '2026-10-21' || f.date === '2026-10-22')).map((f) => f.is_off)).toEqual([true, true]);
+  });
+});
+
+describe('오전 기사 칸 "오후도착"', () => {
+  it('오전은 오후도착(미배치 아님), 오전·오후 맡던 기사는 오후로 남음 · 기사 다시 넣으면 지워짐', () => {
+    const tx = setup();
+    set(tx, 'v9915', 'dA');
+    setRowAmLabel(tx, { date: D, vehicle_id: 'v9915', zone: 'jeju', label: '오후도착' });
+    let r = row(tx, 'v9915');
+    expect([r.driverId, r.loadDriverId, r.amLabel, missingDriver(r, 'unload')]).toEqual([null, 'dA', '오후도착', false]);
+    expect(r.unloads.every((o) => o.driver_id === null)).toBe(true);
+    expect(r.loads.every((o) => o.driver_id === 'dA')).toBe(true);
+    set(tx, 'v9915', 'dB', 'unload');
+    r = row(tx, 'v9915');
+    expect([r.driverId, r.amLabel]).toEqual(['dB', '']);
   });
 });

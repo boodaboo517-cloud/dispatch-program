@@ -847,3 +847,7 @@ grant execute on function admin_backup_now() to authenticated;
 -- pg_cron 은 UTC: 17:00 UTC = 다음 날 02:00 KST
 select cron.unschedule(jobid) from cron.job where jobname = 'daily-server-backup';
 select cron.schedule('daily-server-backup', '0 17 * * *', $$select make_server_backup()$$);
+
+-- ===== 20261025000021_am_label.sql =====
+-- 오전(하차) 기사 칸에 이름 대신 적는 말: "오후도착" (배가 오후에 들어와 오전 일이 없음)
+alter table vehicle_days add column if not exists am_label text not null default '';

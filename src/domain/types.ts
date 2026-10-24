@@ -243,6 +243,9 @@ export interface DailyOrder extends Base {
 }
 
 /** 차량별 하루 한 줄 — 선박·상태·기사 등 차량 단위 정보 */
+/** 오전 기사 칸 "오후도착" */
+export const PM_ARRIVAL_LABEL = '오후도착';
+
 /** 동승 기사 역할: 선탑(교육) / 지원 */
 export type HelperRole = '선탑' | '지원';
 /** 제주 출근 장소 바로 고르기 */
@@ -269,6 +272,8 @@ export interface VehicleDay extends Base {
   /** 오전(하차)·오후(상차) 칸에 오더 없이 적는 비고 */
   unload_note?: string;
   load_note?: string;
+  /** 오전(하차) 기사 칸에 이름 대신 적는 말: "오후도착" (배가 오후에 들어와 오전 일이 없음) */
+  am_label?: string;
   /** 출근 시간(HH:mm)·장소 (제주: 부두, 차고지, 본사, 함덕, 고산, 현장 …) */
   start_time?: string;
   start_place?: string;

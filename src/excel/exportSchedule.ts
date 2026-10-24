@@ -42,7 +42,7 @@ function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: 
     const n = Math.max(uLines, lLines, 1);
     const hasOrders = uLines + lLines > 0;
     const seq = (n: number | null) => (n ? ` ${seqMark(n)}` : '');
-    const drv = driverName(s, row.driverId) ? driverName(s, row.driverId) + seq(row.unloadSeq) : missingDriver(row, 'unload') ? '미배치' : '';
+    const drv = driverName(s, row.driverId) ? driverName(s, row.driverId) + seq(row.unloadSeq) : row.amLabel || (missingDriver(row, 'unload') ? '미배치' : '');
     const helper = row.helperId ? ` +${driverName(s, row.helperId)}${row.helperRole ? `(${row.helperRole})` : ''}` : '';
     const loadDrv = (driverName(s, row.loadDriverId) ? driverName(s, row.loadDriverId) + seq(row.loadSeq) : missingDriver(row, 'load') ? '미배치' : '') + helper;
     for (let i = 0; i < n; i++) {

@@ -93,7 +93,7 @@ function VehicleGroup({ row, zone, a, staff, focus }: { row: BoardRow; zone: Zon
     return (
       <td rowSpan={n}>
         <Cell onTap={() => (drv || !staff ? a.tapVehicle(row) : a.editDriver(row, side))} onLong={staff ? () => a.editDriver(row, side) : undefined}>
-          {drv ? <span style={{ fontSize: 13 }}>{abbrev(drv)}{seqMark(seq)}</span> : missingDriver(row, side) ? <span className="nodrv-badge">미배치</span> : null}
+          {drv ? <span style={{ fontSize: 13 }}>{abbrev(drv)}{seqMark(seq)}</span> : side === 'unload' && row.amLabel ? <span className="pm-arrival" style={{ fontSize: 13 }}>🚢{row.amLabel}</span> : missingDriver(row, side) ? <span className="nodrv-badge">미배치</span> : null}
           {side === 'unload' && (row.startTime || row.startPlace) && <span style={{ fontSize: 12, color: '#1d4ed8' }}>{row.startTime} {row.startPlace}</span>}
           {row.helperId && <span style={{ fontSize: 12, color: '#b45309' }}>+{abbrev(driverName(snap, row.helperId), 3)} {row.helperRole}</span>}
         </Cell>
