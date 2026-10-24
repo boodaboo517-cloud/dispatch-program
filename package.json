@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "sync:functions": "node scripts/sync-functions.mjs",
-    "seed:sql": "node --experimental-strip-types scripts/gen-seed-sql.ts > supabase/seed.sql"
+    "seed:sql": "node --experimental-strip-types scripts/gen-seed-sql.ts > supabase/seed.sql",
+    "setup:sql": "node scripts/gen-setup-sql.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",

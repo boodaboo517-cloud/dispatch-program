@@ -37,14 +37,11 @@ npm run build      # 배포용 빌드 (dist/)
 ## 2. Supabase 연결
 
 1. supabase.com에서 프로젝트를 만듭니다.
-2. SQL Editor에서 순서대로 실행합니다.
-   - `supabase/migrations/20261020000001_schema.sql` (테이블)
-   - `supabase/migrations/20261020000002_rls_audit_realtime.sql` (권한 · 변경 이력 · 실시간 · 기사 알림 · 사진 버킷)
-   - `supabase/migrations/20261021000004_workforce_ships_orders.sql` (기사 비고·근무형태, 선박 기항지별 시간, 상차지/하차지, 당일 왕복)
-   - `supabase/migrations/20261021000005_carrier_bulk.sql` (용차·화주배차, 벌크 선적, 하차 날짜 조정, 차량 기본 기사 없앰)
-   - `supabase/migrations/20261022000006_driver_team.sql` (기사 팀)
-   - `supabase/seed.sql` (선박·차량·기사·거래처·현장근무 기본 데이터)
+2. SQL Editor → New query에 **`supabase/setup_all.sql`** 내용을 통째로 붙여넣고 Run 합니다 (모든 테이블·권한·실시간·사진 버킷을 한 번에 만듭니다).
+   - 그다음 새 query에 `supabase/seed.sql`(선박·차량·기사·거래처·현장근무 기본 명단)을 붙여넣고 Run 합니다. 데모에서 입력한 데이터를 옮길 거면 seed는 건너뛰고 아래 4번 뒤에 백업 파일을 올립니다.
+   - `setup_all.sql`은 `supabase/migrations`를 묶은 파일입니다(`npm run setup:sql`로 다시 만듦). 이미 설정한 서버에는 새로 추가된 migration 파일만 실행하세요.
    - Supabase CLI를 쓴다면 `supabase db push` 후 `psql -f supabase/seed.sql`
+   - Authentication → Sign In / Providers → Email에서 **Confirm email**을 끄면 가입 즉시 로그인됩니다(켜 두면 받은 메일의 링크를 눌러야 로그인됩니다).
 3. `.env.example`을 `.env`로 복사한 뒤 Project Settings → API의 URL과 anon key를 넣습니다.
 4. 앱에서 **처음 가입한 사람이 관리자**가 됩니다. 이후 가입자는 "조회(기사)"이며, 관리자가 설정 → 사용자 권한에서 배차·관리자로 바꾸거나 기사와 연결합니다.
 

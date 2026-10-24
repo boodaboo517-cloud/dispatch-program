@@ -1,0 +1,719 @@
+-- 경민물류 배차: Supabase 처음 설정 (SQL Editor 에 통째로 붙여넣고 Run). npm run setup:sql 로 다시 만든다.
+-- 새벽 스케줄러(20261020000003_scheduler.sql)는 Vault 설정 뒤 따로 실행.
+
+-- ===== 20261020000001_schema.sql =====
+-- 경민물류 배차 스키마
+create extension if not exists pgcrypto;
+
+-- ───────── 사용자 · 권한 ─────────
+create table drivers (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  phone text not null default '',
+  work_days smallint[] not null default '{}',     -- 0=일 … 6=토
+  shift text not null default '',                  -- 월수금 / 화목일 / 토요일 / 부산상주 / 서울상주
+  affiliation text not null default '',
+  staff_type text not null default '기사' check (staff_type in ('기사','현장','사무')),
+  updated_at timestamptz not null default now(),
+  updated_by uuid
+);
+
+create table profiles (
+  id uuid primary key references auth.users on delete cascade,
+  name text not null default '',
+  role text not null default 'viewer' check (role in ('admin','dispatcher','viewer')),
+  driver_id uuid references drivers on delete set null,
+  updated_at timestamptz not null default now()
+);
+
+create or replace function app_role() returns text
+language sql stable security definer set search_path = public as $$
+  select coalesce((select role from profiles where id = auth.uid()), 'viewer')
+$$;
+
+create or replace function is_staff() returns boolean
+language sql stable security definer set search_path = public as $$
+  select app_role() in ('admin','dispatcher')
+$$;
+
+create or replace function my_driver_id() returns uuid
+language sql stable security definer set search_path = public as $$
+  select driver_id from profiles where id = auth.uid()
+$$;
+
+-- 새 가입자는 조회(기사) 권한으로 시작 — 관리자가 설정 화면에서 바꾼다
+create or replace function handle_new_user() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into profiles (id, name, role)
+  values (new.id, coalesce(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
+          case when (select count(*) from profiles) = 0 then 'admin' else 'viewer' end);
+  return new;
+end $$;
+create trigger on_auth_user_created after insert on auth.users
+  for each row execute function handle_new_user();
+
+-- ───────── 기준 정보 ─────────
+create table ships (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  departs_at text not null default '',             -- HH:mm
+  route text not null default 'both' check (route in ('up','down','both')),
+  arrival_day_offset smallint not null default 1,  -- 도착일 차이
+  sort_order int not null default 0,
+  updated_at timestamptz not null default now(),
+  updated_by uuid
+);
+
+create table clients (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  manager text not null default '',
+  phone text not null default '',
+  default_ship text,
+  memo text not null default '',
+  pickup_address text not null default '',
+  dropoff_address text not null default '',
+  pickup_contact_name text not null default '',
+  pickup_contact_phone text not null default '',
+  dropoff_contact_name text not null default '',
+  dropoff_contact_phone text not null default '',
+  updated_at timestamptz not null default now(),
+  updated_by uuid
+);
+
+create table products (
+  id uuid primary key default gen_random_uuid(),
+  client_id uuid not null references clients on delete cascade,
+  name text not null,
+  default_region text not null default '',
+  default_quantity numeric,
+  default_unit text not null default '' check (default_unit in ('','대','파렛트','m','박스')),
+  pickup_address text not null default '',
+  pickup_lat double precision, pickup_lng double precision,
+  pickup_note text not null default '',
+  dropoff_address text not null default '',
+  dropoff_lat double precision, dropoff_lng double precision,
+  dropoff_note text not null default '',
+  pickup_contact_name text not null default '',
+  pickup_contact_phone text not null default '',
+  dropoff_contact_name text not null default '',
+  dropoff_contact_phone text not null default '',
+  storage text not null default 'ambient' check (storage in ('ambient','chilled','frozen')),
+  temp_min numeric, temp_max numeric,
+  caution text not null default '',
+  updated_at timestamptz not null default now(),
+  updated_by uuid
+);
+create index on products (client_id);
+
+-- 금액: 관리자·배차만 (기사·조회 계정은 RLS 로 행 자체가 내려가지 않음)
+create table product_pricing (
+  id uuid primary key default gen_random_uuid(),
+  product_id uuid not null unique references products on delete cascade,
+  calc_method text not null check (calc_method in ('per_pallet','per_unit','fixed')),
+  unit_price numeric not null,
+  updated_at timestamptz not null default now(),
+  updated_by uuid
+);
+
+create table product_photos (
+  id uuid primary key default gen_random_uuid(),
+  product_id uuid not null references products on delete cascade,
+  path text not null,
+  caption text not null default '',
+  updated_at timestamptz not null default now(),
+  updated_by uuid
+);
+
+create table product_suggestions (
+  id uuid primary key default gen_random_uuid(),
+  product_id uuid not null references products on delete cascade,
+  kind text not null check (kind in ('photo','caution')),
+  payload text not null,
+  status text not null default 'pending' check (status in ('pending','approved','rejected')),
+  created_by uuid default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid
+);
+
+create table vehicles (
+  id uuid primary key default gen_random_uuid(),
+  plate text not null,
+  short_no text not null,
+  vehicle_type text not null default '5톤' check (vehicle_type in ('5톤','통윙','통윙2냉','1톤','승용')),
+  usage text not null default '배차' check (usage in ('배차','업무용')),
+  ownership text not null default '자차' check (ownership in ('자차','개인')),
+  default_driver_id uuid references drivers on delete set null,
+  status text not null default '운행' check (status in ('운행','정비','휴차')),
+  home_zone text check (home_zone in ('land','jeju')),
+  sort_order int not null default 0,
+  oil_interval_km int,
+  updated_at timestamptz not null default now(),
+  updated_by uuid
+);
+
+-- ───────── 반복 발주 ─────────
+create table recurring_orders (
+  id uuid primary key default gen_random_uuid(),
+  client_id uuid not null references clients on delete cascade,
+  product_id uuid references products on delete set null,
+  zone text not null check (zone in ('land','jeju')),
+  kind text not null check (kind in ('unload','load')),
+  active boolean not null default true,
+  generated_until date,
+  updated_at timestamptz not null default now(),
+  updated_by uuid
+);
+
+create table recurring_order_versions (
+  id uuid primary key default gen_random_uuid(),
+  recurring_order_id uuid not null references recurring_orders on delete cascade,
+  weekdays smallint[] not null,
+  quantity numeric,
+  unit text not null default '',
+  region text not null default '',
+  ship text,
+  ship_tag text not null default '',
+  vehicle_id uuid references vehicles on delete set null,
+  memo text not null default '',
+  effective_from date not null,
+  effective_to date,
+  updated_at timestamptz not null default now(),
+  updated_by uuid,
+  check (effective_to is null or effective_to >= effective_from - 1)
+);
+create index on recurring_order_versions (recurring_order_id, effective_from);
+
+-- ───────── 날짜별 오더 ─────────
+create table daily_orders (
+  id uuid primary key default gen_random_uuid(),
+  date date not null,
+  zone text not null check (zone in ('land','jeju')),
+  kind text not null check (kind in ('unload','load')),     -- 제주: unload=오전, load=오후
+  client_id uuid references clients on delete set null,
+  client_text text not null default '',
+  product_id uuid references products on delete set null,
+  product_text text not null default '',
+  region text not null default '',
+  quantity numeric,
+  unit text not null default '',
+  memo text not null default '',
+  vehicle_id uuid references vehicles on delete set null,
+  driver_id uuid references drivers on delete set null,
+  arrival_ship text,            -- 육지=상행선박 / 제주=도착 선박
+  arrival_ship_tag text not null default '',
+  departure_ship text,          -- 육지=하행선박 / 제주=오후 선박
+  departure_ship_tag text not null default '',
+  sort_order int not null default 0,
+  source text not null default 'manual' check (source in ('manual','recurring','linked')),
+  recurring_order_id uuid references recurring_orders on delete set null,
+  recurring_version_id uuid references recurring_order_versions on delete set null,
+  edited_manually boolean not null default false,
+  linked_from_id uuid references daily_orders on delete set null deferrable initially deferred,
+  link_status text not null default 'none' check (link_status in ('none','synced','source_changed','source_deleted')),
+  link_pending jsonb,
+  updated_at timestamptz not null default now(),
+  updated_by uuid
+);
+create index on daily_orders (date);
+create index on daily_orders (recurring_order_id, date);
+create index on daily_orders (linked_from_id);
+create index on daily_orders (vehicle_id, date);
+-- 스케줄러와 앱이 동시에 연장해도 같은 날짜 반복 오더가 두 번 생기지 않게
+create unique index daily_orders_recurring_once on daily_orders (recurring_order_id, date) where source = 'recurring';
+
+create table vehicle_days (
+  id uuid primary key default gen_random_uuid(),
+  date date not null,
+  vehicle_id uuid not null references vehicles on delete cascade,
+  zone text check (zone in ('land','jeju')),
+  driver_id uuid references drivers on delete set null,
+  arrival_ship text,
+  arrival_ship_tag text not null default '',
+  departure_ship text,
+  departure_ship_tag text not null default '',
+  status text not null default '' check (status in ('','empty','repair','rest','other')),
+  status_memo text not null default '',
+  arrival_from_id uuid references vehicle_days on delete set null deferrable initially deferred,
+  arrival_edited_manually boolean not null default false,
+  arrival_pending jsonb,
+  updated_at timestamptz not null default now(),
+  updated_by uuid,
+  unique (date, vehicle_id) deferrable initially deferred
+);
+
+-- 매출 (오더별) — 금액이라 별도 테이블 + 관리자·배차 전용 RLS
+create table order_revenue (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null unique references daily_orders on delete cascade deferrable initially deferred,
+  calc_method text not null default 'per_pallet' check (calc_method in ('per_pallet','per_unit','fixed')),
+  unit_price numeric,
+  quantity numeric,
+  extras jsonb not null default '[]',
+  supply_amount numeric,
+  vat numeric,
+  total numeric,
+  bill_to_client_id uuid references clients on delete set null,
+  billing_status text not null default '미청구' check (billing_status in ('미청구','청구','입금')),
+  updated_at timestamptz not null default now(),
+  updated_by uuid
+);
+
+-- ───────── 현장근무 ─────────
+create table field_sites (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  sort_order int not null default 0,
+  updated_at timestamptz not null default now(),
+  updated_by uuid
+);
+
+create table recurring_field_work (
+  id uuid primary key default gen_random_uuid(),
+  staff_id uuid not null references drivers on delete cascade,
+  active boolean not null default true,
+  generated_until date,
+  updated_at timestamptz not null default now(),
+  updated_by uuid
+);
+
+create table recurring_field_versions (
+  id uuid primary key default gen_random_uuid(),
+  recurring_field_id uuid not null references recurring_field_work on delete cascade,
+  weekdays smallint[] not null,
+  site_id uuid references field_sites on delete set null,
+  task text not null default '',
+  vehicle_id uuid references vehicles on delete set null,
+  effective_from date not null,
+  effective_to date,
+  updated_at timestamptz not null default now(),
+  updated_by uuid
+);
+
+-- ───────── 정비 ─────────
+create table maintenance_records (
+  id uuid primary key default gen_random_uuid(),
+  vehicle_id uuid not null references vehicles on delete cascade,
+  kind text not null,
+  shop text not null default '',
+  start_date date not null,
+  end_date date,
+  odometer_km int,
+  cost numeric,
+  staff_id uuid references drivers on delete set null,
+  memo text not null default '',
+  photo_paths text[] not null default '{}',
+  updated_at timestamptz not null default now(),
+  updated_by uuid
+);
+create index on maintenance_records (vehicle_id, start_date);
+
+create table field_assignments (
+  id uuid primary key default gen_random_uuid(),
+  date date not null,
+  site_id uuid references field_sites on delete set null,
+  staff_id uuid references drivers on delete cascade,
+  task text not null default '',
+  vehicle_id uuid references vehicles on delete set null,
+  source text not null default 'manual' check (source in ('manual','recurring','maintenance')),
+  recurring_field_id uuid references recurring_field_work on delete set null,
+  recurring_field_version_id uuid references recurring_field_versions on delete set null,
+  edited_manually boolean not null default false,
+  is_off boolean not null default false,
+  maintenance_record_id uuid references maintenance_records on delete cascade,
+  sort_order int not null default 0,
+  updated_at timestamptz not null default now(),
+  updated_by uuid
+);
+create index on field_assignments (date);
+create unique index field_assignments_recurring_once on field_assignments (recurring_field_id, date) where source = 'recurring';
+
+create table maintenance_schedules (
+  id uuid primary key default gen_random_uuid(),
+  vehicle_id uuid not null references vehicles on delete cascade,
+  kind text not null,
+  interval_days int,
+  interval_km int,
+  due_date date,
+  updated_at timestamptz not null default now(),
+  updated_by uuid
+);
+
+create table odometer_logs (
+  id uuid primary key default gen_random_uuid(),
+  vehicle_id uuid not null references vehicles on delete cascade,
+  date date not null,
+  km int not null,
+  updated_at timestamptz not null default now(),
+  updated_by uuid
+);
+create index on odometer_logs (vehicle_id, date);
+
+-- ───────── 설정 · 알림 · 이력 ─────────
+create table settings (
+  id uuid primary key default gen_random_uuid(),
+  key text not null unique,
+  value jsonb,
+  updated_at timestamptz not null default now(),
+  updated_by uuid
+);
+
+create table notices (
+  id uuid primary key default gen_random_uuid(),
+  date date not null,
+  vehicle_id uuid references vehicles on delete cascade,
+  driver_id uuid references drivers on delete cascade,
+  message text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid
+);
+
+create table audit_log (
+  id bigserial primary key,
+  table_name text not null,
+  row_id uuid,
+  op text not null,
+  old_row jsonb,
+  new_row jsonb,
+  actor uuid,
+  at timestamptz not null default now()
+);
+create index on audit_log (table_name, row_id, at desc);
+
+-- ===== 20261020000002_rls_audit_realtime.sql =====
+-- 권한(RLS) · 변경 이력 · 실시간 · 기사 알림
+
+-- ───────── updated_at / updated_by 자동 기록 ─────────
+create or replace function touch_row() returns trigger
+language plpgsql as $$
+begin
+  new.updated_at := now();
+  new.updated_by := coalesce(auth.uid(), new.updated_by);
+  return new;
+end $$;
+
+-- ───────── 변경 이력 (누가·언제·무엇을) ─────────
+create or replace function audit_row() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into audit_log (table_name, row_id, op, old_row, new_row, actor)
+  values (tg_table_name,
+          coalesce((case when tg_op = 'DELETE' then old.id else new.id end), null),
+          tg_op,
+          case when tg_op in ('UPDATE','DELETE') then to_jsonb(old) end,
+          case when tg_op in ('INSERT','UPDATE') then to_jsonb(new) end,
+          auth.uid());
+  return null;
+end $$;
+
+do $$
+declare t text;
+begin
+  foreach t in array array[
+    'drivers','ships','clients','products','product_pricing','product_photos','product_suggestions',
+    'vehicles','recurring_orders','recurring_order_versions','daily_orders','vehicle_days','order_revenue',
+    'field_sites','recurring_field_work','recurring_field_versions','field_assignments',
+    'maintenance_records','maintenance_schedules','odometer_logs','settings','notices'
+  ] loop
+    execute format('create trigger touch before insert or update on %I for each row execute function touch_row()', t);
+    execute format('create trigger audit after insert or update or delete on %I for each row execute function audit_row()', t);
+    execute format('alter table %I enable row level security', t);
+    execute format('alter table %I replica identity full', t);
+    execute format('alter publication supabase_realtime add table %I', t);
+  end loop;
+end $$;
+
+alter table profiles enable row level security;
+alter table audit_log enable row level security;
+
+-- ───────── 기본 정책: 로그인 사용자 읽기, 관리자·배차만 쓰기 ─────────
+do $$
+declare t text;
+begin
+  foreach t in array array[
+    'drivers','ships','clients','products','product_photos','vehicles','recurring_orders',
+    'recurring_order_versions','daily_orders','vehicle_days','field_sites','recurring_field_work',
+    'recurring_field_versions','field_assignments','maintenance_records','maintenance_schedules','odometer_logs'
+  ] loop
+    execute format('create policy "read" on %I for select to authenticated using (true)', t);
+    execute format('create policy "staff insert" on %I for insert to authenticated with check (is_staff())', t);
+    execute format('create policy "staff update" on %I for update to authenticated using (is_staff()) with check (is_staff())', t);
+    execute format('create policy "staff delete" on %I for delete to authenticated using (is_staff())', t);
+  end loop;
+end $$;
+
+-- 금액 테이블: 관리자·배차만. 기사·조회 계정은 select 정책이 없으므로 행이 아예 내려가지 않는다.
+create policy "staff all" on order_revenue for all to authenticated using (is_staff()) with check (is_staff());
+create policy "staff all" on product_pricing for all to authenticated using (is_staff()) with check (is_staff());
+
+-- 기사: 본인 차량 주행거리 입력 허용
+create policy "driver odometer" on odometer_logs for insert to authenticated with check (
+  exists (select 1 from vehicles v where v.id = vehicle_id and v.default_driver_id = my_driver_id())
+  or exists (select 1 from vehicle_days d where d.vehicle_id = odometer_logs.vehicle_id and d.driver_id = my_driver_id())
+);
+
+-- 기사 제안(사진·주의사항) — 설정에서 허용했을 때만, 관리자 승인 후 반영
+create policy "read own or staff" on product_suggestions for select to authenticated
+  using (is_staff() or created_by = auth.uid());
+create policy "driver suggest" on product_suggestions for insert to authenticated with check (
+  is_staff() or (
+    created_by = auth.uid() and status = 'pending'
+    and coalesce((select (value)::text = 'true' from settings where key = 'driver_suggestions'), false)
+  )
+);
+create policy "staff review" on product_suggestions for update to authenticated using (is_staff()) with check (is_staff());
+create policy "staff delete" on product_suggestions for delete to authenticated using (is_staff());
+
+create policy "read" on settings for select to authenticated using (true);
+create policy "admin write" on settings for all to authenticated using (app_role() = 'admin') with check (app_role() = 'admin');
+
+create policy "read mine or staff" on notices for select to authenticated using (is_staff() or driver_id = my_driver_id());
+create policy "staff write" on notices for all to authenticated using (is_staff()) with check (is_staff());
+
+create policy "read self or staff" on profiles for select to authenticated using (id = auth.uid() or is_staff());
+create policy "admin update" on profiles for update to authenticated using (app_role() = 'admin') with check (app_role() = 'admin');
+
+create policy "staff read" on audit_log for select to authenticated using (is_staff());
+
+alter publication supabase_realtime add table profiles;
+
+-- ───────── 기사 알림: 본인 배차가 바뀌면 notices 에 기록 (앱 상단 노란 띠 + 알림) ─────────
+create or replace function notify_driver_change() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  r record;
+  drv uuid;
+  msg text;
+  zone_label text;
+begin
+  r := case when tg_op = 'DELETE' then old else new end;
+  if r.date < (now() at time zone 'Asia/Seoul')::date then return null; end if;
+
+  if tg_table_name = 'vehicle_days' then
+    drv := r.driver_id;
+    if drv is null or tg_op <> 'UPDATE' then return null; end if;
+    zone_label := case when new.zone = 'jeju' then '오후 선박' else '하행선박' end;
+    if new.departure_ship is distinct from old.departure_ship then
+      msg := format('%s %s로 변경', zone_label, coalesce(trim(new.departure_ship_tag || ' ' || new.departure_ship), '없음'));
+    elsif new.arrival_ship is distinct from old.arrival_ship then
+      msg := format('%s %s로 변경', case when new.zone = 'jeju' then '도착 선박' else '상행선박' end,
+                    coalesce(trim(new.arrival_ship_tag || ' ' || new.arrival_ship), '없음'));
+    else
+      return null;
+    end if;
+  else
+    drv := coalesce(r.driver_id, (select driver_id from vehicle_days d where d.date = r.date and d.vehicle_id = r.vehicle_id));
+    if drv is null then return null; end if;
+    msg := format('%s %s %s',
+      case when r.kind = 'load' then '상차' else '하차' end,
+      coalesce((select name from clients c where c.id = r.client_id), r.client_text, ''),
+      case tg_op when 'INSERT' then '추가' when 'DELETE' then '취소' else '변경' end);
+    if tg_op = 'UPDATE' and new.departure_ship is distinct from old.departure_ship then
+      msg := format('상차 선박 %s로 변경', coalesce(new.departure_ship, '없음'));
+    end if;
+  end if;
+
+  insert into notices (date, vehicle_id, driver_id, message) values (r.date, r.vehicle_id, drv, msg);
+  return null;
+end $$;
+
+create trigger driver_notice after update on vehicle_days for each row execute function notify_driver_change();
+create trigger driver_notice after insert or update or delete on daily_orders for each row execute function notify_driver_change();
+
+-- ───────── 사진 저장소 ─────────
+insert into storage.buckets (id, name, public) values ('photos', 'photos', false) on conflict do nothing;
+create policy "photos read" on storage.objects for select to authenticated using (bucket_id = 'photos');
+create policy "photos staff write" on storage.objects for insert to authenticated with check (
+  bucket_id = 'photos' and (is_staff() or (storage.foldername(name))[1] = 'suggestions')
+);
+create policy "photos staff delete" on storage.objects for delete to authenticated using (bucket_id = 'photos' and is_staff());
+
+-- ===== 20261021000004_workforce_ships_orders.sql =====
+-- 기사 비고·근무 기록, 선박 기항지별 하행 시간, 오더 상차지/하차지·당일 왕복
+
+alter table drivers add column if not exists memo text not null default '';
+
+create table driver_work_logs (
+  id uuid primary key default gen_random_uuid(),
+  date date not null,
+  driver_id uuid not null references drivers on delete cascade,
+  work_types text[] not null default '{}',   -- 주간근무, 야간근무, 특근, 출장, 장거리, 단거리, 야간단거리, 시간외근무
+  memo text not null default '',
+  updated_at timestamptz not null default now(),
+  updated_by uuid,
+  unique (driver_id, date)
+);
+create index on driver_work_logs (date);
+
+create trigger touch before insert or update on driver_work_logs for each row execute function touch_row();
+create trigger audit after insert or update or delete on driver_work_logs for each row execute function audit_row();
+alter table driver_work_logs enable row level security;
+alter table driver_work_logs replica identity full;
+alter publication supabase_realtime add table driver_work_logs;
+create policy "read" on driver_work_logs for select to authenticated using (true);
+create policy "staff insert" on driver_work_logs for insert to authenticated with check (is_staff());
+create policy "staff update" on driver_work_logs for update to authenticated using (is_staff()) with check (is_staff());
+create policy "staff delete" on driver_work_logs for delete to authenticated using (is_staff());
+
+-- departs_at = 제주 출발(상행), port_times = [{"port":"목포","time":"01:00"}, …] 기항지별 하행 출발
+alter table ships add column if not exists port_times jsonb not null default '[]';
+
+alter table daily_orders
+  add column if not exists pickup_place text not null default '',
+  add column if not exists dropoff_place text not null default '',
+  add column if not exists same_day boolean not null default false;
+
+-- ===== 20261021000005_carrier_bulk.sql =====
+-- 용차·화주배차, 벌크 선적, 하차 날짜 조정. 선박 표시(ship_tag)는 예약 업체 이름도 쓰므로 자유 글자.
+alter table daily_orders
+  add column if not exists carrier_type text not null default 'own' check (carrier_type in ('own','hired','shipper')),
+  add column if not exists carrier_name text not null default '',
+  add column if not exists carrier_vehicle text not null default '',
+  add column if not exists carrier_phone text not null default '',
+  add column if not exists shipment text not null default 'vehicle' check (shipment in ('vehicle','bulk')),
+  add column if not exists arrival_offset smallint check (arrival_offset is null or arrival_offset between 0 and 7);
+
+-- 기사는 매일 바뀌므로 차량 기본 기사는 더 이상 쓰지 않는다 (기존 값은 비움)
+update vehicles set default_driver_id = null where default_driver_id is not null;
+
+-- ===== 20261022000006_driver_team.sql =====
+-- 기사 팀 (기사 선택 목록을 팀별로 묶어 보여 줌. 비우면 근무조로 묶음)
+alter table drivers add column if not exists team text not null default '';
+
+-- ===== 20261022000007_field_site_zone.sql =====
+-- 현장 근무지를 일정표의 육지 / 제주 표 중 어디 아래에 보일지
+alter table field_sites add column if not exists zone text check (zone in ('land', 'jeju'));
+update field_sites set zone = case when name like '%목포%' then 'land' else 'jeju' end where zone is null;
+
+-- ===== 20261022000008_load_driver_seq.sql =====
+-- 오후(상차) 기사를 오전(하차) 기사와 따로 지정 + 기사의 그날 처리 순서 (1번차·2번차…)
+alter table vehicle_days add column if not exists load_driver_id uuid references drivers on delete set null;
+alter table vehicle_days add column if not exists unload_seq smallint;
+alter table vehicle_days add column if not exists load_seq smallint;
+
+-- 오후만 맡은 기사도 그 차량 주행거리를 입력할 수 있게
+drop policy if exists "driver odometer" on odometer_logs;
+create policy "driver odometer" on odometer_logs for insert to authenticated with check (
+  exists (select 1 from vehicles v where v.id = vehicle_id and v.default_driver_id = my_driver_id())
+  or exists (select 1 from vehicle_days d where d.vehicle_id = odometer_logs.vehicle_id
+             and (d.driver_id = my_driver_id() or d.load_driver_id = my_driver_id()))
+);
+
+-- 기사 알림: 출발(하행·오후) 선박 변경은 오후 기사에게, 상차 오더 변경도 오후 기사에게
+create or replace function notify_driver_change() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  r record;
+  drv uuid;
+  msg text;
+  zone_label text;
+begin
+  r := case when tg_op = 'DELETE' then old else new end;
+  if r.date < (now() at time zone 'Asia/Seoul')::date then return null; end if;
+
+  if tg_table_name = 'vehicle_days' then
+    if tg_op <> 'UPDATE' then return null; end if;
+    zone_label := case when new.zone = 'jeju' then '오후 선박' else '하행선박' end;
+    if new.departure_ship is distinct from old.departure_ship then
+      drv := coalesce(new.load_driver_id, new.driver_id);
+      msg := format('%s %s로 변경', zone_label, coalesce(trim(new.departure_ship_tag || ' ' || new.departure_ship), '없음'));
+    elsif new.arrival_ship is distinct from old.arrival_ship then
+      drv := new.driver_id;
+      msg := format('%s %s로 변경', case when new.zone = 'jeju' then '도착 선박' else '상행선박' end,
+                    coalesce(trim(new.arrival_ship_tag || ' ' || new.arrival_ship), '없음'));
+    else
+      return null;
+    end if;
+    if drv is null then return null; end if;
+  else
+    drv := coalesce(r.driver_id, (select case when r.kind = 'load' then coalesce(d.load_driver_id, d.driver_id) else d.driver_id end
+                                    from vehicle_days d where d.date = r.date and d.vehicle_id = r.vehicle_id));
+    if drv is null then return null; end if;
+    msg := format('%s %s %s',
+      case when r.kind = 'load' then '상차' else '하차' end,
+      coalesce((select name from clients c where c.id = r.client_id), r.client_text, ''),
+      case tg_op when 'INSERT' then '추가' when 'DELETE' then '취소' else '변경' end);
+    if tg_op = 'UPDATE' and new.departure_ship is distinct from old.departure_ship then
+      msg := format('상차 선박 %s로 변경', coalesce(new.departure_ship, '없음'));
+    end if;
+  end if;
+
+  insert into notices (date, vehicle_id, driver_id, message) values (r.date, r.vehicle_id, drv, msg);
+  return null;
+end $$;
+
+-- ===== 20261023000009_helper_driver.sql =====
+-- 한 차량에 기사 2명: 동승 기사 (선탑·교육 / 지원)
+alter table vehicle_days add column if not exists helper_driver_id uuid references drivers on delete set null;
+alter table vehicle_days add column if not exists helper_role text not null default '' check (helper_role in ('', '선탑', '지원'));
+
+-- ===== 20261023000010_start_time_place.sql =====
+-- 출근 시간·장소 (제주: 부두, 차고지, 본사, 함덕, 고산, 현장 …)
+alter table vehicle_days add column if not exists start_time text not null default '';
+alter table vehicle_days add column if not exists start_place text not null default '';
+
+-- ===== 20261023000011_driver_zone.sql =====
+-- 직원·기사 근무 지역 (일정표 휴무 줄을 육지·제주로 나눔)
+alter table drivers add column if not exists zone text check (zone in ('land', 'jeju'));
+update drivers set zone = case when (shift || ' ' || affiliation) ~ '(상주|부산|서울|목포)' then 'land' else 'jeju' end where zone is null;
+
+-- ===== 20261023000012_order_work_detail.sql =====
+-- 상·하차 세부: 작업 시간과 내용 (예: 08:40 하차 · 막걸리공병 하차지원)
+alter table daily_orders add column if not exists work_time text not null default '';
+alter table daily_orders add column if not exists work_detail text not null default '';
+
+-- ===== 20261024000013_driver_unlisted.sql =====
+-- 비지정 근무자: 자유롭게 일해서 일정표 근무·대기·휴무 명단에 넣지 않음
+alter table drivers add column if not exists unlisted boolean not null default false;
+
+-- ===== 20261024000014_order_ship_date.sql =====
+-- 선박 "대기"로 상차한 짐을 실제로 배에 싣는 날 (비우면 상차일)
+alter table daily_orders add column if not exists ship_date date;
+
+-- ===== 20261024000015_vehicle_day_notes.sql =====
+-- 오전(하차)·오후(상차) 칸에 오더 없이 적는 비고
+alter table vehicle_days add column if not exists unload_note text not null default '';
+alter table vehicle_days add column if not exists load_note text not null default '';
+
+-- ===== 20261025000016_driver_pay_rates.sql =====
+-- 개인별 근로계약 근무별 수당 (원). 금액이라 관리자·배차만 읽고 쓴다 (기사·조회 계정에는 내려가지 않음)
+create table driver_pay_rates (
+  id uuid primary key default gen_random_uuid(),
+  driver_id uuid not null unique references drivers on delete cascade,
+  rates jsonb not null default '{}',   -- {"주간근무": 120000, "야간근무": 150000, …}
+  memo text not null default '',
+  updated_at timestamptz not null default now(),
+  updated_by uuid
+);
+
+create trigger touch before insert or update on driver_pay_rates for each row execute function touch_row();
+create trigger audit after insert or update or delete on driver_pay_rates for each row execute function audit_row();
+alter table driver_pay_rates enable row level security;
+alter table driver_pay_rates replica identity full;
+alter publication supabase_realtime add table driver_pay_rates;
+create policy "staff all" on driver_pay_rates for all to authenticated using (is_staff()) with check (is_staff());
+
+-- ===== 20261025000017_day_status_overtime.sql =====
+-- 근무현황: "근무일 아님" 지정, 시간외근무 시간, 그날 시간외 금액(관리자·배차 전용)
+alter table driver_work_logs add column if not exists day_status text not null default '' check (day_status in ('', 'nonwork'));
+alter table driver_work_logs add column if not exists overtime_hours numeric;
+
+create table if not exists driver_day_pay (
+  id uuid primary key default gen_random_uuid(),
+  date date not null,
+  driver_id uuid not null references drivers on delete cascade,
+  amount numeric not null,
+  updated_at timestamptz not null default now(),
+  updated_by uuid,
+  unique (driver_id, date)
+);
+create index if not exists driver_day_pay_date on driver_day_pay (date);
+
+create trigger touch before insert or update on driver_day_pay for each row execute function touch_row();
+create trigger audit after insert or update or delete on driver_day_pay for each row execute function audit_row();
+alter table driver_day_pay enable row level security;
+alter table driver_day_pay replica identity full;
+alter publication supabase_realtime add table driver_day_pay;
+create policy "staff all" on driver_day_pay for all to authenticated using (is_staff()) with check (is_staff());
