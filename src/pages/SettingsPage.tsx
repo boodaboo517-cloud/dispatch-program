@@ -334,14 +334,17 @@ export function SettingsPage() {
 
   return (
     <div className="page" style={{ maxWidth: 820 }}>
+      {!staff && <button style={{ marginBottom: 8 }} onClick={() => nav('/driver')}>← 내 배차</button>}
       <h2>더보기 · 설정</h2>
-      <div className="menu-tiles">
-        <button onClick={() => nav('/fleet/vehicles')}><span className="ic">🚚</span>차량·기사</button>
-        <button onClick={() => nav('/fleet/ships')}><span className="ic">⛴</span>선박 등록·수정</button>
-        <button onClick={() => nav('/fleet/field')}><span className="ic">👷</span>현장근무 설정</button>
-        {staff && <button onClick={() => nav('/revenue')}><span className="ic">💰</span>매출</button>}
-        <button onClick={() => nav('/driver')}><span className="ic">📱</span>기사 화면 보기</button>
-      </div>
+      {staff && (
+        <div className="menu-tiles">
+          <button onClick={() => nav('/fleet/vehicles')}><span className="ic">🚚</span>차량·기사</button>
+          <button onClick={() => nav('/fleet/ships')}><span className="ic">⛴</span>선박 등록·수정</button>
+          <button onClick={() => nav('/fleet/field')}><span className="ic">👷</span>현장근무 설정</button>
+          <button onClick={() => nav('/revenue')}><span className="ic">💰</span>매출</button>
+          <button onClick={() => nav('/driver')}><span className="ic">📱</span>기사 화면 보기</button>
+        </div>
+      )}
 
       <InstallCard />
 
@@ -356,7 +359,7 @@ export function SettingsPage() {
         </div>
       )}
 
-      <div className="card">
+      {staff && <div className="card">
         <h3>엑셀 다운로드 (일정표 양식)</h3>
         <div className="row wrap">
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={{ width: 'auto' }} />~
@@ -367,7 +370,7 @@ export function SettingsPage() {
           <button onClick={() => exportSchedule(snap, from, to < from ? from : to)}>기간</button>
           <button onClick={() => exportSchedule(snap, dayjs(today).startOf('month').format('YYYY-MM-DD'), dayjs(today).endOf('month').format('YYYY-MM-DD'))}>이번 달</button>
         </div>
-      </div>
+      </div>}
 
       {staff && (
         <div className="card">
@@ -390,7 +393,7 @@ export function SettingsPage() {
           <Editable label="기사 제안 허용" value={String(setting(snap, 'driver_suggestions', false))} options={[{ value: 'false', label: '아니오 (관리자·배차만 수정)' }, { value: 'true', label: '예 (사진·주의사항 제안 → 승인 후 반영)' }]} onSave={(v) => saveSetting('driver_suggestions', v === 'true')} />
         </div>
       )}
-      <DataPanel />
+      {(staff || isDemo) && <DataPanel />}
       {admin && supabase && <UsersPanel />}
 
       <div className="card">

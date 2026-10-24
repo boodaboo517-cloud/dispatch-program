@@ -162,22 +162,32 @@ function Shell() {
       <NavMemory />
       <TopMenu role={session.role} />
       <StatusLine />
-      <Routes>
-        <Route path="/" element={viewer ? <Navigate to="/driver" replace /> : <SchedulePage />} />
-        <Route path="/driver" element={<DriverHome />} />
-        <Route path="/all" element={<OverviewPage />} />
-        <Route path="/monthly" element={<Navigate to="/all" replace />} />
-        <Route path="/order" element={viewer ? <Navigate to="/driver" /> : <OrderInputPage />} />
-        <Route path="/clients" element={<ClientsPage />} />
-        <Route path="/clients/:id" element={<ClientDetailPage />} />
-        <Route path="/products/:id" element={<ProductDetailPage />} />
-        <Route path="/fleet" element={<Navigate to="/fleet/vehicles" replace />} />
-        <Route path="/fleet/maintenance" element={<Navigate to="/fleet/vehicles" replace />} />
-        <Route path="/fleet/:tab" element={<FleetPage />} />
-        <Route path="/revenue" element={<RevenuePage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      {viewer ? (
+        // 기사(조회) 계정: 내 배차만 (품목 주의사항·사진은 배차 카드에서 열림)
+        <Routes>
+          <Route path="/driver" element={<DriverHome />} />
+          <Route path="/products/:id" element={<ProductDetailPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="*" element={<Navigate to="/driver" replace />} />
+        </Routes>
+      ) : (
+        <Routes>
+          <Route path="/" element={<SchedulePage />} />
+          <Route path="/driver" element={<DriverHome />} />
+          <Route path="/all" element={<OverviewPage />} />
+          <Route path="/monthly" element={<Navigate to="/all" replace />} />
+          <Route path="/order" element={<OrderInputPage />} />
+          <Route path="/clients" element={<ClientsPage />} />
+          <Route path="/clients/:id" element={<ClientDetailPage />} />
+          <Route path="/products/:id" element={<ProductDetailPage />} />
+          <Route path="/fleet" element={<Navigate to="/fleet/vehicles" replace />} />
+          <Route path="/fleet/maintenance" element={<Navigate to="/fleet/vehicles" replace />} />
+          <Route path="/fleet/:tab" element={<FleetPage />} />
+          <Route path="/revenue" element={<RevenuePage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      )}
       <TabBar role={session.role} />
     </div>
   );

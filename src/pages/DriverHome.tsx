@@ -1,4 +1,4 @@
-// 기사 조회 전용 화면: 내 배차 카드 / 전체 일정 보기 (수정 버튼 없음)
+// 기사 조회 전용 화면: 내 배차 카드 (수정 버튼 없음). 전체 일정 보기는 관리자·배차가 볼 때만
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HELPER_ROLE_LABEL, addDays, workText, buildBoard, buildIndex, type BoardRow } from '../domain/index.ts';
@@ -67,6 +67,8 @@ export function DriverHome() {
   const [date, setDate] = useState(seoulToday());
   const [notice, setNotice] = useState<string | null>(null);
   const driverId = session?.driverId ?? null;
+  const viewer = (session?.role ?? 'viewer') === 'viewer';
+  const nav = useNavigate();
   const idx = useMemo(() => buildIndex(snap), [snap]);
   const board = useMemo(() => buildBoard(snap, date, idx), [snap, date, idx]);
   const tomorrow = useMemo(() => buildBoard(snap, addDays(date, 1), idx), [snap, date, idx]);
@@ -93,11 +95,14 @@ export function DriverHome() {
   return (
     <div className="page" style={{ maxWidth: 720 }}>
       {band && <div className="banner yellow" onClick={() => setNotice(null)}>🔔 {band} {lastNotice && !notice && <span className="muted small">{fmtStamp(lastNotice.created_at)}</span>}</div>}
-      <div className="tabs">
-        <button className={tab === 'mine' ? 'on' : ''} onClick={() => setTab('mine')}>내 배차</button>
-        <button className={tab === 'all' ? 'on' : ''} onClick={() => setTab('all')}>전체 일정 보기</button>
-      </div>
-      {tab === 'mine' ? (
+      {/* 기사 계정은 내 배차만. 관리자·배차가 "기사 화면 보기"로 볼 때만 전체 일정 탭 */}
+      {!viewer && (
+        <div className="tabs">
+          <button className={tab === 'mine' ? 'on' : ''} onClick={() => setTab('mine')}>내 배차</button>
+          <button className={tab === 'all' ? 'on' : ''} onClick={() => setTab('all')}>전체 일정 보기</button>
+        </div>
+      )}
+      {tab === 'mine' || viewer ? (
         <>
           <DateBar date={date} onChange={setDate} />
           {!driverId && <div className="banner yellow">이 계정에 기사가 연결되어 있지 않습니다. 관리자에게 "설정 → 사용자 권한"에서 연결을 요청하세요.</div>}
@@ -113,6 +118,7 @@ export function DriverHome() {
       {dispatcher && (
         <a href={`tel:${dispatcher}`} style={{ display: 'block', marginTop: 12 }}><button className="primary" style={{ width: '100%', minHeight: 56, fontSize: 19 }}>📞 배차 담당 전화</button></a>
       )}
+      {viewer && <button style={{ width: '100%', marginTop: 12 }} onClick={() => nav('/settings')}>⚙ 설정 · 비밀번호 · 로그아웃</button>}
     </div>
   );
 }
