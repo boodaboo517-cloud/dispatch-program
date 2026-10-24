@@ -19,6 +19,8 @@ import { AttendancePanel } from './AttendancePanel.tsx';
 import { PayRatesCard } from '../ui/PayRates.tsx';
 
 type Tab = 'vehicles' | 'drivers' | 'attendance' | 'ships' | 'field';
+/** 차량 목록 정렬 기준: 뒷번호 4자리 (예: 제주90바1234 → 1234) */
+const last4 = (v: Vehicle) => v.short_no || v.plate.replace(/\D/g, '').slice(-4);
 const TYPES: VehicleType[] = ['5톤', '통윙', '통윙2냉', '1톤', '승용'];
 
 function VehicleSheet({ v, close }: { v: Vehicle; close: () => void }) {
@@ -235,7 +237,7 @@ export function FleetPage() {
             store.run((tx) => tx.insert('vehicles', v));
             sheet.open((c) => <VehicleSheet v={v} close={c} />);
           }}>＋ 차량 등록</button>}
-          {[...snap.vehicles].sort((a, b) => a.plate.localeCompare(b.plate, 'ko', { numeric: true })).map((v) => {
+          {[...snap.vehicles].sort((a, b) => last4(a).localeCompare(last4(b), 'ko', { numeric: true }) || a.plate.localeCompare(b.plate, 'ko')).map((v) => {
             const repair = activeRepair(snap.maintenance_records, v.id, today);
             const status = repair ? '정비' : v.status;
             return (
