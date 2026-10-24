@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { addDays, needsDriver, type Zone } from '../domain/index.ts';
 import { exportSchedule } from '../excel/exportSchedule.ts';
 import { fmtLong, fmtStamp, seoulToday } from '../lib/time.ts';
+import { useSwipe } from '../ui/useSwipe.ts';
 import { useBoard, useIsWide, useRole, useSnap, useStore } from '../ui/hooks.ts';
 import { setting } from '../ui/labels.ts';
 import { useBoardActions } from '../ui/useBoardActions.tsx';
@@ -15,30 +16,6 @@ type Tab = Zone | 'field' | 'waiting';
 type Filter = 'all' | 'empty' | 'repair' | 'waiting' | 'nodriver';
 const TABS: Tab[] = ['land', 'jeju', 'field', 'waiting'];
 
-/** 좌우로 밀면 옆 탭으로 (옆으로 스크롤되는 칸 안에서 시작한 밀기는 무시) */
-function useSwipeTabs(onSwipe: (dir: 1 | -1) => void) {
-  const start = useRef<{ x: number; y: number; t: number } | null>(null);
-  return {
-    onTouchStart: (e: React.TouchEvent) => {
-      const t = e.touches[0];
-      let el = e.target as HTMLElement | null;
-      while (el && el !== e.currentTarget) {
-        if (el.scrollWidth > el.clientWidth + 2 && getComputedStyle(el).overflowX !== 'hidden') { start.current = null; return; }
-        el = el.parentElement;
-      }
-      start.current = e.touches.length === 1 ? { x: t.clientX, y: t.clientY, t: Date.now() } : null;
-    },
-    onTouchEnd: (e: React.TouchEvent) => {
-      const s = start.current;
-      start.current = null;
-      if (!s) return;
-      const t = e.changedTouches[0];
-      const dx = t.clientX - s.x;
-      const dy = t.clientY - s.y;
-      if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.8 && Date.now() - s.t < 800) onSwipe(dx < 0 ? 1 : -1);
-    },
-  };
-}
 
 export function DateBar({ date, onChange }: { date: string; onChange: (d: string) => void }) {
   return (
@@ -77,7 +54,7 @@ export function SchedulePage() {
     setParams(next, { replace: true });
   };
   // 휴대폰: 좌우로 밀어 육지 ↔ 제주 ↔ 현장근무 ↔ 미배차
-  const swipe = useSwipeTabs((dir) => {
+  const swipe = useSwipe((dir) => {
     if (reorder) return;
     const i = TABS.indexOf(tab);
     const nextTab = TABS[i + dir];

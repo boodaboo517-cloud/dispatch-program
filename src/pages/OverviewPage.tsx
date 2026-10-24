@@ -4,6 +4,8 @@ import { useSearchParams } from 'react-router-dom';
 import { exportSchedule } from '../excel/exportSchedule.ts';
 import { seoulToday } from '../lib/time.ts';
 import { useBoard, useIsWide, useRole, useSnap } from '../ui/hooks.ts';
+import { useSwipe } from '../ui/useSwipe.ts';
+import { addDays } from '../domain/index.ts';
 import { setting } from '../ui/labels.ts';
 import { DateBar } from './SchedulePage.tsx';
 import { SheetBoard, SheetExtras } from './schedule/SheetBoard.tsx';
@@ -18,8 +20,10 @@ export function OverviewPage({ embedded }: { embedded?: boolean } = {}) {
   const board = useBoard(date);
   const wide = useIsWide();
   const { staff } = useRole();
+  // 휴대폰: 왼쪽으로 밀면 다음 날, 오른쪽으로 밀면 전날
+  const swipe = useSwipe((dir) => setDate(addDays(date, dir)));
   return (
-    <div className={`paper-page ${embedded ? '' : 'page'}`}>
+    <div className={`paper-page ${embedded ? '' : 'page'}`} {...(wide ? {} : swipe)}>
       <div className="paper-title">{setting(snap, 'header_notice', '경민물류 일정표')}</div>
       <DateBar date={date} onChange={setDate} />
       <SheetBoard zone="land" date={date} rows={board.land} waiting={board.waiting.land} external={board.external.land} field={board.field} />
