@@ -115,21 +115,25 @@ function VehicleRow({ snap, row }: { snap: Snapshot; row: BoardRow }) {
   const statusText = status || row.statusMemo
     ? <>{status && <span className={`st ${status}`}>{DAY_STATUS_LABEL[status]}</span>}{row.statusMemo && <span className="ps-red"> {row.statusMemo}</span>}</>
     : null;
-  // 분홍 표시는 선박이 연결된 차량만 (대기·일정 없는 차량은 색 없이)
   // 분홍 표시: 오전 칸은 도착 선박, 오후 칸은 마감(출발) 선박이 연결됐을 때만
-  const vehCell = (ship: string | null) => (
-    <td className="veh"><Fit><span className={`ps-pill veh ${ship && !isWaitShip(ship) ? '' : 'plain'} ${row.inRepair ? 'repair' : ''}`}>{row.vehicle.short_no}{row.quickRepair ? '⚡' : ''}</span></Fit></td>
-  );
+  // 수리: 하루 이상은 양쪽, 반나절은 그 반쪽 차량번호에 빨간 테두리 + "수리", 경미 수리는 ⚡
+  const vehCell = (ship: string | null, half: 'am' | 'pm') => {
+    const halfRepair = row.shortRepair === half;
+    return (
+      <td className="veh"><Fit><span className={`ps-pill veh ${ship && !isWaitShip(ship) ? '' : 'plain'} ${row.inRepair || halfRepair ? 'repair' : ''}`}>{row.vehicle.short_no}{row.shortRepair === 'quick' ? '⚡' : ''}</span></Fit>
+        {halfRepair && <div className="ps-repair-half">수리</div>}</td>
+    );
+  };
   return (
     <tr className={row.secondary ? 'secondary' : ''}>
       <td className="ship"><ShipText snap={snap} ship={row.arrivalShip} tag={row.arrivalTag} /></td>
-      {vehCell(row.arrivalShip)}
+      {vehCell(row.arrivalShip, 'am')}
       <td className={`drv${noUnload ? ' nodrv' : ''}`}>{name}</td>
       <td className="body">
         {row.unloads.length ? <Orders snap={snap} list={row.unloads} /> : !row.unloadNote ? <Fit>{statusText}</Fit> : null}
         {row.unloadNote && <div className="ps-oline"><Fit><span className="ps-rownote">{row.unloadNote}</span></Fit></div>}
       </td>
-      {vehCell(row.departureShip)}
+      {vehCell(row.departureShip, 'pm')}
       <td className={`drv${noLoad ? ' nodrv' : ''}`}>{loadName}</td>
       <td className="body">
         {row.carried.map((o) => (

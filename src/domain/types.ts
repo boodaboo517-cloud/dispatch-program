@@ -376,9 +376,12 @@ export interface MaintenanceRecord extends Base {
   staff_id: string | null;
   memo: string;
   photo_paths: string[];
-  /** 경미 수리: 1시간 안에 끝나 그날 운행에 지장 없음 (정비 기록만 남고 차량은 막지 않음) */
-  quick?: boolean;
+  /** 수리 시간: 경미(1시간 내, 운행 계속) / 반나절(오전·오후만 수리) / 하루 이상(기간 동안 수리). 비우면 하루 이상 */
+  repair_span?: RepairSpan;
 }
+
+export type RepairSpan = 'quick' | 'am' | 'pm' | 'full';
+export const REPAIR_SPAN_LABEL: Record<RepairSpan, string> = { quick: '경미 수리', am: '오전 수리', pm: '오후 수리', full: '하루 이상 수리' };
 
 export interface MaintenanceSchedule extends Base {
   vehicle_id: string;

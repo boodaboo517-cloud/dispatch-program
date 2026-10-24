@@ -351,3 +351,9 @@ tr.err td { background: var(--red-soft); }
 .chip.danger { color: var(--red); border-color: #fecaca; }
 
 .modal-back { position: fixed; inset: 0; background: rgba(15, 23, 42, .45); z-index: 1000; padding: 0 16px; }
+
+.paper .ps-repair-half { color: var(--red); font-size: .62em; font-weight: 800; line-height: 1; }
+
+.repair-spans { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.repair-spans .chip { display: flex; flex-direction: column; align-items: flex-start; min-height: 52px; padding: 6px 10px; text-align: left; }
+.repair-spans .chip small { font-size: 11px; opacity: .8; font-weight: 400; }

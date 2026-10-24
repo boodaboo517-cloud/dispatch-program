@@ -7,7 +7,7 @@ import { departDelay, isWaitShip, shipTimeOf } from './ships.ts';
 import type { Tx } from './tx.ts';
 import { DEFAULT_START, ON_CALL_SHIFT } from './types.ts';
 import type {
-  DailyOrder, DayStatus, Driver, FieldAssignment, HelperRole, Kind, MaintenanceKind, ShipTag, Snapshot, Vehicle, VehicleDay, Zone,
+  DailyOrder, DayStatus, Driver, FieldAssignment, HelperRole, Kind, MaintenanceKind, RepairSpan, ShipTag, Snapshot, Vehicle, VehicleDay, Zone,
 } from './types.ts';
 
 export const DAY_STATUS_LABEL: Record<Exclude<DayStatus, ''>, string> = {
@@ -113,8 +113,8 @@ export interface BoardRow {
   startPlace: string;
   /** 따로 적지 않아 기본값(07:00 부두)으로 보이는 중 */
   startDefault: boolean;
-  /** 그날 경미 수리 (운행은 계속) */
-  quickRepair: boolean;
+  /** 그날 짧은 수리: 경미(운행 계속) / 오전만 / 오후만. 하루 이상 수리는 inRepair */
+  shortRepair: Exclude<RepairSpan, 'full'> | null;
   arrivalShip: string | null;
   arrivalTag: ShipTag;
   departureShip: string | null;
@@ -223,7 +223,7 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
       startTime: startDefault ? DEFAULT_START.time : vd?.start_time ?? '',
       startPlace: startDefault ? DEFAULT_START.place : vd?.start_place ?? '',
       startDefault,
-      quickRepair: snap.maintenance_records.some((m) => m.quick && m.vehicle_id === v.id && m.start_date === date),
+      shortRepair: shortRepairOn(snap, v.id, date),
       arrivalShip: vd?.arrival_ship ?? unloads.find((o) => o.arrival_ship)?.arrival_ship ?? null,
       arrivalTag: vd?.arrival_ship ? vd.arrival_ship_tag : unloads.find((o) => o.arrival_ship)?.arrival_ship_tag ?? '',
       departureShip: vd?.departure_ship ?? loads.find(vehicleSails)?.departure_ship ?? null,
@@ -258,7 +258,7 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
         startTime: '',
         startPlace: '',
         startDefault: false,
-        quickRepair: false,
+        shortRepair: null,
         arrivalShip: arr?.arrival_ship ?? null,
         arrivalTag: arr?.arrival_ship_tag ?? '',
         departureShip: dep?.departure_ship ?? null,
@@ -355,21 +355,29 @@ export function vehicleChoices(board: Board, zone: Zone | null) {
  * 공차·수리·휴차·기타 상태 입력. 수리를 고르고 정비 종류를 주면 정비 기록도 같이 만든다
  * (일정표 비고 〈차량 점검〉 과 정비 등록을 한 번 입력으로).
  */
+/** 그날 짧은 수리 (경미·오전·오후) */
+export function shortRepairOn(snap: Pick<Snapshot, 'maintenance_records'>, vehicleId: string, date: string): Exclude<RepairSpan, 'full'> | null {
+  const r = snap.maintenance_records.find((m) => m.vehicle_id === vehicleId && m.start_date === date && (m.repair_span ?? 'full') !== 'full');
+  return (r?.repair_span as Exclude<RepairSpan, 'full'> | undefined) ?? null;
+}
+
 export function setVehicleDayStatus(
   tx: Tx,
   p: {
     date: string; vehicle_id: string; zone: Zone | null; status: DayStatus; memo: string;
-    maintenance?: { kind: MaintenanceKind; shop: string; end_date: string | null; staff_id?: string | null; quick?: boolean };
+    maintenance?: { kind: MaintenanceKind; shop: string; end_date: string | null; staff_id?: string | null; span?: RepairSpan };
   },
 ) {
   const vd = ensureVehicleDay(tx, p.date, p.vehicle_id, p.zone);
-  // 경미 수리: 정비 기록만 남기고 차량은 그날 그대로 운행 (수리 표시·배차 경고 없음)
-  if (p.status === 'repair' && p.maintenance?.quick) {
+  // 경미·반나절 수리: 그날 정비 기록만 남기고 차량은 하루 전체를 막지 않는다 (반나절은 그 반쪽에 수리 표시)
+  const span = p.maintenance?.span ?? 'full';
+  if (p.status === 'repair' && p.maintenance && span !== 'full') {
     if (vd.status === 'repair') tx.update('vehicle_days', vd.id, { status: '', status_memo: '' });
+    const same = tx.list('maintenance_records').find((m) => m.vehicle_id === p.vehicle_id && m.start_date === p.date && (m.repair_span ?? 'full') !== 'full');
     saveMaintenance(tx, {
-      id: newId(), vehicle_id: p.vehicle_id, kind: p.maintenance.kind, shop: p.maintenance.shop,
-      start_date: p.date, end_date: p.date, odometer_km: null, cost: null,
-      staff_id: p.maintenance.staff_id ?? null, memo: p.memo, photo_paths: [], quick: true,
+      id: same?.id ?? newId(), vehicle_id: p.vehicle_id, kind: p.maintenance.kind, shop: p.maintenance.shop,
+      start_date: p.date, end_date: p.date, odometer_km: same?.odometer_km ?? null, cost: same?.cost ?? null,
+      staff_id: p.maintenance.staff_id ?? same?.staff_id ?? null, memo: p.memo, photo_paths: same?.photo_paths ?? [], repair_span: span,
     });
     return;
   }

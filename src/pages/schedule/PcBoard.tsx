@@ -81,7 +81,8 @@ function VehicleGroup({ row, zone, a, staff, focus }: { row: BoardRow; zone: Zon
   const vehicleCell = (
     <td rowSpan={n}>
       <Cell className="vehicle" onTap={() => a.tapVehicle(row)} onLong={staff ? () => a.editStatus(row) : undefined}>
-        {row.vehicle.short_no}
+        {row.vehicle.short_no}{row.shortRepair === 'quick' && ' ⚡'}
+        {row.shortRepair === 'am' && <span style={{ color: 'var(--red)', fontSize: 12, fontWeight: 700 }}>🔧오전 수리</span>}
         {hasOrders && <StatusChip row={row} />}
       </Cell>
     </td>
@@ -127,7 +128,7 @@ function VehicleGroup({ row, zone, a, staff, focus }: { row: BoardRow; zone: Zon
         {hasOrders ? (
           <>
             {u ? <OrderFields o={u} a={a} staff={staff} /> : row.unloadNote && i === row.unloads.length ? noteCell('unload') : <EmptyFields onAdd={staff ? () => a.addOrder(zone, 'unload', row) : undefined} />}
-            {i === 0 && <td rowSpan={n} className="sep"><Cell className="vehicle" onTap={() => a.tapVehicle(row)}>{row.vehicle.short_no}</Cell></td>}
+            {i === 0 && <td rowSpan={n} className="sep"><Cell className="vehicle" onTap={() => a.tapVehicle(row)}>{row.vehicle.short_no}{row.shortRepair === 'pm' && <span style={{ color: 'var(--red)', fontSize: 12, fontWeight: 700 }}>🔧오후 수리</span>}</Cell></td>}
             {i === 0 && driverCell('load')}
             {l ? <OrderFields o={l} a={a} staff={staff} carried={row.carried.includes(l) ? () => a.tapCarried(row, l) : undefined} /> : row.loadNote && i === loadList.length ? noteCell('load') : <EmptyFields onAdd={staff ? () => a.addOrder(zone, 'load', row) : undefined} />}
           </>

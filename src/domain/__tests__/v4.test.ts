@@ -510,13 +510,18 @@ describe('오후만 기사 · 경미 수리', () => {
     expect(r.loads.every((o) => o.driver_id === 'dB')).toBe(true);
     expect(r.unloads.every((o) => o.driver_id === null)).toBe(true);
   });
-  it('경미 수리는 정비 기록만 남고 차량은 그대로 운행', () => {
+  it('수리 구분: 경미는 운행 계속, 반나절은 그 반쪽만, 하루 이상은 차량 막음', () => {
     const tx = setup();
-    setVehicleDayStatus(tx, { date: D, vehicle_id: 'v9915', zone: 'jeju', status: 'repair', memo: '전조등', maintenance: { kind: '기타', shop: '', end_date: D, quick: true } });
-    const r = row(tx, 'v9915');
-    expect([r.inRepair, r.status, r.quickRepair]).toEqual([false, '', true]);
-    expect(tx.list('maintenance_records').filter((m) => m.quick)).toHaveLength(1);
-    setVehicleDayStatus(tx, { date: D, vehicle_id: 'v9914', zone: 'jeju', status: 'repair', memo: '', maintenance: { kind: '기타', shop: '', end_date: D } });
-    expect(row(tx, 'v9914').inRepair).toBe(true);
+    const repair = (v: string, span: 'quick' | 'am' | 'pm' | 'full') =>
+      setVehicleDayStatus(tx, { date: D, vehicle_id: v, zone: 'jeju', status: 'repair', memo: '', maintenance: { kind: '기타', shop: '', end_date: D, span } });
+    repair('v9915', 'quick');
+    expect([row(tx, 'v9915').inRepair, row(tx, 'v9915').status, row(tx, 'v9915').shortRepair]).toEqual([false, '', 'quick']);
+    repair('v9914', 'am');
+    expect([row(tx, 'v9914').inRepair, row(tx, 'v9914').shortRepair]).toEqual([false, 'am']);
+    repair('v9914', 'pm'); // 같은 날 다시 고치면 기록 하나로
+    expect(tx.list('maintenance_records').filter((m) => m.vehicle_id === 'v9914')).toHaveLength(1);
+    expect(row(tx, 'v9914').shortRepair).toBe('pm');
+    repair('v8948', 'full');
+    expect([row(tx, 'v8948').inRepair, row(tx, 'v8948').shortRepair]).toEqual([true, null]);
   });
 });

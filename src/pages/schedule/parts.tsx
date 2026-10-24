@@ -1,4 +1,4 @@
-import { CARRIER_LABEL, DAY_STATUS_LABEL, HELPER_ROLE_LABEL, workText, WORK_TYPE_SHORT, abbrev, parseShip, seqMark, workLogOf, type BoardRow, type DailyOrder, type Snapshot } from '../../domain/index.ts';
+import { CARRIER_LABEL, DAY_STATUS_LABEL, REPAIR_SPAN_LABEL, HELPER_ROLE_LABEL, workText, WORK_TYPE_SHORT, abbrev, parseShip, seqMark, workLogOf, type BoardRow, type DailyOrder, type Snapshot } from '../../domain/index.ts';
 import { clientName, driverName, productName, productOf, qtyText, shipTimeOf } from '../../ui/labels.ts';
 
 export function hasMoney(snap: Snapshot, o: DailyOrder) {
@@ -57,7 +57,8 @@ export function VehicleCellText({ snap, row, date }: { snap: Snapshot; row: Boar
   const log = row.driverId ? workLogOf(snap, row.driverId, date) : undefined;
   return (
     <>
-      <span>{row.vehicle.short_no}{row.quickRepair && <span title="경미 수리 (운행 중)"> ⚡</span>}</span>
+      <span>{row.vehicle.short_no}{row.shortRepair === 'quick' && <span title="경미 수리 (운행 중)"> ⚡</span>}</span>
+      {(row.shortRepair === 'am' || row.shortRepair === 'pm') && <span className="drv" style={{ color: 'var(--red)', fontWeight: 700 }}>🔧{REPAIR_SPAN_LABEL[row.shortRepair]}</span>}
       {name ? <span className="drv">{abbrev(name, 4)}{seqMark(row.unloadSeq)}</span> : hasWork ? <span className="nodrv-badge">미배치</span> : null}
       {row.loadDriverId && row.loadDriverId !== row.driverId && (
         <span className="drv" title="오후(상차) 기사">→ {abbrev(driverName(snap, row.loadDriverId), 4)}{seqMark(row.loadSeq)}</span>
