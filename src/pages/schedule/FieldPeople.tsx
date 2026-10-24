@@ -9,6 +9,7 @@ import { useRole, useSnap } from '../../ui/hooks.ts';
 import { ZONE_LABEL, vehicleNo } from '../../ui/labels.ts';
 import { usePickers } from '../../ui/pickers.tsx';
 import { Sheet, useSheet } from '../../ui/Sheet.tsx';
+import { FieldPersonSheet } from './FieldPersonSheet.tsx';
 
 export function FieldPeople({ date }: { date: string }) {
   const snap = useSnap();
@@ -76,6 +77,11 @@ export function FieldPeople({ date }: { date: string }) {
       if (f) saveFieldAssignment(tx, { ...f, vehicle_id: v });
     });
   };
+  const openPerson = (id: string) => staff && sheet.open((close) => <FieldPersonSheet date={date} staffId={id} close={close} />);
+  const addPerson = async () => {
+    const id = await pick.staff(date);
+    if (id) openPerson(id);
+  };
   const setOff = (d: Driver, off: boolean) => store.run((tx) => (off ? setDayOff(tx, date, d.id, true) : setStaffWorking(tx, date, d.id)));
 
   let lastZone = '';
@@ -90,7 +96,7 @@ export function FieldPeople({ date }: { date: string }) {
           head,
           <div key={d.id} className={`fp-row${off ? ' off' : ''}`}>
             <div className="row" style={{ gap: 8 }}>
-              <b className="grow" style={{ fontSize: 18 }}>{d.name} <span className="muted small">{d.staff_type}</span></b>
+              <b className="grow" style={{ fontSize: 18, cursor: staff ? 'pointer' : 'default' }} onClick={() => openPerson(d.id)}>{d.name} <span className="muted small">{d.staff_type}</span>{staff && <span className="muted small"> ✎</span>}</b>
               <div className="seg fp-seg">
                 <button className={off ? '' : 'on'} disabled={!staff} onClick={() => off && setOff(d, false)}>근무</button>
                 <button className={off ? 'on off' : ''} disabled={!staff} onClick={() => !off && setOff(d, true)}>휴무</button>
@@ -110,6 +116,12 @@ export function FieldPeople({ date }: { date: string }) {
         ];
       })}
       {!people.length && <p className="muted">현장 직원이 없습니다. 차량·설정 › 기사 에서 구분을 "현장"으로 등록하세요.</p>}
+      {staff && (
+        <>
+          <button style={{ width: '100%', marginTop: 8, minHeight: 50 }} onClick={() => void addPerson()}>＋ 사람 추가 (기사·알바도 현장근무로)</button>
+          <p className="muted small">이름을 누르면 근무지·업무·차량·휴무를 이 날만 / 기간 / 계속으로 바꿀 수 있습니다.</p>
+        </>
+      )}
     </div>
   );
 }

@@ -165,3 +165,34 @@ export function setDaySite(tx: Tx, date: string, staffId: string, siteId: string
     saveFieldAssignment(tx, { ...f, site_id: siteId });
   }
 }
+
+export interface StaffDayPlan {
+  /** true = 휴무 */
+  off: boolean;
+  site_id: string | null;
+  task: string;
+  vehicle_id: string | null;
+}
+
+/** 그날 한 사람의 현장근무를 정한다: 휴무 / 근무(근무지·업무·차량). 같은 날 줄이 여러 개면 첫 줄을 고친다 */
+export function setStaffDay(tx: Tx, date: string, staffId: string, p: StaffDayPlan) {
+  if (p.off) return setDayOff(tx, date, staffId, true);
+  setStaffWorking(tx, date, staffId);
+  const f = tx.list('field_assignments').find((x) => x.date === date && x.staff_id === staffId && !x.is_off && x.source !== 'maintenance');
+  if (f) saveFieldAssignment(tx, { ...f, site_id: p.site_id, task: p.task, vehicle_id: p.vehicle_id });
+}
+
+/**
+ * 기간으로 정하기 (from~to 포함). skipDays 에 든 요일(매주 쉬는 날)은 건너뛴다.
+ * 돌아오는 날짜 수.
+ */
+export function setStaffRange(tx: Tx, p: { staffId: string; from: string; to: string; plan: StaffDayPlan; skipDays?: number[] }) {
+  const [from, to] = p.from <= p.to ? [p.from, p.to] : [p.to, p.from];
+  let n = 0;
+  for (const d of eachDay(from, to)) {
+    if (!p.plan.off && p.skipDays?.includes(weekdayOf(d))) continue;
+    setStaffDay(tx, d, p.staffId, p.plan);
+    n++;
+  }
+  return n;
+}

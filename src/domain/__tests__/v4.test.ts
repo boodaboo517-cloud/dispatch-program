@@ -4,7 +4,7 @@ import { blankOrder, repairShipLinks, saveOrder, setRowShip, workText } from '..
 import { Tx, applyMutations } from '../tx.ts';
 import { copyOrder, createOrder, splitPerVehicle } from '../actions.ts';
 import { planCreateRecurring, planRecurringChange } from '../recurring.ts';
-import { blankField, planCreateFieldRecurring, saveFieldAssignment, setDayOff, setDaySite, setStaffWorking } from '../fieldwork.ts';
+import { blankField, planCreateFieldRecurring, saveFieldAssignment, setDayOff, setDaySite, setStaffDay, setStaffRange, setStaffWorking } from '../fieldwork.ts';
 import { ON_CALL_SHIFT, repairSnapshot, type Driver, type Weekday } from '../types.ts';
 import { assignedDriverIds, cancelLeave, fixedOffDays, leaveRanges, offByZone, planStaffFixedOff, setLeave, weeklyOffOn, workDaysFromOff } from '../workforce.ts';
 import { baseSnapshot, resetIds } from './fixtures.ts';
@@ -523,5 +523,22 @@ describe('오후만 기사 · 경미 수리', () => {
     expect(row(tx, 'v9914').shortRepair).toBe('pm');
     repair('v8948', 'full');
     expect([row(tx, 'v8948').inRepair, row(tx, 'v8948').shortRepair]).toEqual([true, null]);
+  });
+});
+
+describe('현장근무 사람별 일정 바꾸기', () => {
+  it('하루 · 기간 (쉬는 요일 건너뜀) · 휴무', () => {
+    const tx = new Tx(baseSnapshot());
+    const site = tx.list('field_sites')[0]?.id ?? null;
+    setStaffDay(tx, '2026-10-20', 'dA', { off: false, site_id: site, task: '배송지원', vehicle_id: null });
+    const day = tx.list('field_assignments').filter((f) => f.staff_id === 'dA' && f.date === '2026-10-20');
+    expect(day.map((f) => [f.site_id, f.task, f.is_off])).toEqual([[site, '배송지원', false]]);
+    // 10/19(월)~10/25(일), 일요일(0) 빼고 → 6일
+    const n = setStaffRange(tx, { staffId: 'dA', from: '2026-10-19', to: '2026-10-25', plan: { off: false, site_id: site, task: '목포 지원', vehicle_id: null }, skipDays: [0] });
+    expect(n).toBe(6);
+    expect(tx.list('field_assignments').filter((f) => f.staff_id === 'dA' && !f.is_off && f.task === '목포 지원')).toHaveLength(6);
+    expect(tx.list('field_assignments').some((f) => f.staff_id === 'dA' && f.date === '2026-10-25')).toBe(false);
+    setStaffRange(tx, { staffId: 'dA', from: '2026-10-21', to: '2026-10-22', plan: { off: true, site_id: null, task: '', vehicle_id: null } });
+    expect(tx.list('field_assignments').filter((f) => f.staff_id === 'dA' && (f.date === '2026-10-21' || f.date === '2026-10-22')).map((f) => f.is_off)).toEqual([true, true]);
   });
 });
