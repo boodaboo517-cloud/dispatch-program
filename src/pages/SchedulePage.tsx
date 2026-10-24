@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { addDays, needsDriver, type Zone } from '../domain/index.ts';
 import { exportSchedule } from '../excel/exportSchedule.ts';
@@ -13,6 +13,32 @@ import { ReorderPanel } from './schedule/ReorderPanel.tsx';
 
 type Tab = Zone | 'field' | 'waiting';
 type Filter = 'all' | 'empty' | 'repair' | 'waiting' | 'nodriver';
+const TABS: Tab[] = ['land', 'jeju', 'field', 'waiting'];
+
+/** 좌우로 밀면 옆 탭으로 (옆으로 스크롤되는 칸 안에서 시작한 밀기는 무시) */
+function useSwipeTabs(onSwipe: (dir: 1 | -1) => void) {
+  const start = useRef<{ x: number; y: number; t: number } | null>(null);
+  return {
+    onTouchStart: (e: React.TouchEvent) => {
+      const t = e.touches[0];
+      let el = e.target as HTMLElement | null;
+      while (el && el !== e.currentTarget) {
+        if (el.scrollWidth > el.clientWidth + 2 && getComputedStyle(el).overflowX !== 'hidden') { start.current = null; return; }
+        el = el.parentElement;
+      }
+      start.current = e.touches.length === 1 ? { x: t.clientX, y: t.clientY, t: Date.now() } : null;
+    },
+    onTouchEnd: (e: React.TouchEvent) => {
+      const s = start.current;
+      start.current = null;
+      if (!s) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - s.x;
+      const dy = t.clientY - s.y;
+      if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.8 && Date.now() - s.t < 800) onSwipe(dx < 0 ? 1 : -1);
+    },
+  };
+}
 
 export function DateBar({ date, onChange }: { date: string; onChange: (d: string) => void }) {
   return (
@@ -50,6 +76,16 @@ export function SchedulePage() {
     for (const [k, v] of Object.entries(p)) v === null ? next.delete(k) : next.set(k, v);
     setParams(next, { replace: true });
   };
+  // 휴대폰: 좌우로 밀어 육지 ↔ 제주 ↔ 현장근무 ↔ 미배차
+  const swipe = useSwipeTabs((dir) => {
+    if (reorder) return;
+    const i = TABS.indexOf(tab);
+    const nextTab = TABS[i + dir];
+    if (!nextTab) return;
+    update({ zone: nextTab });
+    setFilter('all');
+    window.scrollTo({ top: 0 });
+  });
 
   useEffect(() => setFocus(focusParam), [focusParam]);
   const focusRowId = useMemo(() => {
@@ -95,7 +131,7 @@ export function SchedulePage() {
       )}
       <DateBar date={date} onChange={(d) => update({ date: d, focus: null })} />
       <div className="tabs">
-        {(['land', 'jeju', 'field', 'waiting'] as Tab[]).map((t) => (
+        {TABS.map((t) => (
           <button key={t} className={tab === t ? 'on' : ''} onClick={() => { update({ zone: t }); setFilter('all'); }}>
             {{ land: '육지', jeju: '제주', field: '현장근무', waiting: `미배차${s.waiting ? ` ${s.waiting}` : ''}` }[t]}
           </button>
@@ -113,6 +149,7 @@ export function SchedulePage() {
         <span className="chip">하차 {s.unloads} · 상차 {s.loads}</span>
         {wide && <button className="chip" onClick={() => exportSchedule(snap, date, date)}>⬇ 엑셀</button>}
       </div>
+      <div {...(wide ? {} : swipe)} style={{ minHeight: '60vh' }}>
       {board.unknownLocation.length > 0 && (
         <div className="banner red">⚠ 위치 미정 차량 {board.unknownLocation.map((v) => v.short_no).join(', ')} — 등록 대수 {s.registered}대 중 {s.land + s.jeju}대만 표시됩니다. 차량 상태에서 위치를 지정하세요.</div>
       )}
@@ -142,6 +179,7 @@ export function SchedulePage() {
           <p className="muted">노란 차량 칸을 누르면 그날 그 지역 차량 목록이 뜹니다. PC에서는 육지·제주 탭에서 끌어다 차량 줄에 놓을 수도 있습니다.</p>
         </>
       )}
+      </div>
     </div>
   );
 }
