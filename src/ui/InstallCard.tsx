@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { MANUAL_STEPS, browserKind, canPromptInstall, isStandalone, onInstallChange, promptInstall } from '../lib/install.ts';
+import { MANUAL_STEPS, browserKind, canPromptInstall, isStandalone, onInstallChange, openInBrowser, promptInstall } from '../lib/install.ts';
 import { store } from '../data/store.ts';
 import { isDemo } from '../data/supabase.ts';
 import { Sheet, useSheet } from './Sheet.tsx';
@@ -31,10 +31,12 @@ export function InstallCard() {
         </>
       ) : (
         <>
-          <p className="small">이 브라우저에서는 메뉴로 설치합니다{kind === 'samsung' ? ' (삼성 인터넷)' : kind === 'chrome' ? ' (크롬)' : kind === 'ios' ? ' (아이폰 Safari)' : ''}:</p>
+          <p className="small">{kind === 'inapp' ? '지금 카카오톡·네이버 같은 앱 안에서 열려 있습니다:' : `이 브라우저에서는 메뉴로 설치합니다${kind === 'samsung' ? ' (삼성 인터넷)' : kind === 'chrome' ? ' (크롬)' : kind === 'ios' ? ' (아이폰 Safari)' : ''}:`}</p>
           <ol className="small" style={{ paddingLeft: 20, margin: '4px 0' }}>
             {MANUAL_STEPS[kind].map((s) => <li key={s} style={{ margin: '4px 0' }}>{s}</li>)}
           </ol>
+          {kind === 'inapp' && <button className="primary" style={{ width: '100%' }} onClick={() => openInBrowser()}>🌐 크롬/Safari로 열기</button>}
+          {(kind === 'chrome' || kind === 'samsung') && <p className="muted small">크롬·삼성 인터넷은 화면을 조금 사용한 뒤(30초 정도)에 자동 설치 버튼이 켜지기도 합니다. 잠시 뒤 다시 눌러 보세요.</p>}
           {isDemo && <p className="muted small">지금 쓰는 브라우저로 설치해야 입력한 데이터가 이어집니다. 설치 전에 💾 백업 파일 저장을 한 번 눌러 두세요.</p>}
         </>
       )}
@@ -76,7 +78,9 @@ export function InstallBanner() {
   };
   return (
     <div className="install-banner">
-      <button className="primary grow" onClick={() => void install()}>📲 홈 화면에 앱 설치</button>
+      {browserKind() === 'inapp'
+        ? <button className="primary grow" onClick={() => openInBrowser()}>🌐 크롬/Safari로 열어서 설치</button>
+        : <button className="primary grow" onClick={() => void install()}>📲 홈 화면에 앱 설치</button>}
       <button className="ghost" onClick={later}>나중에</button>
     </div>
   );
