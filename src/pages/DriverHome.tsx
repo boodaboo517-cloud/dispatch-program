@@ -13,7 +13,8 @@ function myPart(row: BoardRow, me: string | null) {
 }
 import { store } from '../data/store.ts';
 import { fmtDate, fmtStamp, seoulToday } from '../lib/time.ts';
-import { useSession, useSnap } from '../ui/hooks.ts';
+import { useIsWide, useSession, useSnap } from '../ui/hooks.ts';
+import { useSwipe } from '../ui/useSwipe.ts';
 import { clientName, driverName, productName, productOf, qtyText, setting, shipText, shipTimeOf, ZONE_LABEL } from '../ui/labels.ts';
 import { StorageBadge, tempText } from '../ui/OrderSheet.tsx';
 import { OverviewPage } from './OverviewPage.tsx';
@@ -97,6 +98,10 @@ export function DriverHome() {
   const driverId = session?.driverId ?? null;
   const viewer = (session?.role ?? 'viewer') === 'viewer';
   const nav = useNavigate();
+  const wide = useIsWide();
+  // 휴대폰: 왼쪽으로 밀면 다음 날, 오른쪽으로 밀면 전날 (전체 일정 탭은 그 화면이 날짜를 넘김)
+  const swipe = useSwipe((dir) => setDate(addDays(date, dir)));
+  const swipeOn = !wide && (tab === 'mine' || viewer);
   const idx = useMemo(() => buildIndex(snap), [snap]);
   const board = useMemo(() => buildBoard(snap, date, idx), [snap, date, idx]);
   const tomorrow = useMemo(() => buildBoard(snap, addDays(date, 1), idx), [snap, date, idx]);
@@ -121,7 +126,7 @@ export function DriverHome() {
   const band = notice ?? lastNotice?.message;
 
   return (
-    <div className="page" style={{ maxWidth: 720 }}>
+    <div className="page" style={{ maxWidth: 720, minHeight: '80vh' }} {...(swipeOn ? swipe : {})}>
       {band && <div className="banner yellow" onClick={() => setNotice(null)}>🔔 {band} {lastNotice && !notice && <span className="muted small">{fmtStamp(lastNotice.created_at)}</span>}</div>}
       {/* 기사 계정은 내 배차만. 관리자·배차가 "기사 화면 보기"로 볼 때만 전체 일정 탭 */}
       {!viewer && (
