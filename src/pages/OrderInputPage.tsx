@@ -24,7 +24,7 @@ export function OrderInputPage() {
   const [o, setO] = useState<DailyOrder>(() => blankOrder({
     date: params.get('date') ?? seoulToday(),
     zone: (params.get('zone') === 'jeju' ? 'jeju' : 'land') as Zone,
-    kind: 'unload',
+    kind: params.get('kind') === 'unload' ? 'unload' : 'load',
   }));
   const [repeat, setRepeat] = useState(false);
   /** 같은 거래처에서 함께 나가는 다른 품목들 (저장하면 품목마다 오더 1건) */
@@ -122,7 +122,7 @@ export function OrderInputPage() {
         <Seg value={o.zone} onChange={(z: Zone) => set({ zone: z })} options={[{ value: 'land', label: '육지' }, { value: 'jeju', label: '제주' }]} />
       </label>
       <label className="field"><span>구분</span>
-        <Seg value={o.kind} onChange={(k: Kind) => set({ kind: k })} options={[{ value: 'unload', label: kindLabel(o.zone, 'unload') }, { value: 'load', label: kindLabel(o.zone, 'load') }]} />
+        <Seg value={o.kind} onChange={(k: Kind) => set({ kind: k })} options={[{ value: 'load', label: kindLabel(o.zone, 'load') }, { value: 'unload', label: kindLabel(o.zone, 'unload') }]} />
       </label>
       <Row k="거래처" v={clientName(snap, o)} onClick={chooseClient} ph="검색 · 최근 · 자주 쓰는" />
       <Row k="품목" v={productName(snap, o)} onClick={chooseClient} />
