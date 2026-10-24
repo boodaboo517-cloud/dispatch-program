@@ -1,10 +1,10 @@
 // 엑셀·설정·사용자 권한
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Tx, type Role, type Snapshot } from '../domain/index.ts';
+import { Tx, repairSnapshot, type Role, type Snapshot } from '../domain/index.ts';
 import { BackupError, backupSummary, downloadBackup, lastBackupAt, parseBackup, readBackupFile, uploadPlan } from '../data/backup.ts';
 import { emailStatus, lastEmailBackupAt, sendBackupEmail, type EmailStatus } from '../data/emailBackup.ts';
-import { store } from '../data/store.ts';
+import { savedDemoData, store } from '../data/store.ts';
 import { isDemo, supabase } from '../data/supabase.ts';
 import { exportSchedule } from '../excel/exportSchedule.ts';
 import { downloadTemplates, parseUpload, planUpload, TEMPLATES, type PreviewRow } from '../excel/importer.ts';
@@ -60,6 +60,30 @@ function DataPanel() {
   const { admin } = useRole();
   const [progress, setProgress] = useState('');
   const last = lastBackupAt();
+  // 서버 연결 전에 이 기기에서 쓰던 데모 데이터 (파일 없이 바로 옮기기)
+  const [localDemo, setLocalDemo] = useState<Snapshot | null>(null);
+  useEffect(() => {
+    if (!isDemo && admin) void savedDemoData().then((s) => setLocalDemo(s ? repairSnapshot(s) : null));
+  }, [admin]);
+
+  const moveLocalDemo = async () => {
+    if (!localDemo) return;
+    const ok = await sheet.confirm({
+      title: '이 기기의 데모 데이터를 서버로 옮기기',
+      message: `서버 연결 전에 이 기기에서 입력한 데이터\n${backupSummary(localDemo)}\n\n서버에 같은 항목이 있으면 이 내용으로 덮어씁니다. 서버에만 있는 데이터는 그대로 둡니다.`,
+      actions: [{ label: '서버로 옮기기', value: 'y', kind: 'primary' }],
+    });
+    if (!ok) return;
+    try {
+      await uploadToServer(localDemo, setProgress);
+      setProgress('');
+      await store.refresh();
+      store.toast('서버로 옮겼습니다');
+    } catch (e) {
+      setProgress('');
+      store.toast(`옮기기 실패 — ${e instanceof Error ? e.message : e}. 다시 실행해도 중복되지 않습니다.`, 'error');
+    }
+  };
 
   const restore = async (file: File | undefined) => {
     if (!file) return;
@@ -119,6 +143,15 @@ function DataPanel() {
         <div className="banner yellow small">
           데모 모드는 <b>이 기기 브라우저에만</b> 저장됩니다. 다른 휴대폰·PC와 공유되지 않고, 브라우저 데이터를 지우면 사라집니다.
           <b> 백업 파일을 자주 저장</b>해 두세요. 나중에 서버(Supabase)를 연결하면 이 파일로 그대로 옮길 수 있습니다.
+        </div>
+      )}
+      {localDemo && (
+        <div className="banner blue small">
+          이 기기에 서버 연결 전 데모 데이터가 남아 있습니다 ({backupSummary(localDemo)}).
+          <div style={{ marginTop: 6 }}>
+            <button className="primary" onClick={() => void moveLocalDemo()}>⬆ 이 기기의 데모 데이터 서버로 옮기기</button>
+            <button style={{ marginLeft: 6 }} onClick={() => { downloadBackup(localDemo); store.toast('데모 데이터를 백업 파일로 저장했습니다'); }}>💾 데모 데이터 파일로 저장</button>
+          </div>
         </div>
       )}
       <p className="muted small">지금 데이터: {backupSummary(snap)}<br />마지막 백업: {last ? fmtStamp(last) : '없음'}</p>
