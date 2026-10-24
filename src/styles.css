@@ -345,3 +345,9 @@ tr.err td { background: var(--red-soft); }
 .pay-rate span { flex: none; width: 70px; font-size: 12px; white-space: nowrap; letter-spacing: -.3px; }
 .pay-rate input { flex: 1; min-width: 0; text-align: right; }
 .pay-rate small { color: #64748b; }
+
+/* 사용자 권한 목록 */
+.user-row { border-bottom: 1px solid #eee; padding: 8px 0; }
+.chip.danger { color: var(--red); border-color: #fecaca; }
+
+.modal-back { position: fixed; inset: 0; background: rgba(15, 23, 42, .45); z-index: 1000; padding: 0 16px; }

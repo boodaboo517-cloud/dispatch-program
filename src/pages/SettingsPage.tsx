@@ -8,7 +8,7 @@ import { savedDemoData, store } from '../data/store.ts';
 import { isDemo, supabase } from '../data/supabase.ts';
 import { exportSchedule } from '../excel/exportSchedule.ts';
 import { downloadTemplates, parseUpload, planUpload, TEMPLATES, type PreviewRow } from '../excel/importer.ts';
-import { dayjs, fmtStamp, seoulToday } from '../lib/time.ts';
+import { TZ, dayjs, fmtStamp, seoulToday } from '../lib/time.ts';
 import { Editable } from '../ui/Editable.tsx';
 import { useRole, useSnap, useStore } from '../ui/hooks.ts';
 import { setting } from '../ui/labels.ts';
@@ -16,6 +16,7 @@ import { InstallCard } from '../ui/InstallCard.tsx';
 import { saveSetting } from '../ui/Phrases.tsx';
 import { reloadFresh } from '../lib/recover.ts';
 import { Sheet, useSheet } from '../ui/Sheet.tsx';
+import { NewPasswordSheet } from './LoginPage.tsx';
 
 
 function UploadPreview({ rows, data, close }: { rows: PreviewRow[]; data: Awaited<ReturnType<typeof parseUpload>>; close: () => void }) {
@@ -209,10 +210,27 @@ function EmailBackup() {
   );
 }
 
+type UserRow = { id: string; name: string; role: Role; driver_id: string | null; blocked?: boolean; email?: string; created_at?: string; last_sign_in_at?: string | null };
+
 function UsersPanel() {
   const snap = useSnap();
-  const [users, setUsers] = useState<{ id: string; name: string; role: Role; driver_id: string | null }[]>([]);
-  const load = () => supabase?.from('profiles').select('id,name,role,driver_id').then(({ data }) => setUsers((data ?? []) as never));
+  const sheet = useSheet();
+  const me = useStore((s) => s.session?.userId);
+  const [users, setUsers] = useState<UserRow[]>([]);
+  const [noInfo, setNoInfo] = useState(false);
+  const load = async () => {
+    if (!supabase) return;
+    const [{ data: profiles }, info] = await Promise.all([
+      supabase.from('profiles').select('id,name,role,driver_id,blocked'),
+      supabase.rpc('admin_users'),
+    ]);
+    // 서버에 회원 관리 SQL(20261025000018)을 아직 안 넣었으면 이메일·가입일 없이 보여 준다
+    setNoInfo(!!info.error);
+    const byId = new Map(((info.data ?? []) as { id: string; email: string; created_at: string; last_sign_in_at: string | null }[]).map((u) => [u.id, u]));
+    const rows = ((profiles ?? []) as UserRow[]).map((p) => ({ ...p, ...byId.get(p.id) }));
+    rows.sort((a, b) => Number(!!a.blocked) - Number(!!b.blocked) || String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')));
+    setUsers(rows);
+  };
   useEffect(() => {
     void load();
   }, []);
@@ -221,22 +239,72 @@ function UsersPanel() {
     if (error) store.toast(error.message, 'error');
     void load();
   };
+  const activeAdmins = users.filter((u) => u.role === 'admin' && !u.blocked).length;
+  const block = async (u: UserRow) => {
+    if (!u.blocked) {
+      if (u.id === me) return store.toast('내 계정은 막을 수 없습니다', 'error');
+      if (u.role === 'admin' && activeAdmins <= 1) return store.toast('관리자가 한 명은 남아 있어야 합니다', 'error');
+      const ok = await sheet.confirm({
+        title: `${u.name} 계정 막기`,
+        message: '퇴사 등으로 계정을 막습니다. 로그인해도 아무 데이터도 볼 수 없고 입력도 못 합니다. 입력했던 배차·오더는 그대로 남고, 나중에 다시 허용할 수 있습니다.',
+        actions: [{ label: '막기', value: 'y', kind: 'danger' }],
+      });
+      if (!ok) return;
+    }
+    await update(u.id, { blocked: !u.blocked });
+    store.toast(u.blocked ? `${u.name} 계정을 다시 허용했습니다` : `${u.name} 계정을 막았습니다`);
+  };
+  const resetPw = (u: UserRow) => sheet.open((close) => <PasswordResetSheet user={u} close={close} />);
+  const day = (t?: string | null) => (t ? dayjs(t).tz(TZ).format('YYYY.M.D') : '-');
   return (
     <div className="card">
       <h3>사용자 권한</h3>
       <p className="muted small">새로 가입한 사람은 "조회(기사)"로 시작합니다. 기사 계정은 연결된 기사의 배차만 "내 배차"에 보입니다.</p>
+      {noInfo && <div className="banner yellow small">이메일·가입일·막기·비밀번호 재설정을 쓰려면 Supabase에 회원 관리 SQL을 한 번 실행해야 합니다.</div>}
       {users.map((u) => (
-        <div key={u.id} className="row wrap" style={{ borderBottom: '1px solid #eee', padding: '6px 0' }}>
-          <b className="grow">{u.name}</b>
-          <select style={{ width: 130 }} value={u.role} onChange={(e) => update(u.id, { role: e.target.value })}>
-            <option value="admin">관리자</option><option value="dispatcher">배차</option><option value="viewer">조회(기사)</option>
-          </select>
-          <select style={{ width: 150 }} value={u.driver_id ?? ''} onChange={(e) => update(u.id, { driver_id: e.target.value || null })}>
-            <option value="">기사 연결 없음</option>{snap.drivers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-          </select>
+        <div key={u.id} className="user-row" style={{ opacity: u.blocked ? 0.55 : 1 }}>
+          <div className="row" style={{ alignItems: 'baseline', gap: 6 }}>
+            <b>{u.name || '(이름 없음)'}</b>
+            {u.blocked && <span className="mk warn">막힘(퇴사)</span>}
+            {u.id === me && <span className="muted small">나</span>}
+          </div>
+          {u.email && <div className="muted small">{u.email} · 가입 {day(u.created_at)} · 최근 로그인 {day(u.last_sign_in_at)}</div>}
+          <div className="row wrap" style={{ gap: 6, marginTop: 4 }}>
+            <select style={{ width: 120 }} value={u.role} disabled={u.blocked} onChange={(e) => {
+              if (u.role === 'admin' && e.target.value !== 'admin' && activeAdmins <= 1) { store.toast('관리자가 한 명은 남아 있어야 합니다', 'error'); return; }
+              void update(u.id, { role: e.target.value });
+            }}>
+              <option value="admin">관리자</option><option value="dispatcher">배차</option><option value="viewer">조회(기사)</option>
+            </select>
+            <select style={{ width: 140 }} value={u.driver_id ?? ''} disabled={u.blocked} onChange={(e) => update(u.id, { driver_id: e.target.value || null })}>
+              <option value="">기사 연결 없음</option>{snap.drivers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+            {!noInfo && <button className="chip" onClick={() => resetPw(u)}>🔑 비밀번호 재설정</button>}
+            {!noInfo && u.id !== me && <button className={`chip ${u.blocked ? '' : 'danger'}`} onClick={() => void block(u)}>{u.blocked ? '다시 허용' : '🚫 계정 막기(퇴사)'}</button>}
+          </div>
         </div>
       ))}
     </div>
+  );
+}
+
+/** 관리자가 새 비밀번호를 정해 직접 알려 준다 (메일 없이) */
+function PasswordResetSheet({ user, close }: { user: UserRow; close: () => void }) {
+  const [pw, setPw] = useState('');
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true);
+    const { error } = await supabase!.rpc('admin_set_password', { target: user.id, new_password: pw });
+    setBusy(false);
+    if (error) return store.toast(error.message, 'error');
+    store.toast(`${user.name} 비밀번호를 바꿨습니다. 새 비밀번호를 본인에게 알려 주세요`);
+    close();
+  };
+  return (
+    <Sheet title={`${user.name} 비밀번호 재설정`} onClose={close} footer={<button className="primary" disabled={busy || pw.length < 6} onClick={() => void save()}>바꾸기</button>}>
+      <p className="muted small">{user.email} 계정의 비밀번호를 새로 정합니다. 바꾼 뒤 본인에게 알려 주고, 로그인한 다음 설정에서 다시 바꾸게 하세요.</p>
+      <label className="field"><span>새 비밀번호 (6자 이상)</span><input type="text" autoComplete="off" value={pw} onChange={(e) => setPw(e.target.value)} /></label>
+    </Sheet>
   );
 }
 
@@ -330,6 +398,7 @@ export function SettingsPage() {
         <p>{session?.name} · {{ admin: '관리자', dispatcher: '배차', viewer: '조회(기사)' }[session?.role ?? 'viewer']} {isDemo && <span className="badge warn">데모 모드 (이 기기에만 저장)</span>}</p>
         {!isDemo && <p className="muted small">전송 대기 {pending}건 {pending ? '— 연결되면 자동 동기화' : ''}</p>}
         <div className="row wrap">
+          {!isDemo && <button onClick={() => sheet.open((close) => <NewPasswordSheet close={close} />)}>🔑 비밀번호 바꾸기</button>}
           <button className="danger" onClick={async () => { await supabase?.auth.signOut(); await store.stop(); localStorage.removeItem('demo-role'); location.href = '/'; }}>로그아웃</button>
         </div>
       </div>

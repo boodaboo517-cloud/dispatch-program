@@ -9,7 +9,7 @@ export function LoginPage({ onDemo }: { onDemo: (role: Role, driverId: string | 
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
   const [name, setName] = useState('');
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [mode, setMode] = useState<'login' | 'signup' | 'reset'>('login');
   const [msg, setMsg] = useState('');
   const [driver, setDriver] = useState('');
   const [saved, setSaved] = useState<Awaited<ReturnType<typeof savedDemoData>>>(null);
@@ -24,8 +24,16 @@ export function LoginPage({ onDemo }: { onDemo: (role: Role, driverId: string | 
     onDemo(role, driverId);
   };
 
+  const sendReset = async () => {
+    setMsg('');
+    if (!email.trim()) return setMsg('가입한 이메일을 넣어 주세요');
+    const { error } = await supabase!.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin });
+    setMsg(error ? error.message : '비밀번호를 다시 정하는 링크를 메일로 보냈습니다. 메일이 오지 않으면 관리자에게 "비밀번호 재설정"을 부탁하세요.');
+  };
+
   const submit = async () => {
     setMsg('');
+    if (mode === 'reset') return sendReset();
     const r = mode === 'login'
       ? await supabase!.auth.signInWithPassword({ email, password: pw })
       : await supabase!.auth.signUp({ email, password: pw, options: { data: { name } } });
@@ -60,13 +68,58 @@ export function LoginPage({ onDemo }: { onDemo: (role: Role, driverId: string | 
         <div className="card">
           {mode === 'signup' && <label className="field"><span>이름</span><input value={name} onChange={(e) => setName(e.target.value)} /></label>}
           <label className="field"><span>이메일</span><input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
-          <label className="field"><span>비밀번호</span><input type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} /></label>
-          {msg && <div className="banner red">{msg}</div>}
-          <button className="primary" style={{ width: '100%' }} onClick={submit}>{mode === 'login' ? '로그인' : '가입'}</button>
-          <button className="ghost" style={{ width: '100%' }} onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}>{mode === 'login' ? '처음이세요? 가입' : '로그인으로'}</button>
+          {mode !== 'reset' && <label className="field"><span>비밀번호</span><input type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} /></label>}
+          {mode === 'reset' && <p className="muted small">가입한 이메일로 비밀번호를 다시 정하는 링크를 보냅니다.</p>}
+          {msg && <div className={`banner ${mode === 'reset' && msg.startsWith('비밀번호를') ? 'blue' : 'red'}`}>{msg}</div>}
+          <button className="primary" style={{ width: '100%' }} onClick={submit}>{mode === 'login' ? '로그인' : mode === 'signup' ? '가입' : '재설정 메일 보내기'}</button>
+          <button className="ghost" style={{ width: '100%' }} onClick={() => { setMsg(''); setMode(mode === 'login' ? 'signup' : 'login'); }}>{mode === 'login' ? '처음이세요? 가입' : '로그인으로'}</button>
+          {mode === 'login' && <button className="ghost" style={{ width: '100%' }} onClick={() => { setMsg(''); setMode('reset'); }}>비밀번호를 잊으셨나요?</button>}
           <p className="muted small">처음 가입한 사람이 관리자가 됩니다. 이후 가입자는 조회(기사) 권한이며, 관리자가 설정에서 바꿉니다.</p>
         </div>
       )}
+    </div>
+  );
+}
+
+/** 막힌(퇴사) 계정 */
+export function BlockedPage() {
+  return (
+    <div className="page" style={{ maxWidth: 420, paddingTop: 48 }}>
+      <h1 style={{ color: 'var(--red)', textAlign: 'center' }}>경민물류 배차</h1>
+      <div className="card">
+        <p><b>사용이 중지된 계정입니다.</b></p>
+        <p className="muted small">다시 사용하려면 관리자에게 문의하세요.</p>
+        <button style={{ width: '100%' }} onClick={() => void supabase!.auth.signOut().then(() => location.reload())}>로그아웃</button>
+      </div>
+    </div>
+  );
+}
+
+/** 비밀번호 찾기 메일의 링크로 들어왔을 때 · 설정에서 비밀번호 바꾸기 */
+export function NewPasswordSheet({ close }: { close: () => void }) {
+  const [pw, setPw] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [msg, setMsg] = useState('');
+  const save = async () => {
+    if (pw.length < 6) return setMsg('6자 이상으로 정해 주세요');
+    if (pw !== pw2) return setMsg('두 번 넣은 비밀번호가 다릅니다');
+    const { error } = await supabase!.auth.updateUser({ password: pw });
+    if (error) return setMsg(error.message);
+    alert('비밀번호를 바꿨습니다');
+    close();
+  };
+  return (
+    <div className="modal-back">
+      <div className="card" style={{ maxWidth: 400, margin: '15vh auto 0' }}>
+        <h3>새 비밀번호 정하기</h3>
+        <label className="field"><span>새 비밀번호 (6자 이상)</span><input type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} /></label>
+        <label className="field"><span>한 번 더</span><input type="password" autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void save()} /></label>
+        {msg && <div className="banner red">{msg}</div>}
+        <div className="row" style={{ gap: 6 }}>
+          <button className="grow" onClick={close}>닫기</button>
+          <button className="primary grow" onClick={() => void save()}>저장</button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -12,7 +12,7 @@ import { SheetProvider } from './ui/Sheet.tsx';
 import { ClientDetailPage, ClientsPage } from './pages/ClientsPage.tsx';
 import { DriverHome } from './pages/DriverHome.tsx';
 import { FleetPage } from './pages/FleetPage.tsx';
-import { LoginPage } from './pages/LoginPage.tsx';
+import { BlockedPage, LoginPage, NewPasswordSheet } from './pages/LoginPage.tsx';
 import { OverviewPage } from './pages/OverviewPage.tsx';
 import { OrderInputPage } from './pages/OrderInputPage.tsx';
 import { ProductDetailPage } from './pages/ProductDetailPage.tsx';
@@ -186,6 +186,8 @@ function Shell() {
 export default function App() {
   const session = useStore((s) => s.session);
   const [checking, setChecking] = useState(!isDemo);
+  const [blocked, setBlocked] = useState(false);
+  const [recovery, setRecovery] = useState(false);
 
   useEffect(() => {
     if (isDemo) {
@@ -202,7 +204,16 @@ export default function App() {
         setChecking(false);
         return;
       }
-      const { data } = await supabase!.from('profiles').select('name,role,driver_id').eq('id', userId).single();
+      let { data, error } = await supabase!.from('profiles').select('name,role,driver_id,blocked').eq('id', userId).single();
+      // 회원 관리 SQL 적용 전 서버 (blocked 칸 없음)
+      if (error) ({ data } = await supabase!.from('profiles').select('name,role,driver_id').eq('id', userId).single() as never);
+      if ((data as { blocked?: boolean } | null)?.blocked) {
+        await store.stop();
+        setBlocked(true);
+        setChecking(false);
+        return;
+      }
+      setBlocked(false);
       await store.start({ userId, name: data?.name ?? '', role: (data?.role ?? 'viewer') as Role, driverId: data?.driver_id ?? null, demo: false });
       setChecking(false);
     };
@@ -210,6 +221,7 @@ export default function App() {
     const { data: sub } = supabase!.auth.onAuthStateChange((ev, s) => {
       if (ev === 'SIGNED_IN' && s?.user.id !== store.getState().session?.userId) void startFor(s?.user.id);
       if (ev === 'SIGNED_OUT') void startFor(undefined);
+      if (ev === 'PASSWORD_RECOVERY') setRecovery(true); // 비밀번호 찾기 메일의 링크로 들어옴
     });
     return () => sub.subscription.unsubscribe();
   }, []);
@@ -218,7 +230,8 @@ export default function App() {
   return (
     <BrowserRouter>
       <SheetProvider>
-        {session ? <Shell /> : (
+        {recovery && <NewPasswordSheet close={() => setRecovery(false)} />}
+        {blocked ? <BlockedPage /> : session ? <Shell /> : (
           <LoginPage onDemo={(role, driverId) => {
             localStorage.setItem('demo-role', JSON.stringify({ role, driverId }));
             void store.start({ userId: 'demo', name: role === 'viewer' ? '기사(데모)' : '데모 사용자', role, driverId, demo: true });
