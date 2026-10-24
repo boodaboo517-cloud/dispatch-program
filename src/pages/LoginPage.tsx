@@ -4,6 +4,7 @@ import { isDemo, supabase } from '../data/supabase.ts';
 import { seedSnapshot } from '../data/seed.ts';
 import { savedDemoData } from '../data/store.ts';
 import { Seg } from '../ui/Picker.tsx';
+import { InstallBanner } from '../ui/InstallCard.tsx';
 
 export function LoginPage({ onDemo }: { onDemo: (role: Role, driverId: string | null) => void }) {
   const [email, setEmail] = useState('');
@@ -44,6 +45,7 @@ export function LoginPage({ onDemo }: { onDemo: (role: Role, driverId: string | 
   return (
     <div className="page" style={{ maxWidth: 420, paddingTop: 48 }}>
       <h1 style={{ color: 'var(--red)', textAlign: 'center' }}>경민물류 배차</h1>
+      <InstallBanner />
       {isDemo ? (
         <div className="card">
           <p><b>데모 모드</b> — 서버 없이 <b>이 기기에만</b> 저장됩니다. 설정 → 데이터 보관에서 백업 파일을 저장해 두면 나중에 서버로 그대로 옮길 수 있습니다.</p>

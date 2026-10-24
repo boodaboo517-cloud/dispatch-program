@@ -357,3 +357,6 @@ tr.err td { background: var(--red-soft); }
 .repair-spans { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .repair-spans .chip { display: flex; flex-direction: column; align-items: flex-start; min-height: 52px; padding: 6px 10px; text-align: left; }
 .repair-spans .chip small { font-size: 11px; opacity: .8; font-weight: 400; }
+
+.install-banner { display: flex; gap: 6px; align-items: center; max-width: 720px; margin: 8px auto; padding: 0 12px; }
+.install-banner .primary { min-height: 48px; font-size: 17px; }

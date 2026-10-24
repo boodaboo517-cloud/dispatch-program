@@ -9,6 +9,7 @@ import { lastUrl, menuOf, menuUrl, remember, saveScroll, scrollOf } from './lib/
 import { seoulToday } from './lib/time.ts';
 import { useStore } from './ui/hooks.ts';
 import { SheetProvider } from './ui/Sheet.tsx';
+import { InstallBanner } from './ui/InstallCard.tsx';
 import { ClientDetailPage, ClientsPage } from './pages/ClientsPage.tsx';
 import { DriverHome } from './pages/DriverHome.tsx';
 import { FleetPage } from './pages/FleetPage.tsx';
@@ -162,6 +163,7 @@ function Shell() {
       <NavMemory />
       <TopMenu role={session.role} />
       <StatusLine />
+      <InstallBanner />
       {viewer ? (
         // 기사(조회) 계정: 내 배차만 (품목 주의사항·사진은 배차 카드에서 열림)
         <Routes>
