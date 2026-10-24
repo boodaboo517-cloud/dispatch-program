@@ -159,13 +159,68 @@ function DataPanel() {
       <div className="row wrap">
         <button className="primary" onClick={() => { downloadBackup(snap); store.toast('백업 파일을 저장했습니다 (다운로드 폴더)'); }}>💾 백업 파일 저장</button>
         {(isDemo || admin) && (
-          <label><button onClick={(e) => (e.currentTarget.nextElementSibling as HTMLInputElement).click()}>{isDemo ? '📂 백업 불러오기' : '⬆ 데모 데이터 서버로 옮기기'}</button>
+          <label><button onClick={(e) => (e.currentTarget.nextElementSibling as HTMLInputElement).click()}>{isDemo ? '📂 백업 불러오기' : '⬆ 백업 파일 서버로 올리기'}</button>
             <input hidden type="file" accept=".json,.gz,application/json,application/gzip" onChange={(e) => { void restore(e.target.files?.[0]); e.target.value = ''; }} /></label>
         )}
         {isDemo && <button className="danger" onClick={reset}>초기화</button>}
       </div>
       {progress && <p className="muted">옮기는 중… {progress}</p>}
+      {!isDemo && admin && <ServerBackups />}
       <EmailBackup />
+    </div>
+  );
+}
+
+/** 서버 자동 백업 (매일 02:00, 30일 보관) — 날짜별로 내려받기 · 지금 백업 */
+function ServerBackups() {
+  const [list, setList] = useState<{ id: number; created_at: string; summary: string; size_bytes: number }[] | null>(null);
+  const [missing, setMissing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const load = async () => {
+    const { data, error } = await supabase!.from('server_backups').select('id,created_at,summary,size_bytes').order('created_at', { ascending: false }).limit(30);
+    setMissing(!!error);
+    setList((data ?? []) as never);
+  };
+  useEffect(() => { void load(); }, []);
+  const download = async (id: number, at: string) => {
+    setBusy(true);
+    const { data, error } = await supabase!.from('server_backups').select('data').eq('id', id).single();
+    setBusy(false);
+    if (error || !data) return store.toast(`받지 못했습니다: ${error?.message ?? ''}`, 'error');
+    const blob = new Blob([JSON.stringify((data as { data: unknown }).data)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `gyeongmin-server-backup-${dayjs(at).tz(TZ).format('YYYYMMDD-HHmm')}.json`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  };
+  const now = async () => {
+    setBusy(true);
+    const { error } = await supabase!.rpc('admin_backup_now');
+    setBusy(false);
+    if (error) return store.toast(error.message, 'error');
+    store.toast('서버에 백업했습니다');
+    void load();
+  };
+  return (
+    <div style={{ marginTop: 12, borderTop: '1px solid #eee', paddingTop: 10 }}>
+      <b>🗄 서버 자동 백업 (매일 새벽 2시 · 30일 보관)</b>
+      {missing ? (
+        <p className="muted small">아직 켜지지 않았습니다. Supabase에 자동 백업 SQL(20261025000020)을 한 번 실행하면 매일 새벽 2시에 자동으로 백업됩니다.</p>
+      ) : (
+        <>
+          <p className="muted small">휴대폰·PC가 꺼져 있어도 서버가 스스로 백업합니다. 되돌릴 때는 받은 파일을 위 "⬆ 백업 파일 서버로 올리기"로 올리면 됩니다.</p>
+          {list?.slice(0, 7).map((b) => (
+            <div key={b.id} className="row" style={{ alignItems: 'center', minHeight: 40, borderBottom: '1px solid #f1f5f9' }}>
+              <span className="grow small"><b>{dayjs(b.created_at).tz(TZ).format('M/D (dd) HH:mm')}</b> <span className="muted">{b.summary} · {Math.max(1, Math.round(b.size_bytes / 1024))}KB</span></span>
+              <button className="chip" disabled={busy} onClick={() => void download(b.id, b.created_at)}>⬇ 받기</button>
+            </div>
+          ))}
+          {list && !list.length && <p className="muted small">아직 백업이 없습니다. 오늘 새벽 2시에 처음 만들어집니다.</p>}
+          <button style={{ marginTop: 6 }} disabled={busy} onClick={() => void now()}>지금 서버에 백업</button>
+        </>
+      )}
     </div>
   );
 }
