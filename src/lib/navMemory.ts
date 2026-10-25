@@ -1,5 +1,6 @@
 // 메뉴를 오갈 때 마지막 보던 화면(날짜·탭·스크롤)에서 다시 시작하고, 앱을 다시 열면 마지막 메뉴로.
 import { seoulToday } from './time.ts';
+import { boardView } from './boardDate.ts';
 
 /** 아래 탭(메뉴) 묶음: 그 메뉴 안에서 마지막으로 본 화면으로 돌아간다 */
 export function menuOf(pathname: string): string {
@@ -51,8 +52,16 @@ export function remember(pathname: string, search: string) {
   save();
 }
 
-/** 메뉴 링크 주소: 그 메뉴에서 마지막으로 본 화면 (없으면 기본) */
-export const menuUrl = (menu: string) => fresh(mem.menus[menu] ?? menu);
+/** 메뉴 링크 주소: 그 메뉴에서 마지막으로 본 화면 (없으면 기본). 배차·일정표는 마지막으로 본 날짜를 같이 쓴다 */
+export function menuUrl(menu: string) {
+  const url = fresh(mem.menus[menu] ?? menu);
+  const shared = boardView()?.date;
+  if (!shared || (menu !== '/' && menu !== '/all')) return url;
+  const [path, q = ''] = url.split('?');
+  const p = new URLSearchParams(q);
+  p.set('date', shared);
+  return `${path}?${p.toString()}`;
+}
 
 /** 앱을 다시 열었을 때 갈 화면 */
 export const lastUrl = () => (mem.last ? fresh(mem.last) : '');

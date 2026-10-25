@@ -64,10 +64,10 @@ function TopMenu({ role }: { role: Role }) {
           <NavLink to="/fleet/ships">선박 등록</NavLink>
           <span style={{ width: 16 }} />
           <button onClick={() => go(addDays(date, -1))}>◀ 전일</button>
-          <NavLink to={loc.pathname === '/all' ? '/all' : menuUrl('/all')}>전체 일정표</NavLink>
+          <NavLink to={loc.pathname === '/all' ? '/all' : menuUrl('/all')} onClick={(e) => { if (loc.pathname !== '/all') { e.preventDefault(); nav(menuUrl('/all')); } }}>전체 일정표</NavLink>
           <button onClick={() => go(addDays(date, 1))}>익일 ▶</button>
           <span style={{ width: 16 }} />
-          <NavLink to={loc.pathname === '/' ? '/' : menuUrl('/')} end className={() => (loc.pathname === '/' ? 'active' : '')}>배차</NavLink>
+          <NavLink to={loc.pathname === '/' ? '/' : menuUrl('/')} end className={() => (loc.pathname === '/' ? 'active' : '')} onClick={(e) => { if (loc.pathname !== '/') { e.preventDefault(); nav(menuUrl('/')); } }}>배차</NavLink>
           {role === 'admin' && <NavLink to="/revenue">매출</NavLink>}
           <NavLink to={loc.pathname.startsWith('/admin') ? loc.pathname : '/admin/dispatch'} className={() => (loc.pathname.startsWith('/admin') ? 'active' : '')}>📊 관리</NavLink>
           {role === 'admin' ? <NavLink to="/settings">설정</NavLink> : <NavLink to="/settings">👤 내 계정</NavLink>}
@@ -128,6 +128,7 @@ function NavMemory() {
 
 function TabBar({ role }: { role: Role }) {
   const loc = useLocation();
+  const nav = useNavigate();
   if (role === 'viewer') return null;
   // 설정(매출 포함)은 관리자만. 관리 = 거래처·차량·기사·근무현황·선박·현장
   const tabs: [string, string, string][] = [
@@ -137,7 +138,9 @@ function TabBar({ role }: { role: Role }) {
   return (
     <nav className="tabbar">
       {tabs.map(([to, ic, l]) => (
-        <NavLink key={to} to={menuOf(loc.pathname) === to ? to : menuUrl(to)} end={to === '/'} className={() => (menuOf(loc.pathname) === to ? 'active' : '')}>
+        <NavLink key={to} to={menuOf(loc.pathname) === to ? to : menuUrl(to)} end={to === '/'} className={() => (menuOf(loc.pathname) === to ? 'active' : '')}
+          // 주소는 누르는 순간 다시 계산 (방금 넘긴 배차·일정표 날짜까지 반영)
+          onClick={(e) => { if (menuOf(loc.pathname) !== to) { e.preventDefault(); nav(menuUrl(to)); } }}>
           <span className="ic">{ic}</span>{l}
         </NavLink>
       ))}

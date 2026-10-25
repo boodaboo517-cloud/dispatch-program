@@ -4,7 +4,7 @@ import { addDays, needsDriver, type Zone } from '../domain/index.ts';
 import { exportSchedule } from '../excel/exportSchedule.ts';
 import { fmtLong, fmtStamp, seoulToday } from '../lib/time.ts';
 import { useSwipe } from '../ui/useSwipe.ts';
-import { rememberBoardView } from '../lib/boardDate.ts';
+import { boardView, rememberBoardView } from '../lib/boardDate.ts';
 import { useBoard, useIsWide, useRole, useSnap, useStore } from '../ui/hooks.ts';
 import { setting } from '../ui/labels.ts';
 import { useBoardActions } from '../ui/useBoardActions.tsx';
@@ -36,7 +36,8 @@ export function DateBar({ date, onChange }: { date: string; onChange: (d: string
 
 export function SchedulePage() {
   const [params, setParams] = useSearchParams();
-  const date = params.get('date') ?? seoulToday();
+  // 날짜: 주소 → 배차·일정표에서 마지막으로 본 날짜 → 오늘 (두 화면이 같은 날짜를 씀)
+  const date = params.get('date') ?? boardView()?.date ?? seoulToday();
   const tab = (params.get('zone') as Tab) ?? 'land';
   // 오더 입력을 열면 이 날짜·구역이 기본으로
   useEffect(() => rememberBoardView(date, tab), [date, tab]);

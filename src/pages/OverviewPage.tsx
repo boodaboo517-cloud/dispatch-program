@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { exportSchedule } from '../excel/exportSchedule.ts';
 import { seoulToday } from '../lib/time.ts';
-import { rememberBoardDate } from '../lib/boardDate.ts';
+import { boardView, rememberBoardDate } from '../lib/boardDate.ts';
 import { useBoard, useIsWide, useRole, useSnap } from '../ui/hooks.ts';
 import { useSwipe } from '../ui/useSwipe.ts';
 import { addDays } from '../domain/index.ts';
@@ -15,7 +15,7 @@ export function OverviewPage({ embedded }: { embedded?: boolean } = {}) {
   const [params, setParams] = useSearchParams();
   const [localDate, setLocalDate] = useState(seoulToday());
   // 기사 화면 안에 넣을 때는 주소(URL) 대신 화면 안에서만 날짜를 바꾼다
-  const date = embedded ? localDate : params.get('date') ?? seoulToday();
+  const date = embedded ? localDate : params.get('date') ?? boardView()?.date ?? seoulToday();
   const setDate = (d: string) => (embedded ? setLocalDate(d) : setParams({ date: d }, { replace: true }));
   // 오더 입력을 열면 이 날짜가 기본으로 (기사 화면 안 전체 일정은 제외)
   useEffect(() => { if (!embedded) rememberBoardDate(date); }, [date, embedded]);
