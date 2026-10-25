@@ -5,7 +5,7 @@ import {
   CALC_LABEL, CARRIER_LABEL, EXTRA_PRESETS, Tx, acceptLinkPending, arrivalOffset, buildBoard, transportSummary,
   type CarrierType, type Shipment, computeRevenue, deleteOrder, findLinkedUnload, ignoreLinkPending, newId,
   copyOrder, createOrder, isPerVehicleSplittable, addDays, saveOrder, saveRevenue, splitPerVehicle, workText, setProductDefaultPrice, won,
-  type BillingStatus, type CalcMethod, type DailyOrder, type OrderRevenue, type Unit,
+  type BillingStatus, type CalcMethod, type DailyOrder, type OrderRevenue, type Unit, postponeUnload, type UnloadHold,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
 import { QtyInput } from './QtyInput.tsx';
@@ -144,6 +144,14 @@ export function OrderSheet({ orderId, close, startEditing = false }: { orderId: 
               {order.client_id && order.source !== 'linked' && <button onClick={() => void addSameClient()}>＋ 같은 거래처 품목</button>}
               <button onClick={() => sheet.open((c) => <CopySheet order={order} close={c} onDone={close} />)}>📋 복사</button>
               {!order.vehicle_id && <button onClick={() => void moveDate()}>📅 날짜 변경</button>}
+              {order.kind === 'unload' && order.vehicle_id && (
+                <button onClick={() => {
+                  const sails = buildBoard(store.getState().snap, order.date).rows.find((r) => r.vehicle.id === order.vehicle_id && !r.secondary)?.departureShip;
+                  store.run((tx) => postponeUnload(tx, order.id));
+                  store.toast(sails ? `하차를 내일로 미뤘습니다. 이 차량에 오늘 출발 선박(${sails})이 있어 내일 위치가 바뀝니다 — 선박을 확인하세요` : '하차를 내일 오전으로 미뤘습니다 (차량은 짐을 실은 채 대기)', sails ? 'warn' : undefined);
+                  close();
+                }}>⏸ 하차 연기 (내일로)</button>
+              )}
               {isPerVehicleSplittable(order) && <button onClick={() => { let n = 0; store.run((tx) => { n = splitPerVehicle(tx, order.id).length; }); store.toast(`1대씩 ${n}건으로 나눴습니다 (나머지는 배차 대기)`); close(); }}>대당 나누기</button>}
               <button className="primary" onClick={() => setDraft({ ...order })}>수정</button>
             </>
@@ -345,6 +353,23 @@ export function TransportFields({ o, set }: { o: DailyOrder; set: (p: Partial<Da
             ))}
           </div>
           <div className="muted small" style={{ marginTop: 4 }}>선박·벌크 마감으로 다음 배를 타면 +1일 더 늦게 고르세요.</div>
+          <div className="muted small" style={{ marginTop: 10 }}>고객 지정 하차일</div>
+          <div className="row" style={{ gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input type="date" value={o.unload_date ?? ''} min={o.date} style={{ width: 'auto' }}
+              onChange={(e) => set(e.target.value ? { unload_date: e.target.value, unload_hold: o.unload_hold || 'vehicle', same_day: false } : { unload_date: null, unload_hold: '' })} />
+            {o.unload_date && <button type="button" className="chip" onClick={() => set({ unload_date: null, unload_hold: '' })}>지정 안 함</button>}
+          </div>
+          {o.unload_date && (
+            <>
+              <Seg value={o.unload_hold || 'vehicle'} onChange={(v: UnloadHold) => set({ unload_hold: v })}
+                options={[{ value: 'vehicle', label: '🚚 차량 대기' }, { value: 'storage', label: '🏬 창고 보관' }]} />
+              <div className="muted small" style={{ marginTop: 4 }}>
+                {(o.unload_hold || 'vehicle') === 'vehicle'
+                  ? '배가 도착한 뒤 지정일까지 이 차량이 짐을 실은 채 대기하고, 지정일에 이 차량으로 하차합니다.'
+                  : '도착한 날 창고에 내려 보관하고, 지정일 하차는 차량 없이 배차 대기로 들어가 그날 따로 배차합니다.'}
+              </div>
+            </>
+          )}
           {!bulk && ct === 'own' && (
             <label className="row" style={{ cursor: 'pointer', minHeight: 44, marginTop: 6 }}>
               <input type="checkbox" checked={!!o.same_day} onChange={(e) => set({ same_day: e.target.checked })} style={{ width: 24, minHeight: 24 }} />

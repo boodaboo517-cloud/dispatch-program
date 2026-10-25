@@ -389,3 +389,5 @@ tr.err td { background: var(--red-soft); }
 .admin-table td { vertical-align: top; }
 .admin-table tr.total td { font-weight: 800; background: #f1f5f9; position: sticky; bottom: 0; }
 .admin-table tbody tr:hover td { background: #fef2f2; }
+
+.cell.rownote.info { color: #b45309; background: #fffbeb; }

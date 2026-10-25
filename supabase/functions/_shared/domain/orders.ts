@@ -5,7 +5,7 @@ import { findShip, isNextDayShip, isWaitShip } from './ships.ts';
 import { CARRIER_LABEL } from './types.ts';
 import type { Tx } from './tx.ts';
 import type {
-  DailyOrder, OrderSnapshot, ShipTag, VehicleDay, Zone, Kind, Snapshot,
+  DailyOrder, OrderSnapshot, ShipTag, UnloadHold, VehicleDay, Zone, Kind, Snapshot,
 } from './types.ts';
 
 export const opposite = (z: Zone): Zone => (z === 'land' ? 'jeju' : 'land');
@@ -23,6 +23,9 @@ export function blankOrder(p: { date: string; zone: Zone; kind: Kind } & Partial
     memo: '',
     work_time: '',
     work_detail: '',
+    delayed_from: null,
+    unload_date: null,
+    unload_hold: '',
     vehicle_id: null,
     driver_id: null,
     arrival_ship: null,
@@ -91,6 +94,13 @@ export function arrivalOffset(snap: Pick<Snapshot, 'ships'>, shipName: string | 
 /** 상차 → 연결 하차로 복사되는 값 (기사는 복사하지 않음) */
 /** 상차 → 연결 하차까지 날 수: 당일 왕복 0, 직접 정한 값, 없으면 선박 설정(기본 1) */
 export function unloadDayOffset(snap: Pick<Snapshot, 'ships'>, load: DailyOrder): number {
+  // 고객 지정 하차일
+  if (load.unload_date && load.unload_date >= load.date) return diffDays(load.unload_date, load.date);
+  return arrivalDayOffset(snap, load);
+}
+
+/** 지정일과 상관없이 배가 반대편에 닿는 날까지 날 수 */
+export function arrivalDayOffset(snap: Pick<Snapshot, 'ships'>, load: DailyOrder): number {
   if (load.same_day) return 0;
   // 대기했다가 나중 날 선적한 짐: 상차일 → 선적일 날 수 + 선박 도착일 차이
   const waited = load.ship_date && load.ship_date > load.date ? diffDays(load.ship_date, load.date) : 0;
@@ -100,7 +110,8 @@ export function unloadDayOffset(snap: Pick<Snapshot, 'ships'>, load: DailyOrder)
 
 export function linkedValues(tx: Tx, load: DailyOrder): OrderSnapshot {
   // 벌크는 화물만 배를 타므로 도착지에서 차량을 다시 섭외 → 차량·운송업체 비움
-  const bulk = load.shipment === 'bulk';
+  // 벌크·창고 보관은 도착지에서 차량을 다시 섭외 → 차량·운송업체 비움
+  const bulk = load.shipment === 'bulk' || (!!load.unload_date && load.unload_hold === 'storage');
   return {
     vehicle_id: bulk ? null : load.vehicle_id,
     carrier_type: bulk ? 'own' : load.carrier_type ?? 'own',
@@ -480,4 +491,22 @@ export function repairShipLinks(tx: Tx, fromDate: string) {
     if (vd.date < fromDate) continue;
     if (isWaitShip(vd.departure_ship) || isNextDayShip(vd.departure_ship)) syncShipCarryover(tx, vd.id);
   }
+}
+
+/** 하차 연기: 하차를 다음 날(또는 days 뒤)로 미룬다. 차량은 짐을 실은 채 그대로, 원래 날에는 "하차 연기 →" 표시 */
+export function postponeUnload(tx: Tx, orderId: string, days = 1) {
+  const o = tx.get('daily_orders', orderId);
+  if (!o || o.kind !== 'unload') return;
+  saveOrder(tx, { ...o, date: addDays(o.date, days), delayed_from: o.date });
+}
+
+/** 지정일 보관 중인 상차 짐: 배가 닿은 날부터 지정일 전날까지 (차량 대기 / 창고 보관) */
+export function heldLoads(snap: Pick<Snapshot, 'ships' | 'daily_orders'>, date: string): { order: DailyOrder; arrive: string; hold: UnloadHold }[] {
+  const out: { order: DailyOrder; arrive: string; hold: UnloadHold }[] = [];
+  for (const o of snap.daily_orders) {
+    if (o.kind !== 'load' || !o.unload_date || !o.unload_hold) continue;
+    const arrive = addDays(o.date, arrivalDayOffset(snap, o));
+    if (date >= arrive && date < o.unload_date) out.push({ order: o, arrive, hold: o.unload_hold });
+  }
+  return out;
 }

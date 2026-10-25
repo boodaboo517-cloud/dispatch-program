@@ -29,6 +29,7 @@ export function OrderMarks({ snap, o, staff }: { snap: Snapshot; o: DailyOrder; 
 export function OrderCellText({ snap, o }: { snap: Snapshot; o: DailyOrder }) {
   return (
     <>
+      {o.delayed_from && <div className="l2" style={{ color: '#b45309', fontWeight: 700 }}>⏸ 연기된 하차</div>}
       {workText(o) && <div className="l2" style={{ color: 'var(--red)', fontWeight: 700 }}>{abbrev(workText(o), 10)}</div>}
       <div className="l1">{abbrev(clientName(snap, o)) || '·'}</div>
       <div className="l2">{abbrev(productName(snap, o))} {qtyText(o)}</div>
@@ -90,4 +91,16 @@ export function CarrierText({ o }: { o: DailyOrder }) {
       {(veh || o.carrier_name) && <span className="small">{veh || abbrev(o.carrier_name ?? '', 4)}</span>}
     </>
   );
+}
+
+/** 오전(하차) 칸 안내 줄: 하차 연기 · 지정일까지 보관(차량 대기) · 창고 입고 */
+export function unloadInfo(snap: Snapshot, row: BoardRow): string[] {
+  const what = (o: DailyOrder) => [clientName(snap, o), productName(snap, o), qtyText(o)].filter(Boolean).join(' ');
+  const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}`;
+  return [
+    ...row.postponed.map((o) => `⏸ 하차 연기 → ${md(o.date)} · ${what(o)}`),
+    ...row.held.map((h) => h.hold === 'vehicle'
+      ? `📦 ${h.arrivedToday ? '도착 · ' : ''}싣고 대기 → ${md(h.order.unload_date!)} 하차 · ${what(h.order)}`
+      : `🏬 창고 입고 → ${md(h.order.unload_date!)} 배송 · ${what(h.order)}`),
+  ];
 }

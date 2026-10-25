@@ -6,7 +6,7 @@ import { useRole, useSnap } from '../../ui/hooks.ts';
 import { Cell } from '../../ui/Cell.tsx';
 import { clientName, driverName, productName, qtyText } from '../../ui/labels.ts';
 import type { useBoardActions } from '../../ui/useBoardActions.tsx';
-import { CarrierText, OrderMarks, ShipCellText, StatusChip } from './parts.tsx';
+import { CarrierText, OrderMarks, ShipCellText, StatusChip, unloadInfo } from './parts.tsx';
 
 type Actions = ReturnType<typeof useBoardActions>;
 const FIELDS = ['업체명', '지역', '품목', '수량', '비고'] as const;
@@ -72,10 +72,12 @@ function VehicleGroup({ row, zone, a, staff, focus }: { row: BoardRow; zone: Zon
   const snap = useSnap();
   const [over, setOver] = useState(false);
   const loadList = [...row.carried, ...row.loads];
-  const hasOrders = row.unloads.length + loadList.length > 0 || !!row.unloadNote || !!row.loadNote;
-  const n = hasOrders ? Math.max(row.unloads.length + (row.unloadNote ? 1 : 0), loadList.length + (row.loadNote ? 1 : 0)) + (staff ? 1 : 0) : 1;
+  // 하차 칸 안내(연기·보관·창고 입고)는 비고 줄에 같이
+  const uNote = [row.unloadNote ? `📝 ${row.unloadNote}` : '', ...unloadInfo(snap, row)].filter(Boolean).join(' · ');
+  const hasOrders = row.unloads.length + loadList.length > 0 || !!uNote || !!row.loadNote;
+  const n = hasOrders ? Math.max(row.unloads.length + (uNote ? 1 : 0), loadList.length + (row.loadNote ? 1 : 0)) + (staff ? 1 : 0) : 1;
   const noteCell = (kind: 'unload' | 'load') => (
-    <td colSpan={5}><Cell className="rownote" onTap={() => (staff ? void a.editNote(row, kind) : undefined)}>📝 {kind === 'unload' ? row.unloadNote : row.loadNote}</Cell></td>
+    <td colSpan={5}><Cell className="rownote" onTap={() => (staff ? void a.editNote(row, kind) : undefined)}>{kind === 'unload' ? uNote : `📝 ${row.loadNote}`}</Cell></td>
   );
   const focused = !!focus && (focus === row.vehicle.id || [...row.unloads, ...row.loads].some((o) => o.id === focus));
   const vehicleCell = (
@@ -127,7 +129,7 @@ function VehicleGroup({ row, zone, a, staff, focus }: { row: BoardRow; zone: Zon
         {i === 0 && driverCell('unload')}
         {hasOrders ? (
           <>
-            {u ? <OrderFields o={u} a={a} staff={staff} /> : row.unloadNote && i === row.unloads.length ? noteCell('unload') : <EmptyFields onAdd={staff ? () => a.addOrder(zone, 'unload', row) : undefined} />}
+            {u ? <OrderFields o={u} a={a} staff={staff} /> : uNote && i === row.unloads.length ? noteCell('unload') : <EmptyFields onAdd={staff ? () => a.addOrder(zone, 'unload', row) : undefined} />}
             {i === 0 && <td rowSpan={n} className="sep"><Cell className="vehicle" onTap={() => a.tapVehicle(row)}>{row.vehicle.short_no}{row.shortRepair === 'pm' && <span style={{ color: 'var(--red)', fontSize: 12, fontWeight: 700 }}>🔧오후 수리</span>}</Cell></td>}
             {i === 0 && driverCell('load')}
             {l ? <OrderFields o={l} a={a} staff={staff} carried={row.carried.includes(l) ? () => a.tapCarried(row, l) : undefined} /> : row.loadNote && i === loadList.length ? noteCell('load') : <EmptyFields onAdd={staff ? () => a.addOrder(zone, 'load', row) : undefined} />}

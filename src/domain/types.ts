@@ -264,7 +264,15 @@ export interface DailyOrder extends Base {
   shipment?: Shipment;
   /** 연결 하차까지 걸리는 날 (비우면 선박 설정, 마감으로 다음 배를 타면 +1) */
   arrival_offset?: number | null;
+  /** 하차 연기: 원래 하차하려던 날 (그날 오전 칸에 "하차 연기 →" 로 보이고, 오늘 칸에는 ⏸연기) */
+  delayed_from?: string | null;
+  /** 상차: 고객이 정한 하차일 (지정일). 도착하고 그날까지 unload_hold 방식으로 보관 */
+  unload_date?: string | null;
+  /** 지정일까지 보관: vehicle = 차량에 실은 채 대기 / storage = 창고 보관 후 그날 따로 배차 */
+  unload_hold?: UnloadHold;
 }
+
+export type UnloadHold = '' | 'vehicle' | 'storage';
 
 /** 차량별 하루 한 줄 — 선박·상태·기사 등 차량 단위 정보 */
 /** 오전 기사 칸 "오후도착" */

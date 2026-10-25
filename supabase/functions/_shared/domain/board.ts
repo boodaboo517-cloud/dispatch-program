@@ -2,7 +2,7 @@
 import { addDays, weekdayOf } from './dates.ts';
 import { newId } from './ids.ts';
 import { activeRepair, repairMemo, saveMaintenance } from './maintenance.ts';
-import { carriedLoads, ensureVehicleDay, opposite, waitsForShip } from './orders.ts';
+import { carriedLoads, ensureVehicleDay, heldLoads, opposite, waitsForShip } from './orders.ts';
 import { departDelay, isWaitShip, shipTimeOf } from './ships.ts';
 import type { Tx } from './tx.ts';
 import { DEFAULT_START, ON_CALL_SHIFT } from './types.ts';
@@ -95,6 +95,10 @@ export interface BoardRow {
   loads: DailyOrder[];
   /** 전날까지 선박 "대기"로 싣고 있는 짐 → [[ 상차짐 ]] */
   carried: DailyOrder[];
+  /** 오늘 하려다 다음 날로 미룬 하차 (오전 칸에 "하차 연기 →") */
+  postponed: DailyOrder[];
+  /** 고객 지정일까지 보관 중인 짐: 차량에 실은 채 대기 / 창고 보관 */
+  held: { order: DailyOrder; hold: 'vehicle' | 'storage'; arrivedToday: boolean }[];
   /** 오전(하차) 기사 */
   driverId: string | null;
   /** 오후(상차) 기사 (따로 없으면 오전 기사) */
@@ -176,6 +180,7 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
   const fieldVehicleIds = new Set(field.filter((f) => f.vehicle_id && !f.is_off).map((f) => f.vehicle_id!));
   const dayOrders = idx.ordersByDate.get(date) ?? [];
   // 선박 "대기"로 싣고 있거나 나중 날 선적하는 상차 (다음 날 [[ 상차짐 ]] 표시용)
+  const holds = heldLoads(snap, date);
   const waitingLoads = snap.daily_orders.filter((o) => o.kind === 'load' && o.vehicle_id && o.date < date && (o.ship_date ? o.ship_date >= date : waitsForShip(o)));
   const rows: BoardRow[] = [];
   const unknownLocation: Vehicle[] = [];
@@ -202,7 +207,11 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
     } else if (!status && v.status === '정비') status = 'repair';
     else if (!status && v.status === '휴차') status = 'rest';
     const carried = zone ? carriedLoads(waitingLoads, v.id, date, zone) : [];
-    if (!status && mine.length === 0 && carried.length === 0 && !vd?.unload_note && !vd?.load_note) status = 'empty';
+    const postponed = snap.daily_orders.filter((o) => o.kind === 'unload' && o.vehicle_id === v.id && o.delayed_from === date && o.date > date);
+    // 차량 대기는 매일, 창고 보관은 배가 닿은 날(입고)만 그 차량 줄에
+    const held = holds.filter((h) => h.order.vehicle_id === v.id && (h.hold === 'vehicle' || h.arrive === date))
+      .map((h) => ({ order: h.order, hold: h.hold as 'vehicle' | 'storage', arrivedToday: h.arrive === date }));
+    if (!status && mine.length === 0 && carried.length === 0 && !postponed.length && !held.length && !vd?.unload_note && !vd?.load_note) status = 'empty';
     // 오후 기사만 정해 둔 날은 오전을 비워 둔다 (오더에 적힌 오후 기사를 오전으로 끌어오지 않음)
     const driverId = vd?.driver_id ?? (vd?.load_driver_id || vd?.am_label ? null : orders.find((o) => o.driver_id)?.driver_id ?? null);
     // 제주 기사는 따로 적지 않으면 기본 출근(07:00 부두)
@@ -214,6 +223,8 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
       unloads,
       loads,
       carried,
+      postponed,
+      held,
       driverId,
       loadDriverId: vd?.load_driver_id || driverId,
       unloadSeq: vd?.unload_seq ?? null,
@@ -250,6 +261,8 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
         unloads: u,
         loads: l,
         carried: [],
+        postponed: [],
+        held: [],
         driverId,
         loadDriverId: vd?.load_driver_id || driverId,
         unloadSeq: null,

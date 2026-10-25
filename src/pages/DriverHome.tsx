@@ -18,6 +18,8 @@ import { useSwipe } from '../ui/useSwipe.ts';
 import { clientName, driverName, productName, productOf, qtyText, setting, shipText, shipTimeOf, ZONE_LABEL } from '../ui/labels.ts';
 import { StorageBadge, tempText } from '../ui/OrderSheet.tsx';
 import { OverviewPage } from './OverviewPage.tsx';
+import { ringAlert } from '../lib/alerts.ts';
+import { unloadInfo } from './schedule/parts.tsx';
 import { DateBar } from './SchedulePage.tsx';
 
 function DispatchCard({ row, date, title, me }: { row: BoardRow; date: string; title?: string; me: string | null }) {
@@ -52,7 +54,8 @@ function DispatchCard({ row, date, title, me }: { row: BoardRow; date: string; t
       {(row.startTime || row.startPlace) && <div style={{ textAlign: 'center', fontSize: 20, fontWeight: 800, color: '#1d4ed8' }}>출근 {row.startTime} {row.startPlace}</div>}
       <div style={{ textAlign: 'center' }} className="muted">{fmtDate(date)} · {ZONE_LABEL[z]} · {row.vehicle.plate}</div>
       {showUnload && <><h3>{z === 'land' ? '하차' : '오전'} {row.unloads.length}건 {row.arrivalShip && <span className="badge ok">{z === 'land' ? '상행' : '도착'} {shipText(row.arrivalShip, row.arrivalTag)}</span>}</h3>
-      {row.unloads.length ? <ol>{row.unloads.map(line)}</ol> : <p className="muted">없음</p>}</>}
+      {row.unloads.length ? <ol>{row.unloads.map(line)}</ol> : !unloadInfo(snap, row).length ? <p className="muted">없음</p> : null}
+      {unloadInfo(snap, row).map((t) => <div key={t} style={{ color: '#b45309', fontWeight: 700, margin: '4px 0' }}>{t}</div>)}</>}
       {showLoad && <><h3>{z === 'land' ? '상차' : '오후'} {row.loads.length}건 {row.departureShip && <span className="badge red">{z === 'land' ? '하행' : '출발'} {shipText(row.departureShip, row.departureTag)} {shipTimeOf(snap, row.departureShip)}</span>}</h3>
       {row.loads.length ? <ol>{row.loads.map(line)}</ol> : <p className="muted">없음</p>}</>}
       {!row.unloads.length && !row.loads.length && row.statusMemo && <p>{row.statusMemo}</p>}
@@ -113,9 +116,7 @@ export function DriverHome() {
   useEffect(() => {
     store.onNotice = (m) => {
       setNotice(m);
-      if ('Notification' in window && Notification.permission === 'granted') {
-        void navigator.serviceWorker?.ready.then((r) => r.showNotification('경민물류 배차 변경', { body: m, tag: 'dispatch' }));
-      }
+      ringAlert(m);
     };
     if ('Notification' in window && Notification.permission === 'default') void Notification.requestPermission();
     return () => {
@@ -124,10 +125,33 @@ export function DriverHome() {
   }, []);
   const lastNotice = snap.notices.filter((n) => n.driver_id === driverId && n.date >= seoulToday()).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
   const band = notice ?? lastNotice?.message;
+  // 변경 내역: 오늘 이후 일정에 대한 알림 (최근 것 위로), 안 본 것은 진하게
+  const history = snap.notices.filter((n) => n.driver_id === driverId && n.date >= seoulToday()).sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 30);
+  const [seenAt, setSeenAt] = useState(() => { try { return localStorage.getItem('notice-seen') ?? ''; } catch { return ''; } });
+  const unseen = history.filter((n) => n.created_at > seenAt).length;
+  const [showHistory, setShowHistory] = useState(false);
+  const openHistory = () => {
+    setShowHistory(!showHistory);
+    const now = new Date().toISOString();
+    if (!showHistory) { try { localStorage.setItem('notice-seen', now); } catch { /* 무시 */ } setTimeout(() => setSeenAt(now), 4000); }
+  };
 
   return (
     <div className="page" style={{ maxWidth: 720, minHeight: '80vh' }} {...(swipeOn ? swipe : {})}>
-      {band && <div className="banner yellow" onClick={() => setNotice(null)}>🔔 {band} {lastNotice && !notice && <span className="muted small">{fmtStamp(lastNotice.created_at)}</span>}</div>}
+      {band && <div className="banner yellow" onClick={() => { setNotice(null); if (!showHistory) openHistory(); }}>🔔 {band} {lastNotice && !notice && <span className="muted small">{fmtStamp(lastNotice.created_at)}</span>}</div>}
+      {history.length > 0 && (
+        <div className="card" style={{ padding: '8px 12px' }}>
+          <button className="ghost" style={{ width: '100%', justifyContent: 'space-between', display: 'flex' }} onClick={openHistory}>
+            <b>🔔 변경 내역 {unseen > 0 && <span className="badge red">새 {unseen}</span>}</b><span>{showHistory ? '접기 ▲' : `${history.length}건 ▼`}</span>
+          </button>
+          {showHistory && history.map((n) => (
+            <div key={n.id} className="row" style={{ borderTop: '1px solid #f1f5f9', padding: '6px 0', gap: 8, fontWeight: n.created_at > seenAt ? 800 : 400 }}>
+              <span className="muted small" style={{ width: 70, flex: 'none' }}>{fmtStamp(n.created_at)}</span>
+              <span className="grow">{n.message}</span>
+            </div>
+          ))}
+        </div>
+      )}
       {/* 기사 계정은 내 배차만. 관리자·배차가 "기사 화면 보기"로 볼 때만 전체 일정 탭 */}
       {!viewer && (
         <div className="tabs">

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildBoard, lastStart, setRowAmLabel, setVehicleDayStatus, missingDriver, needsDriver, setRowNote, setDriverSeq, setRowDriver, setRowHelper, setRowStart, startText } from '../board.ts';
-import { blankOrder, repairShipLinks, saveOrder, setRowShip, workText } from '../orders.ts';
+import { blankOrder, postponeUnload, repairShipLinks, saveOrder, setRowShip, workText } from '../orders.ts';
 import { Tx, applyMutations } from '../tx.ts';
 import { copyOrder, createOrder, splitPerVehicle } from '../actions.ts';
 import { planCreateRecurring, planRecurringChange } from '../recurring.ts';
@@ -555,5 +555,38 @@ describe('오전 기사 칸 "오후도착"', () => {
     set(tx, 'v9915', 'dB', 'unload');
     r = row(tx, 'v9915');
     expect([r.driverId, r.amLabel]).toEqual(['dB', '']);
+  });
+});
+
+describe('하차 연기 · 고객 지정일 하차', () => {
+  it('하차 연기: 다음 날 오전으로, 원래 날은 "연기"로 남고 공차 아님', () => {
+    const tx = new Tx(baseSnapshot());
+    const u = saveOrder(tx, blankOrder({ date: D, zone: 'jeju', kind: 'unload', vehicle_id: 'v9915', client_id: 'c-sin' }));
+    postponeUnload(tx, u.id);
+    const today = buildBoard(tx.result(), D).rows.find((r) => r.vehicle.id === 'v9915')!;
+    expect(today.postponed.map((o) => o.id)).toEqual([u.id]);
+    expect(today.status).not.toBe('empty');
+    const next = buildBoard(tx.result(), '2026-10-21').rows.find((r) => r.vehicle.id === 'v9915')!;
+    expect(next.unloads.map((o) => [o.id, o.delayed_from])).toEqual([[u.id, D]]);
+  });
+  it('지정일 + 차량 대기: 도착 다음 날부터 지정일 전날까지 보관 표시, 지정일에 그 차량 하차', () => {
+    const tx = new Tx(baseSnapshot());
+    const load = createOrder(tx, blankOrder({ date: D, zone: 'land', kind: 'load', client_id: 'c-dm', vehicle_id: 'v9915', departure_ship: '제이엘', unload_date: '2026-10-24', unload_hold: 'vehicle' }));
+    const linked = tx.list('daily_orders').find((o) => o.linked_from_id === load.id)!;
+    expect([linked.date, linked.vehicle_id]).toEqual(['2026-10-24', 'v9915']);
+    const day = (d: string) => buildBoard(tx.result(), d).rows.find((r) => r.vehicle.id === 'v9915' && !r.secondary)!;
+    expect(day('2026-10-21').held.map((h) => [h.hold, h.arrivedToday])).toEqual([['vehicle', true]]);
+    expect(day('2026-10-23').held).toHaveLength(1);
+    expect(day('2026-10-24').held).toHaveLength(0);
+  });
+  it('지정일 + 창고 보관: 도착일에 입고 표시, 지정일 하차는 차량 없이 배차 대기', () => {
+    const tx = new Tx(baseSnapshot());
+    const load = createOrder(tx, blankOrder({ date: D, zone: 'land', kind: 'load', client_id: 'c-dm', vehicle_id: 'v9915', departure_ship: '제이엘', unload_date: '2026-10-24', unload_hold: 'storage' }));
+    const linked = tx.list('daily_orders').find((o) => o.linked_from_id === load.id)!;
+    expect([linked.date, linked.vehicle_id]).toEqual(['2026-10-24', null]);
+    const b21 = buildBoard(tx.result(), '2026-10-21');
+    expect(b21.rows.find((r) => r.vehicle.id === 'v9915' && !r.secondary)!.held.map((h) => h.hold)).toEqual(['storage']);
+    expect(buildBoard(tx.result(), '2026-10-22').rows.find((r) => r.vehicle.id === 'v9915' && !r.secondary)?.held ?? []).toHaveLength(0);
+    expect(buildBoard(tx.result(), '2026-10-24').waiting.jeju.map((o) => o.id)).toEqual([linked.id]);
   });
 });

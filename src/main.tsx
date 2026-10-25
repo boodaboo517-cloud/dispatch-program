@@ -4,6 +4,7 @@ import { registerSW } from 'virtual:pwa-register';
 import App from './App.tsx';
 import { ErrorBoundary } from './ui/ErrorBoundary.tsx';
 import { initInstallCapture } from './lib/install.ts';
+import { unlockAudio } from './lib/alerts.ts';
 import './styles.css';
 
 registerSW({
@@ -17,6 +18,7 @@ registerSW({
   },
 });
 initInstallCapture();
+unlockAudio();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

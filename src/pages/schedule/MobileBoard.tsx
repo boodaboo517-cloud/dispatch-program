@@ -3,7 +3,7 @@ import { useRole, useSnap } from '../../ui/hooks.ts';
 import { Cell } from '../../ui/Cell.tsx';
 import type { useBoardActions } from '../../ui/useBoardActions.tsx';
 import { isExternal } from '../../domain/index.ts';
-import { CarrierText, OrderCellText, OrderMarks, ShipCellText, StatusChip, VehicleCellText } from './parts.tsx';
+import { CarrierText, OrderCellText, OrderMarks, ShipCellText, StatusChip, VehicleCellText, unloadInfo } from './parts.tsx';
 
 type Actions = ReturnType<typeof useBoardActions>;
 
@@ -33,7 +33,8 @@ export function MobileBoard(p: { date: string; zone: Zone; rows: BoardRow[]; wai
 function VehicleRow({ date, row, zone, a, focus }: { date: string; row: BoardRow; zone: Zone; a: Actions; focus: string | null }) {
   const snap = useSnap();
   const { staff } = useRole();
-  const hasOrders = row.unloads.length + row.loads.length + row.carried.length > 0 || !!row.unloadNote || !!row.loadNote;
+  const info = unloadInfo(snap, row);
+  const hasOrders = row.unloads.length + row.loads.length + row.carried.length + info.length > 0 || !!row.unloadNote || !!row.loadNote;
   const focused = !!focus && (focus === row.vehicle.id || [...row.unloads, ...row.loads].some((o) => o.id === focus));
   const orderCells = (list: DailyOrder[], kind: 'unload' | 'load') => (
     <div className="col">
@@ -49,6 +50,7 @@ function VehicleRow({ date, row, zone, a, focus }: { date: string; row: BoardRow
           <OrderCellText snap={snap} o={o} />
         </Cell>
       ))}
+      {kind === 'unload' && info.map((t) => <Cell key={t} className="rownote info" onTap={() => undefined}>{t}</Cell>)}
       {(kind === 'unload' ? row.unloadNote : row.loadNote) && (
         <Cell className="rownote" onTap={() => (staff ? void a.editNote(row, kind) : undefined)}>📝 {kind === 'unload' ? row.unloadNote : row.loadNote}</Cell>
       )}

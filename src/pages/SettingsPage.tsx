@@ -15,6 +15,7 @@ import { setting } from '../ui/labels.ts';
 import { InstallCard } from '../ui/InstallCard.tsx';
 import { saveSetting } from '../ui/Phrases.tsx';
 import { reloadFresh } from '../lib/recover.ts';
+import { alertPrefs, canVibrate, ringAlert, setAlertPref } from '../lib/alerts.ts';
 import { Sheet, useSheet } from '../ui/Sheet.tsx';
 import { NewPasswordSheet } from './LoginPage.tsx';
 import { ProfileSheet } from './ProfileSheet.tsx';
@@ -226,6 +227,34 @@ function ServerBackups() {
   );
 }
 
+/** 일정 변경 알림: 소리 · 진동 · 휴대폰 알림창 (이 기기에만 저장) */
+function AlertSettings() {
+  const [p, setP] = useState(alertPrefs());
+  const [perm, setPerm] = useState(() => ('Notification' in window ? Notification.permission : 'denied'));
+  const toggle = (k: 'sound' | 'vibrate') => { setAlertPref(k, !p[k]); setP(alertPrefs()); };
+  return (
+    <div className="card">
+      <h3>🔔 일정 변경 알림</h3>
+      <p className="muted small">내 배차가 추가·변경·취소되면 알려 줍니다. 이 휴대폰에만 적용됩니다.</p>
+      <label className="row" style={{ alignItems: 'center', gap: 8, minHeight: 44 }}>
+        <input type="checkbox" checked={p.sound} onChange={() => toggle('sound')} style={{ width: 24, height: 24 }} /><span style={{ fontSize: 17 }}>🔊 알림 소리</span>
+      </label>
+      <label className="row" style={{ alignItems: 'center', gap: 8, minHeight: 44 }}>
+        <input type="checkbox" checked={p.vibrate} disabled={!canVibrate()} onChange={() => toggle('vibrate')} style={{ width: 24, height: 24 }} />
+        <span style={{ fontSize: 17 }}>📳 진동</span>{!canVibrate() && <span className="muted small">(이 기기·브라우저는 진동을 지원하지 않습니다 — 아이폰 등)</span>}
+      </label>
+      <div className="row wrap" style={{ gap: 6, marginTop: 4 }}>
+        <button onClick={() => ringAlert('테스트 알림', true)}>▶ 소리·진동 시험</button>
+        {perm !== 'granted' && 'Notification' in window && (
+          <button onClick={() => void Notification.requestPermission().then(setPerm)}>📲 휴대폰 알림창 허용</button>
+        )}
+        {perm === 'granted' && <span className="small" style={{ color: 'var(--green)', alignSelf: 'center' }}>✓ 휴대폰 알림창 허용됨</span>}
+      </div>
+      <p className="muted small" style={{ marginTop: 6 }}>앱을 켜 두었거나 잠깐 다른 앱으로 넘어간 동안 알립니다. 앱을 완전히 닫으면 다음에 열 때 "변경 내역"에서 볼 수 있습니다.</p>
+    </div>
+  );
+}
+
 function EmailBackup() {
   const snap = useSnap();
   const [st, setSt] = useState<EmailStatus | null | undefined>(undefined);
@@ -406,6 +435,8 @@ export function SettingsPage() {
       )}
 
       <InstallCard />
+
+      <AlertSettings />
 
       <div className="card row" style={{ alignItems: 'center' }}>
         <div className="grow"><b>앱 버전</b><div className="muted small">{__APP_VERSION__}</div></div>

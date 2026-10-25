@@ -4,6 +4,7 @@ import {
   type BoardRow, type DailyOrder, type FieldAssignment, type Snapshot, type Zone,
 } from '../../domain/index.ts';
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
+import { unloadInfo } from './parts.tsx';
 import { useSnap } from '../../ui/hooks.ts';
 import { clientName, driverName, productName, qtyText, shipTimeOf, vehicleNo } from '../../ui/labels.ts';
 
@@ -85,6 +86,7 @@ function Orders({ snap, list }: { snap: Snapshot; list: DailyOrder[] }) {
             workText(o),
             o.kind === 'load' ? o.pickup_place : o.dropoff_place,
             o.kind === 'load' && o.shipment === 'bulk' ? '벌크' : '',
+            o.delayed_from ? '⏸연기' : '',
             o.memo,
             product?.caution?.split('\n')[0],
           ].map((x) => x?.trim() ?? '');
@@ -108,6 +110,7 @@ function VehicleRow({ snap, row }: { snap: Snapshot; row: BoardRow }) {
     ? <div className="ps-oline center"><Fit><span className={`ps-start ${row.startDefault ? 'dflt' : ''}`}>{[row.startTime, row.startPlace].filter(Boolean).join(' ')}</span></Fit></div>
     : null;
   const noUnload = missingDriver(row, 'unload');
+  const info = unloadInfo(snap, row);
   const noLoad = missingDriver(row, 'load');
   const MISSING = <div className="ps-oline center"><Fit><span className="ps-nodrv">미배치</span></Fit></div>;
   const name = <>{start}{noUnload ? MISSING : !row.driverId && row.amLabel
@@ -132,7 +135,8 @@ function VehicleRow({ snap, row }: { snap: Snapshot; row: BoardRow }) {
       {vehCell(row.arrivalShip, 'am')}
       <td className={`drv${noUnload ? ' nodrv' : ''}`}>{name}</td>
       <td className="body">
-        {row.unloads.length ? <Orders snap={snap} list={row.unloads} /> : !row.unloadNote ? <Fit>{statusText}</Fit> : null}
+        {row.unloads.length ? <Orders snap={snap} list={row.unloads} /> : !row.unloadNote && !info.length ? <Fit>{statusText}</Fit> : null}
+        {info.map((t) => <div key={t} className="ps-oline"><Fit><span className="ps-rownote">{t}</span></Fit></div>)}
         {row.unloadNote && <div className="ps-oline"><Fit><span className="ps-rownote">{row.unloadNote}</span></Fit></div>}
       </td>
       {vehCell(row.departureShip, 'pm')}
