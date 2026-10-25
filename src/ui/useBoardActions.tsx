@@ -1,7 +1,7 @@
 // 일정표 칸 동작 (휴대폰·PC 공통)
 import {
   ON_CALL_SHIFT, abbrev, acceptShipPending, nudgeVehicle, workLogOf, assignVehicle, blankOrder, buildBoard, createOrder, ignoreShipPending, opposite, saveOrder,
-  DEFAULT_START, sails, PM_ARRIVAL_LABEL, setRowAmLabel, HELPER_ROLE_LABEL, START_PLACES, setRowNote, lastStart, startText, setRowStart, rowDriver, seqMark, setDriverSeq, setRowDriver, setRowHelper, setRowShip, setVehicleDayStatus, setVehicleZone, shipTime,
+  DEFAULT_START, sails, orderDriver, setRowNightDriver, PM_ARRIVAL_LABEL, setRowAmLabel, HELPER_ROLE_LABEL, START_PLACES, setRowNote, lastStart, startText, setRowStart, rowDriver, seqMark, setDriverSeq, setRowDriver, setRowHelper, setRowShip, setVehicleDayStatus, setVehicleZone, shipTime,
   type Board, type BoardRow, type DailyOrder, type DriverSide, type HelperRole, type Kind, type Zone,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
@@ -28,12 +28,12 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     ));
 
   /** startClient: 같은 거래처의 다른 품목을 이어서 넣을 때 (품목 고르기부터) */
-  const addOrder = async (zone: Zone, kind: Kind, row?: BoardRow, startClient?: { id: string; text: string }) => {
+  const addOrder = async (zone: Zone, kind: Kind, row?: BoardRow, startClient?: { id: string; text: string }, night = false) => {
     if (!staff) return;
-    const c = await pick.clientProduct(row?.vehicle.id ?? null, startClient, !!row && !startClient);
+    const c = await pick.clientProduct(row?.vehicle.id ?? null, startClient, !!row && !startClient && !night);
     if (!c) return;
     if (c.noteOnly && row) return editNote(row, kind);
-    const ship = kind === 'load'
+    const ship = night ? {} : kind === 'load'
       ? { departure_ship: row?.departureShip ?? null, departure_ship_tag: row?.departureTag ?? '' }
       : { arrival_ship: row?.arrivalShip ?? null, arrival_ship_tag: row?.arrivalTag ?? '' };
     const same = store.getState().snap.daily_orders.filter((o) => o.date === date && o.zone === zone && o.kind === kind);
@@ -42,13 +42,39 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
       client_id: c.client_id, client_text: c.client_text,
       product_id: c.product?.id ?? null, product_text: c.product_text,
       region: c.product?.default_region ?? '', quantity: c.product?.default_quantity ?? null, unit: c.product?.default_unit ?? '',
-      vehicle_id: row?.vehicle.id ?? null, driver_id: row ? rowDriver(row, kind) : null,
-      sort_order: same.length,
+      vehicle_id: row?.vehicle.id ?? null, driver_id: row ? (night ? row.nightDriverId : rowDriver(row, kind)) : null,
+      sort_order: same.length, night,
       ...ship,
     });
     store.run((tx) => createOrder(tx, order));
     const more = c.client_id ? { id: c.client_id, text: c.client_text } : undefined;
-    sheet.open((close) => <QuickQtySheet orderId={order.id} close={close} onAddMore={more ? () => void addOrder(zone, kind, row, more) : undefined} />);
+    sheet.open((close) => <QuickQtySheet orderId={order.id} close={close} onAddMore={more ? () => void addOrder(zone, kind, row, more, night) : undefined} />);
+  };
+
+  /** 🌙 야간 작업 추가: 야간 상차 / 야간 하차 고르고 → 거래처·품목. 구역은 이 줄 구역 (건너간 지역이면 그 지역) */
+  const addNight = async (row: BoardRow) => {
+    if (!staff) return;
+    const z = row.zone ?? 'land';
+    const k = await sheet.confirm({
+      title: `${row.vehicle.short_no} 🌙 야간 작업`,
+      message: '',
+      actions: [
+        { label: `🌙 야간 상차 (${ZONE_LABEL[z]})`, value: `load|${z}`, kind: 'primary' },
+        { label: `🌙 야간 하차 (${ZONE_LABEL[z]})`, value: `unload|${z}` },
+        { label: `🌙 야간 상차 (${ZONE_LABEL[opposite(z)]} · 건너가서)`, value: `load|${opposite(z)}` },
+      ],
+    });
+    if (!k) return;
+    const [kind, zone] = k.split('|') as [Kind, Zone];
+    await addOrder(zone, kind, row, undefined, true);
+  };
+
+  /** 🌙 야간 기사 */
+  const editNightDriver = async (row: BoardRow) => {
+    if (!staff) return;
+    const d = await pick.driver(date, row.nightDriverId);
+    if (d === undefined || d === PM_ARRIVAL) return;
+    store.run((tx) => setRowNightDriver(tx, { date, vehicle_id: row.vehicle.id, zone: row.zone, driver_id: d }));
   };
 
   const openOrder = (o: DailyOrder, edit = false) =>
@@ -130,8 +156,12 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
         { label: `${sideLabel(row, 'unload')}·${sideLabel(row, 'load')} 같은 기사`, value: 'unload', kind: 'primary' },
         { label: `${sideLabel(row, 'load')}만 (${sideLabel(row, 'unload')}은 비움)`, value: 'load' },
         { label: '🚢 오후도착 (오전 기사 없음)', value: 'pm' },
+        { label: '🌙 야간 작업 추가', value: 'night' },
+        { label: '🌙 야간 기사', value: 'night-driver' },
       ],
     });
+    if (side === 'night') return addNight(row);
+    if (side === 'night-driver') return editNightDriver(row);
     if (side === 'pm') {
       store.run((tx) => setRowAmLabel(tx, { date, vehicle_id: row.vehicle.id, zone: row.zone, label: PM_ARRIVAL_LABEL }));
       const now = buildBoard(store.getState().snap, date).rows.find((r) => r.vehicle.id === row.vehicle.id && !r.secondary);
@@ -221,6 +251,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
         <div>{sideLabel(row, 'unload')} 기사: {driverName(snap, row.driverId) || '미지정'} {seqMark(row.unloadSeq)}</div>
         <div>{sideLabel(row, 'load')} 기사: {row.loadDriverId !== row.driverId ? driverName(snap, row.loadDriverId) : <span className="muted">{sideLabel(row, 'unload')}과 같음</span>} {seqMark(row.loadSeq)}</div>
         <div>출근: {startText(row) || <span className="muted">미정</span>}</div>
+        <div>🌙 야간 기사: {row.nightDriverId ? driverName(snap, row.nightDriverId) : <span className="muted">없음</span>}{row.nights.length ? ` · 야간 작업 ${row.nights.length}건` : ''}</div>
         <div>동승: {row.helperId ? <>{driverName(snap, row.helperId)} <span className="badge warn">{row.helperRole ? HELPER_ROLE_LABEL[row.helperRole] : '동승'}</span></> : <span className="muted">없음</span>}</div>
         {row.driverId && <div>근무형태: {workLogOf(snap, row.driverId, date)?.work_types.join(', ') || <span className="muted">미입력</span>}</div>}
         {row.inRepair && <div style={{ color: 'var(--red)' }}>수리 중 {row.statusMemo}</div>}
@@ -232,6 +263,8 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
             { label: '순서 ①②', run: () => editSeq(row) },
             { label: '출근 시간·장소', run: () => editStart(row) },
             { label: '동승 (선탑·지원)', run: () => void editHelper(row) },
+            { label: '🌙 야간 작업 추가', run: () => void addNight(row) },
+            { label: '🌙 야간 기사', run: () => void editNightDriver(row) },
             ...(row.driverId ? [{ label: '근무형태', run: () => void pick.workType(date, row.driverId!) }] : []),
             ...(sails(row) ? [{ label: '🚢 선박 요금 (할증·승선)', run: () => sheet.open((close) => <VoyageSheet date={date} row={row} close={close} />) }] : []),
             { label: '상태·위치', run: () => void editStatus(row) },
@@ -283,7 +316,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     }
     const row = board.rows.find((r) => r.vehicle.id === vid);
     if (row?.inRepair && !confirm(`${row.vehicle.short_no} 차량은 수리 중입니다. 그래도 배차할까요?`)) return;
-    store.run((tx) => assignVehicle(tx, o.id, vid, row ? rowDriver(row, o.kind) : null));
+    store.run((tx) => assignVehicle(tx, o.id, vid, row ? orderDriver(row, o) : null));
     store.toast(`${vehicleNo(store.getState().snap, vid)} 차량에 배차했습니다`);
     onFocusVehicle?.(vid);
   };
@@ -295,7 +328,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     if (r) store.run((tx) => saveOrder(tx, { ...o, ...(isLoad ? { departure_ship: r.ship, departure_ship_tag: r.tag } : { arrival_ship: r.ship, arrival_ship_tag: r.tag }) }));
   };
 
-  return { addOrder, assignDriver, editNote, moveDate, tapCarried, openOrder, editShip, tapShip, editDriver, editSeq, editHelper, editStart, editStatus, tapVehicle, assign, editWaitingShip, showText, abbrev };
+  return { addOrder, addNight, editNightDriver, assignDriver, editNote, moveDate, tapCarried, openOrder, editShip, tapShip, editDriver, editSeq, editHelper, editStart, editStatus, tapVehicle, assign, editWaitingShip, showText, abbrev };
 }
 
 /** 출근 시간·장소 입력 */

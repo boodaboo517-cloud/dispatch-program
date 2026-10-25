@@ -217,6 +217,10 @@ export function OrderSheet({ orderId, close, startEditing = false }: { orderId: 
         <>
           <label className="field"><span>지역</span><input value={o.region} onChange={(e) => set({ region: e.target.value })} /></label>
           <PlaceFields pickup={o.pickup_place ?? ''} dropoff={o.dropoff_place ?? ''} onChange={(p) => set(p)} />
+          <label className="row night-toggle">
+            <input type="checkbox" checked={!!o.night} onChange={(e) => set({ night: e.target.checked })} style={{ width: 24, height: 24 }} />
+            <span>🌙 야간 작업</span>
+          </label>
           <WorkFields kind={o.kind} time={o.work_time ?? ''} detail={o.work_detail ?? ''} onChange={(p) => set(p)} />
           <div className="field"><span className="muted small">수량 (10파렛트 · 3대 처럼 써도 됨)</span>
             <QtyInput quantity={o.quantity} unit={o.unit} onChange={(quantity, unit) => set({ quantity, unit })} />

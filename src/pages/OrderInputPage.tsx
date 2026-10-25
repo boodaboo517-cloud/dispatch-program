@@ -128,6 +128,10 @@ export function OrderInputPage() {
       <label className="field"><span>구분</span>
         <Seg className="soft" value={o.kind} onChange={(k: Kind) => set({ kind: k })} options={[{ value: 'load', label: kindLabel(o.zone, 'load') }, { value: 'unload', label: kindLabel(o.zone, 'unload') }]} />
       </label>
+      <label className="row night-toggle">
+        <input type="checkbox" checked={!!o.night} onChange={(e) => set({ night: e.target.checked })} style={{ width: 24, height: 24 }} />
+        <span>🌙 야간 작업 <span className="muted small">(오전·오후와 따로 야간 칸 · 야간 기사가 맡음)</span></span>
+      </label>
       <Row k="거래처" v={clientName(snap, o)} onClick={chooseClient} ph="검색 · 최근 · 자주 쓰는" />
       <Row k="품목" v={productName(snap, o)} onClick={chooseClient} />
       <div className="field"><span className="muted small">수량{extras.length ? ` (${productName(snap, o) || '첫 품목'})` : ''} (숫자 뒤에 단위를 써도 됩니다: 10파렛트, 3대, 5박스)</span>

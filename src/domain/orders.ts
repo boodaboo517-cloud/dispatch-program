@@ -26,6 +26,7 @@ export function blankOrder(p: { date: string; zone: Zone; kind: Kind } & Partial
     delayed_from: null,
     unload_date: null,
     unload_hold: '',
+    night: false,
     vehicle_id: null,
     driver_id: null,
     arrival_ship: null,
@@ -70,6 +71,7 @@ export function blankVehicleDay(p: { date: string; vehicle_id: string } & Partia
     am_label: '',
     fare_kind: '',
     boarding: false,
+    night_driver_id: null,
     arrival_ship: null,
     arrival_ship_tag: '',
     departure_ship: null,
@@ -223,8 +225,13 @@ export function ensureVehicleDay(tx: Tx, date: string, vehicleId: string, zone: 
   return tx.insert('vehicle_days', blankVehicleDay({ date, vehicle_id: vehicleId, zone }));
 }
 
+/** 줄 자체에 적은 내용 (오더 제외) */
+function vehicleDayOwnContent(vd: VehicleDay): boolean {
+  return !!(vd.departure_ship || vd.status || vd.status_memo || vd.driver_id || vd.load_driver_id || vd.helper_driver_id || vd.start_time || vd.start_place || vd.unload_note || vd.load_note || vd.am_label || vd.fare_kind || vd.boarding || vd.night_driver_id);
+}
+
 function vehicleDayHasContent(tx: Tx, vd: VehicleDay): boolean {
-  if (vd.departure_ship || vd.status || vd.status_memo || vd.driver_id || vd.load_driver_id || vd.helper_driver_id || vd.start_time || vd.start_place || vd.unload_note || vd.load_note || vd.am_label || vd.fare_kind || vd.boarding) return true;
+  if (vehicleDayOwnContent(vd)) return true;
   if (vd.arrival_ship && vd.arrival_from_id === null) return true;
   return tx.list('daily_orders').some((o) => o.date === vd.date && o.vehicle_id === vd.vehicle_id);
 }
@@ -247,6 +254,13 @@ export function syncShipCarryover(tx: Tx, vehicleDayId: string) {
   }
   const targetDate = addDays(vd.date, arrivalOffset(tx.snap, vd.departure_ship));
   const targetZone = vd.zone ? opposite(vd.zone) : null;
+  // 당일 회차: 건너간 지역에서 그날 밤 다시 상차해 배를 타고 돌아오면 다음 날 그 지역 도착 줄을 만들지 않는다
+  const turnaround = !!targetZone && tx.list('daily_orders').some((o) => o.date === vd.date && o.vehicle_id === vd.vehicle_id && o.zone === targetZone
+    && o.kind === 'load' && !!o.departure_ship && !isWaitShip(o.departure_ship) && !o.same_day && o.shipment !== 'bulk');
+  if (turnaround) {
+    for (const p of previous) clearCarried(tx, p.id);
+    return;
+  }
   // 도착일이 바뀐 경우 예전 날짜 쪽은 비운다
   for (const p of previous) if (p.date !== targetDate) clearCarried(tx, p.id);
 
@@ -292,6 +306,8 @@ function clearCarried(tx: Tx, targetId: string) {
     arrival_ship: null, arrival_ship_tag: '', arrival_from_id: null, arrival_pending: null,
   });
   if (!vehicleDayHasContent(tx, cleared)) tx.remove('vehicle_days', t.id);
+  // 오더 때문에만 남은 줄은 도착으로 정해졌던 구역을 비워, 그날 오더의 구역을 따르게 한다
+  else if (!vehicleDayOwnContent(cleared)) tx.update('vehicle_days', t.id, { zone: null });
 }
 
 export function acceptShipPending(tx: Tx, vehicleDayId: string) {
@@ -389,6 +405,11 @@ export function saveOrder(tx: Tx, order: DailyOrder, opts: { userEdit?: boolean 
     releaseDepartureShip(tx, existing);
   }
   if (saved.kind === 'load') syncLinkedUnload(tx, saved.id);
+  // 반대 지역에서 그날 다시 배를 타는 상차(당일 회차)가 생기거나 바뀌면 그날 출발 줄의 다음 날 도착을 다시 맞춘다
+  if (saved.kind === 'load' && saved.vehicle_id) {
+    const other = tx.list('vehicle_days').find((v) => v.date === saved.date && v.vehicle_id === saved.vehicle_id && v.zone && v.zone !== saved.zone);
+    if (other) syncShipCarryover(tx, other.id);
+  }
   return tx.get('daily_orders', saved.id)!;
 }
 

@@ -36,7 +36,8 @@ function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: 
   r++;
   for (const row of rows) {
     // 전날 대기 짐 [[ ]] 과 칸 비고(오더 없이)도 줄로 넣는다
-    const loadList = [...row.carried, ...row.loads];
+    // 야간 작업은 상차 칸 아래에 "(야간)"으로
+    const loadList = [...row.carried, ...row.loads, ...row.nights];
     const uLines = row.unloads.length + (row.unloadNote ? 1 : 0);
     const lLines = loadList.length + (row.loadNote ? 1 : 0);
     const n = Math.max(uLines, lLines, 1);
@@ -44,13 +45,15 @@ function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: 
     const seq = (n: number | null) => (n ? ` ${seqMark(n)}` : '');
     const drv = driverName(s, row.driverId) ? driverName(s, row.driverId) + seq(row.unloadSeq) : row.amLabel || (missingDriver(row, 'unload') ? '미배치' : '');
     const helper = row.helperId ? ` +${driverName(s, row.helperId)}${row.helperRole ? `(${row.helperRole})` : ''}` : '';
-    const loadDrv = (driverName(s, row.loadDriverId) ? driverName(s, row.loadDriverId) + seq(row.loadSeq) : missingDriver(row, 'load') ? '미배치' : '') + helper;
+    const loadDrv = (driverName(s, row.loadDriverId) ? driverName(s, row.loadDriverId) + seq(row.loadSeq) : missingDriver(row, 'load') ? '미배치' : '') + helper
+      + (row.nights.length || row.nightDriverId ? ` / 야간 ${driverName(s, row.nightDriverId) || '미배치'}` : '');
     for (let i = 0; i < n; i++) {
       const line = ws.getRow(r + i);
       if (hasOrders) {
         orderVals(s, row.unloads[i]).forEach((v, k) => (line.getCell(4 + k).value = v));
         orderVals(s, loadList[i]).forEach((v, k) => (line.getCell(11 + k).value = v));
         if (row.carried.includes(loadList[i])) line.getCell(11).value = `[[ ${line.getCell(11).value ?? ''} ]]`;
+        if (row.nights.includes(loadList[i])) line.getCell(11).value = `(야간${loadList[i].kind === 'unload' ? ' 하차' : ''}) ${line.getCell(11).value ?? ''}`;
         if (row.unloadNote && i === row.unloads.length) line.getCell(4).value = row.unloadNote;
         if (row.loadNote && i === loadList.length) line.getCell(11).value = row.loadNote;
       }

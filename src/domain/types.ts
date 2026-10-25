@@ -270,6 +270,8 @@ export interface DailyOrder extends Base {
   unload_date?: string | null;
   /** 지정일까지 보관: vehicle = 차량에 실은 채 대기 / storage = 창고 보관 후 그날 따로 배차 */
   unload_hold?: UnloadHold;
+  /** 야간 작업 (오전·오후와 따로 야간 칸, 야간 기사가 맡음) */
+  night?: boolean;
 }
 
 export type UnloadHold = '' | 'vehicle' | 'storage';
@@ -306,6 +308,8 @@ export interface VehicleDay extends Base {
   load_note?: string;
   /** 오전(하차) 기사 칸에 이름 대신 적는 말: "오후도착" (배가 오후에 들어와 오전 일이 없음) */
   am_label?: string;
+  /** 야간 기사 (야간 작업 오더를 맡음) */
+  night_driver_id?: string | null;
   /** 출발 선박 요금 구분 (빈 글자 = 자동) */
   fare_kind?: FareKind;
   /** 기사 승선 (선박비에 승선 금액 추가) */

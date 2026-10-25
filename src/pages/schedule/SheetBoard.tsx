@@ -136,7 +136,24 @@ function VehicleRow({ snap, row }: { snap: Snapshot; row: BoardRow }) {
         {halfRepair && <div className="ps-repair-half">수리</div>}</td>
     );
   };
+  // 🌙 야간 작업: 차량 줄 바로 아래 한 줄 (기사 · 상차/하차 내용 · 선박)
+  const nightLine = row.nights.length > 0 || row.nightDriverId ? (
+    <tr className="night">
+      <td className="ship" />
+      <td className="veh"><Fit><span className="ps-night">🌙야간</span></Fit></td>
+      <td className={`drv${row.nights.length && !row.nightDriverId ? ' nodrv' : ''}`}>{row.nightDriverId ? <div className="ps-oline center"><Fit>{driverName(snap, row.nightDriverId)}</Fit></div> : row.nights.length ? MISSING : null}</td>
+      <td className="body" colSpan={5}>
+        {row.nights.map((o) => (
+          <div key={o.id} className="ps-oline"><Fit>
+            <span className="ps-night">{o.kind === 'load' ? '상차' : '하차'}{o.zone !== row.zone ? `(${o.zone === 'land' ? '육지' : '제주'})` : ''}</span>{' '}
+            {clientName(snap, o)} {productName(snap, o)} {qtyText(o)}{o.departure_ship ? ` → ${parseShip(o.departure_ship).name}` : ''}
+          </Fit></div>
+        ))}
+      </td>
+    </tr>
+  ) : null;
   return (
+    <>
     <tr className={row.secondary ? 'secondary' : ''}>
       <td className="ship"><ShipText snap={snap} ship={row.arrivalShip} tag={row.arrivalTag} /></td>
       {vehCell(row.arrivalShip, 'am')}
@@ -157,6 +174,8 @@ function VehicleRow({ snap, row }: { snap: Snapshot; row: BoardRow }) {
       </td>
       <td className="ship"><ShipText snap={snap} ship={row.departureShip} tag={row.departureTag} /></td>
     </tr>
+    {nightLine}
+    </>
   );
 }
 

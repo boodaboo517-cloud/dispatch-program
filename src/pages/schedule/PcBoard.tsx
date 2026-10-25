@@ -162,6 +162,22 @@ function VehicleGroup({ row, zone, a, staff, focus }: { row: BoardRow; zone: Zon
       onDrop={onDrop}
     >
       {rows}
+      {(row.nights.length > 0 || row.nightDriverId) && (
+        <tr className="night-row">
+          <td colSpan={2}><b>🌙 야간</b></td>
+          <td><Cell onTap={() => void a.editNightDriver(row)}>{row.nightDriverId ? abbrev(driverName(snap, row.nightDriverId)) : row.nights.length ? <span className="nodrv-badge">미배치</span> : '＋'}</Cell></td>
+          <td colSpan={13}>
+            <div className="row wrap" style={{ gap: 4 }}>
+              {row.nights.map((o) => (
+                <Cell key={o.id} onTap={() => a.openOrder(o)} onLong={staff ? () => a.openOrder(o, true) : undefined}>
+                  <b>{o.kind === 'load' ? '상차' : '하차'}{o.zone !== row.zone ? `(${o.zone === 'land' ? '육지' : '제주'})` : ''}</b> {clientName(snap, o)} {productName(snap, o)} {qtyText(o)} {o.departure_ship ? `→ ${o.departure_ship}` : ''}
+                </Cell>
+              ))}
+              {staff && <Cell className="add" onTap={() => void a.addNight(row)}>＋ 야간</Cell>}
+            </div>
+          </td>
+        </tr>
+      )}
     </tbody>
   );
 }

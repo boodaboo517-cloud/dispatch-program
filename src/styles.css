@@ -424,3 +424,17 @@ button.admin-card { font: inherit; color: inherit; }
 .paper .ps-time { font-size: max(.4em, 5px); line-height: .9; margin-top: -1px; }
 
 .paper .ps-part { margin-left: 2px; color: #b45309; font-size: .75em; font-weight: 700; }
+
+/* 🌙 야간 칸 (배차 화면 차량 줄 아래) */
+.night-strip { grid-column: 1 / -1; display: grid; grid-template-columns: 120px 1fr; border-top: 1px dashed #6366f1; background: #eef2ff; }
+.night-strip .cell { min-height: 44px; }
+.night-strip .night-drv { flex-direction: column; align-items: flex-start; color: #3730a3; font-weight: 700; }
+.night-orders { display: flex; flex-wrap: wrap; }
+.night-orders > * { flex: 1 1 140px; }
+
+.pc-table tr.night-row td { background: #eef2ff; border-top: 1px dashed #6366f1; color: #3730a3; }
+
+.paper tr.night td { background: #eef2ff; border-top: 1px dashed #6366f1; }
+.paper .ps-night { color: #3730a3; font-weight: 800; }
+
+.night-toggle { align-items: center; gap: 8px; min-height: 44px; margin: 4px 0; padding: 4px 10px; background: #eef2ff; border-radius: 10px; color: #3730a3; cursor: pointer; }

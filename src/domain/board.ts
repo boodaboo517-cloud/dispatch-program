@@ -109,6 +109,9 @@ export interface BoardRow {
   /** 동승 기사 (선탑·지원) */
   helperId: string | null;
   helperRole: HelperRole | '';
+  /** 야간 작업 (오전·오후와 따로) · 야간 기사 */
+  nights: DailyOrder[];
+  nightDriverId: string | null;
   /** 오전(하차)·오후(상차) 칸 비고 (오더 없이) */
   unloadNote: string;
   loadNote: string;
@@ -154,8 +157,10 @@ export interface Board {
 /** 차량은 배정됐는데 그 쪽(하차/상차) 기사가 없음 → "미배치" */
 export const missingDriver = (r: Pick<BoardRow, 'unloads' | 'loads' | 'driverId' | 'loadDriverId'> & { amLabel?: string }, kind: Kind) =>
   kind === 'unload' ? r.unloads.length > 0 && !r.driverId && !r.amLabel : r.loads.length > 0 && !r.loadDriverId;
-export const needsDriver = (r: Pick<BoardRow, 'unloads' | 'loads' | 'driverId' | 'loadDriverId'> & { amLabel?: string }) =>
-  missingDriver(r, 'unload') || missingDriver(r, 'load');
+/** 야간 작업이 있는데 야간 기사가 없음 */
+export const missingNightDriver = (r: Pick<BoardRow, 'nights' | 'nightDriverId'>) => r.nights.length > 0 && !r.nightDriverId;
+export const needsDriver = (r: Pick<BoardRow, 'unloads' | 'loads' | 'driverId' | 'loadDriverId'> & { amLabel?: string; nights?: DailyOrder[]; nightDriverId?: string | null }) =>
+  missingDriver(r, 'unload') || missingDriver(r, 'load') || (!!r.nights?.length && !r.nightDriverId);
 
 export function shipTime(snap: Snapshot, name: string | null): string {
   if (!name) return '99:99';
@@ -196,8 +201,12 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
     // 당일 왕복 등으로 다른 구역에도 오더가 있으면 그 구역에 보조 줄을 하나 더 만든다
     const mine = zone ? orders.filter((o) => o.zone === zone) : orders;
     const elsewhere = zone ? orders.filter((o) => o.zone !== zone) : [];
-    const unloads = mine.filter((o) => o.kind === 'unload');
-    const loads = mine.filter((o) => o.kind === 'load');
+    const unloads = mine.filter((o) => o.kind === 'unload' && !o.night);
+    const loads = mine.filter((o) => o.kind === 'load' && !o.night);
+    const nights = mine.filter((o) => o.night);
+    // 선박은 야간 작업까지 포함해서 (야간 상차 후 배를 타는 경우)
+    const allUnloads = mine.filter((o) => o.kind === 'unload');
+    const allLoads = mine.filter((o) => o.kind === 'load');
     const repair = activeRepair(snap.maintenance_records, v.id, date);
     let status: BoardRow['status'] = vd?.status ?? '';
     let statusMemo = vd?.status_memo ?? '';
@@ -211,7 +220,7 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
     // 차량 대기는 매일, 창고 보관은 배가 닿은 날(입고)만 그 차량 줄에
     const held = holds.filter((h) => h.order.vehicle_id === v.id && (h.hold === 'vehicle' || h.arrive === date))
       .map((h) => ({ order: h.order, hold: h.hold as 'vehicle' | 'storage', arrivedToday: h.arrive === date }));
-    if (!status && mine.length === 0 && carried.length === 0 && !postponed.length && !held.length && !vd?.unload_note && !vd?.load_note) status = 'empty';
+    if (!status && mine.length === 0 && carried.length === 0 && !vd?.night_driver_id && !postponed.length && !held.length && !vd?.unload_note && !vd?.load_note) status = 'empty';
     // 오후 기사만 정해 둔 날은 오전을 비워 둔다 (오더에 적힌 오후 기사를 오전으로 끌어오지 않음)
     const driverId = vd?.driver_id ?? (vd?.load_driver_id || vd?.am_label ? null : orders.find((o) => o.driver_id)?.driver_id ?? null);
     // 제주 기사는 따로 적지 않으면 기본 출근(07:00 부두)
@@ -225,6 +234,8 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
       carried,
       postponed,
       held,
+      nights,
+      nightDriverId: vd?.night_driver_id ?? null,
       driverId,
       loadDriverId: vd?.load_driver_id || driverId,
       unloadSeq: vd?.unload_seq ?? null,
@@ -238,10 +249,10 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
       startPlace: startDefault ? DEFAULT_START.place : vd?.start_place ?? '',
       startDefault,
       shortRepair: shortRepairOn(snap, v.id, date),
-      arrivalShip: vd?.arrival_ship ?? unloads.find((o) => o.arrival_ship)?.arrival_ship ?? null,
-      arrivalTag: vd?.arrival_ship ? vd.arrival_ship_tag : unloads.find((o) => o.arrival_ship)?.arrival_ship_tag ?? '',
-      departureShip: vd?.departure_ship ?? loads.find(vehicleSails)?.departure_ship ?? null,
-      departureTag: vd?.departure_ship ? vd.departure_ship_tag : loads.find(vehicleSails)?.departure_ship_tag ?? '',
+      arrivalShip: vd?.arrival_ship ?? allUnloads.find((o) => o.arrival_ship)?.arrival_ship ?? null,
+      arrivalTag: vd?.arrival_ship ? vd.arrival_ship_tag : allUnloads.find((o) => o.arrival_ship)?.arrival_ship_tag ?? '',
+      departureShip: vd?.departure_ship ?? allLoads.find(vehicleSails)?.departure_ship ?? null,
+      departureTag: vd?.departure_ship ? vd.departure_ship_tag : allLoads.find(vehicleSails)?.departure_ship_tag ?? '',
       status,
       statusMemo,
       inRepair: !!repair || v.status === '정비',
@@ -250,10 +261,11 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
       secondary: false,
     });
     if (elsewhere.length) {
-      const u = elsewhere.filter((o) => o.kind === 'unload');
-      const l = elsewhere.filter((o) => o.kind === 'load');
-      const arr = u.find((o) => o.arrival_ship);
-      const dep = l.find((o) => o.departure_ship);
+      const u = elsewhere.filter((o) => o.kind === 'unload' && !o.night);
+      const l = elsewhere.filter((o) => o.kind === 'load' && !o.night);
+      const nt = elsewhere.filter((o) => o.night);
+      const arr = [...u, ...nt].find((o) => o.kind === 'unload' && o.arrival_ship);
+      const dep = [...l, ...nt].find((o) => o.kind === 'load' && o.departure_ship);
       rows.push({
         vehicle: v,
         zone: opposite(zone!),
@@ -263,6 +275,8 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
         carried: [],
         postponed: [],
         held: [],
+        nights: nt,
+        nightDriverId: vd?.night_driver_id ?? null,
         driverId,
         loadDriverId: vd?.load_driver_id || driverId,
         unloadSeq: null,
@@ -421,6 +435,9 @@ export type DriverSide = 'unload' | 'load';
 
 /** 그 줄에서 오더 종류(하차/상차)를 맡는 기사 */
 export const rowDriver = (row: Pick<BoardRow, 'driverId' | 'loadDriverId'>, kind: Kind) => (kind === 'load' ? row.loadDriverId : row.driverId);
+/** 그 오더를 맡을 기사 (야간 작업은 야간 기사) */
+export const orderDriver = (row: Pick<BoardRow, 'driverId' | 'loadDriverId' | 'nightDriverId'>, o: Pick<DailyOrder, 'kind' | 'night'>) =>
+  (o.night ? row.nightDriverId : rowDriver(row, o.kind));
 
 const seqField = (side: DriverSide) => (side === 'unload' ? 'unload_seq' : 'load_seq');
 
@@ -475,7 +492,7 @@ export function setRowDriver(tx: Tx, p: { date: string; vehicle_id: string; zone
     tx.update('vehicle_days', vd.id, { load_driver_id: ld, load_seq: null });
   }
   const now = tx.get('vehicle_days', vd.id)!;
-  for (const o of tx.list('daily_orders').filter((o) => o.date === p.date && o.vehicle_id === p.vehicle_id)) {
+  for (const o of tx.list('daily_orders').filter((o) => o.date === p.date && o.vehicle_id === p.vehicle_id && !o.night)) {
     const drv = o.kind === 'load' ? now.load_driver_id || now.driver_id : now.driver_id;
     if (o.driver_id !== drv) tx.update('daily_orders', o.id, { driver_id: drv });
   }
@@ -497,6 +514,15 @@ export function setRowAmLabel(tx: Tx, p: { date: string; vehicle_id: string; zon
   for (const o of tx.list('daily_orders').filter((o) => o.date === p.date && o.vehicle_id === p.vehicle_id)) {
     const drv = o.kind === 'load' ? pm : null;
     if (o.driver_id !== drv) tx.update('daily_orders', o.id, { driver_id: drv });
+  }
+}
+
+/** 야간 기사 지정 (null = 비우기). 그 차량 그날 야간 작업 오더의 기사도 같이 */
+export function setRowNightDriver(tx: Tx, p: { date: string; vehicle_id: string; zone: Zone | null; driver_id: string | null }) {
+  const vd = ensureVehicleDay(tx, p.date, p.vehicle_id, p.zone);
+  tx.update('vehicle_days', vd.id, { night_driver_id: p.driver_id });
+  for (const o of tx.list('daily_orders').filter((o) => o.date === p.date && o.vehicle_id === p.vehicle_id && o.night)) {
+    if (o.driver_id !== p.driver_id) tx.update('daily_orders', o.id, { driver_id: p.driver_id });
   }
 }
 

@@ -8,8 +8,9 @@ function myPart(row: BoardRow, me: string | null) {
   const helper = !!me && row.helperId === me;
   const unload = !!me && (row.driverId === me || helper);
   const load = !!me && (row.loadDriverId === me || helper);
+  const night = !!me && row.nightDriverId === me;
   const seqs = [unload ? row.unloadSeq : null, load ? row.loadSeq : null].filter((n): n is number => !!n);
-  return { unload, load, helper, seq: helper ? null : seqs.length ? Math.min(...seqs) : null };
+  return { unload, load, night, helper, seq: helper ? null : seqs.length ? Math.min(...seqs) : null };
 }
 import { store } from '../data/store.ts';
 import { fmtDate, fmtStamp, seoulToday } from '../lib/time.ts';
@@ -27,9 +28,11 @@ function DispatchCard({ row, date, title, me }: { row: BoardRow; date: string; t
   const nav = useNavigate();
   const z = row.zone ?? 'land';
   const part = myPart(row, me);
-  // 기사가 연결되지 않은 경우 등은 둘 다 보여 준다
-  const showUnload = part.unload || !part.load;
-  const showLoad = part.load || !part.unload;
+  // 기사가 연결되지 않은 경우 등은 둘 다 보여 준다. 야간만 맡았으면 야간만
+  const onlyNight = part.night && !part.unload && !part.load;
+  const showUnload = !onlyNight && (part.unload || !part.load);
+  const showLoad = !onlyNight && (part.load || !part.unload);
+  const showNight = row.nights.length > 0 && (part.night || (!part.unload && !part.load));
   const line = (o: (typeof row.unloads)[number], i: number) => {
     const p = productOf(snap, o);
     return (
@@ -58,6 +61,8 @@ function DispatchCard({ row, date, title, me }: { row: BoardRow; date: string; t
       {unloadInfo(snap, row).map((t) => <div key={t} style={{ color: '#b45309', fontWeight: 700, margin: '4px 0' }}>{t}</div>)}</>}
       {showLoad && <><h3>{z === 'land' ? '상차' : '오후'} {row.loads.length}건 {row.departureShip && <span className="badge red">{z === 'land' ? '하행' : '출발'} {shipText(row.departureShip, row.departureTag)} {shipTimeOf(snap, row.departureShip)}</span>}</h3>
       {row.loads.length ? <ol>{row.loads.map(line)}</ol> : <p className="muted">없음</p>}</>}
+      {showNight && <><h3 style={{ color: '#3730a3' }}>🌙 야간 {row.nights.length}건 {row.nightDriverId && <span className="muted small">기사 {driverName(snap, row.nightDriverId)}</span>}</h3>
+      <ol>{row.nights.map((o, i) => <div key={o.id}><span className="badge" style={{ background: '#e0e7ff', color: '#3730a3' }}>{o.kind === 'load' ? '상차' : '하차'}{o.zone !== row.zone ? ` · ${ZONE_LABEL[o.zone]}` : ''}{o.departure_ship ? ` → ${shipText(o.departure_ship, o.departure_ship_tag)}` : ''}</span>{line(o, i)}</div>)}</ol></>}
       {!row.unloads.length && !row.loads.length && row.statusMemo && <p>{row.statusMemo}</p>}
       {latest?.updated_at && <div className="muted small">마지막 변경 {fmtStamp(latest.updated_at)} {store.profileName(latest.updated_by) && `· ${store.profileName(latest.updated_by)}`}</div>}
     </div>
@@ -110,7 +115,7 @@ export function DriverHome() {
   const board = useMemo(() => buildBoard(snap, date, idx), [snap, date, idx]);
   const tomorrow = useMemo(() => buildBoard(snap, addDays(date, 1), idx), [snap, date, idx]);
   const mine = (b: typeof board) => b.rows
-    .filter((r) => !!driverId && (r.driverId === driverId || r.loadDriverId === driverId || r.helperId === driverId))
+    .filter((r) => !!driverId && (r.driverId === driverId || r.loadDriverId === driverId || r.helperId === driverId || r.nightDriverId === driverId))
     .sort((a, b) => (myPart(a, driverId).seq ?? 99) - (myPart(b, driverId).seq ?? 99));
   const dispatcher = setting(snap, 'dispatcher_phone', '');
 

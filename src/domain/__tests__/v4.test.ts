@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { buildBoard, lastStart, setRowAmLabel, setVehicleDayStatus, missingDriver, needsDriver, setRowNote, setDriverSeq, setRowDriver, setRowHelper, setRowStart, startText } from '../board.ts';
+import { buildBoard, lastStart, missingNightDriver, setRowAmLabel, setRowNightDriver, setVehicleDayStatus, missingDriver, needsDriver, setRowNote, setDriverSeq, setRowDriver, setRowHelper, setRowStart, startText } from '../board.ts';
 import { blankOrder, postponeUnload, repairShipLinks, saveOrder, setRowShip, workText } from '../orders.ts';
 import { Tx, applyMutations } from '../tx.ts';
 import { copyOrder, createOrder, splitPerVehicle } from '../actions.ts';
@@ -590,5 +590,33 @@ describe('하차 연기 · 고객 지정일 하차', () => {
     expect(b21.rows.find((r) => r.vehicle.id === 'v9915' && !r.secondary)!.held.map((h) => h.hold)).toEqual(['storage']);
     expect(buildBoard(tx.result(), '2026-10-22').rows.find((r) => r.vehicle.id === 'v9915' && !r.secondary)?.held ?? []).toHaveLength(0);
     expect(buildBoard(tx.result(), '2026-10-24').waiting.jeju.map((o) => o.id)).toEqual([linked.id]);
+  });
+});
+
+describe('야간 작업 · 야간 기사', () => {
+  it('오후 제주 하차 → 바로 육지행 → 육지 야간 상차 → 다음 날 제주 하차', () => {
+    const tx = new Tx(baseSnapshot());
+    saveOrder(tx, blankOrder({ date: D, zone: 'jeju', kind: 'unload', vehicle_id: 'v9915', client_id: 'c-sin' }));
+    setRowShip(tx, { date: D, vehicle_id: 'v9915', zone: 'jeju', which: 'departure', ship: '제이엘', tag: '' });
+    const night = createOrder(tx, blankOrder({ date: D, zone: 'land', kind: 'load', vehicle_id: 'v9915', client_id: 'c-dm', departure_ship: '완도', night: true }));
+    setRowNightDriver(tx, { date: D, vehicle_id: 'v9915', zone: 'jeju', driver_id: 'dB' });
+    const b = buildBoard(tx.result(), D);
+    const main = b.rows.find((r) => r.vehicle.id === 'v9915' && !r.secondary)!;
+    const land = b.rows.find((r) => r.vehicle.id === 'v9915' && r.secondary)!;
+    expect(main.zone).toBe('jeju');
+    expect([land.zone, land.nights.map((o) => o.id), land.loads.length]).toEqual(['land', [night.id], 0]);
+    expect(tx.get('daily_orders', night.id)!.driver_id).toBe('dB');
+    const next = buildBoard(tx.result(), '2026-10-21').rows.find((r) => r.vehicle.id === 'v9915' && !r.secondary)!;
+    expect(next.unloads.map((o) => o.linked_from_id)).toEqual([night.id]);
+  });
+  it('제주 야간 상차는 야간 칸, 오전·오후 기사를 바꿔도 야간 기사는 그대로', () => {
+    const tx = new Tx(baseSnapshot());
+    createOrder(tx, blankOrder({ date: D, zone: 'jeju', kind: 'load', vehicle_id: 'v9914', client_id: 'c-dm', departure_ship: '제이엘', night: true }));
+    setRowNightDriver(tx, { date: D, vehicle_id: 'v9914', zone: 'jeju', driver_id: 'dB' });
+    setRowDriver(tx, { date: D, vehicle_id: 'v9914', zone: 'jeju', driver_id: 'dA' });
+    const r = buildBoard(tx.result(), D).rows.find((x) => x.vehicle.id === 'v9914' && !x.secondary)!;
+    expect([r.loads.length, r.nights.length, r.nightDriverId, r.departureShip]).toEqual([0, 1, 'dB', '제이엘']);
+    expect(r.nights[0].driver_id).toBe('dB');
+    expect(missingNightDriver(r)).toBe(false);
   });
 });

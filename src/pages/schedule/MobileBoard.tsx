@@ -1,5 +1,6 @@
 import type { BoardRow, DailyOrder, Zone } from '../../domain/index.ts';
 import { useRole, useSnap } from '../../ui/hooks.ts';
+import { driverName } from '../../ui/labels.ts';
 import { Cell } from '../../ui/Cell.tsx';
 import type { useBoardActions } from '../../ui/useBoardActions.tsx';
 import { isExternal } from '../../domain/index.ts';
@@ -87,6 +88,23 @@ function VehicleRow({ date, row, zone, a, focus }: { date: string; row: BoardRow
           <ShipCellText snap={snap} ship={row.departureShip} tag={row.departureTag} />
         </Cell>
       </div>
+      {(row.nights.length > 0 || row.nightDriverId) && (
+        <div className="night-strip">
+          <Cell className="night-drv" onTap={() => void a.editNightDriver(row)}>
+            <span>🌙 야간</span>
+            {row.nightDriverId ? <span className="drv">{driverName(snap, row.nightDriverId)}</span> : row.nights.length ? <span className="nodrv-badge">미배치</span> : null}
+          </Cell>
+          <div className="night-orders">
+            {row.nights.map((o) => (
+              <Cell key={o.id} onTap={() => a.openOrder(o)} onLong={staff ? () => a.openOrder(o, true) : undefined}>
+                <span className="mk">{o.kind === 'load' ? '상차' : '하차'}{o.zone !== row.zone ? `·${o.zone === 'land' ? '육지' : '제주'}` : ''}</span>
+                <OrderCellText snap={snap} o={o} />
+              </Cell>
+            ))}
+            {staff && <Cell className="add" onTap={() => void a.addNight(row)}>＋</Cell>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

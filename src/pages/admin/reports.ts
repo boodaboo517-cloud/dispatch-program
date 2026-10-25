@@ -19,6 +19,7 @@ export function dispatchReport(snap: Snapshot, date: string): { sheet: ReportShe
     { key: 'zone', label: '구역', width: 6 }, { key: 'veh', label: '차량', width: 8 }, { key: 'type', label: '차종', width: 8 },
     { key: 'arr', label: '도착선박', width: 12 }, { key: 'd1', label: '오전·하차 기사', width: 12 }, { key: 'u', label: '오전·하차 내용', width: 40 },
     { key: 'd2', label: '오후·상차 기사', width: 12 }, { key: 'l', label: '오후·상차 내용', width: 40 }, { key: 'dep', label: '출발선박', width: 12 },
+    { key: 'nd', label: '야간 기사', width: 10 }, { key: 'n', label: '야간 내용', width: 30 },
     { key: 'st', label: '상태·비고', width: 18 },
   ];
   const rows: ReportRow[] = [];
@@ -28,7 +29,10 @@ export function dispatchReport(snap: Snapshot, date: string): { sheet: ReportShe
     u: [orderText(snap, r.unloads), r.unloadNote].filter(Boolean).join(' / '),
     d2: r.loadDriverId !== r.driverId ? driverName(snap, r.loadDriverId) || (missingDriver(r, 'load') ? '미배치' : '') : '',
     l: [r.carried.length ? `[[ ${orderText(snap, r.carried)} ]]` : '', orderText(snap, r.loads), r.loadNote].filter(Boolean).join(' / '),
-    dep: r.departureShip ?? '', st: [r.inRepair ? '수리' : '', r.status === 'empty' ? '공차' : r.status === 'rest' ? '휴차' : '', r.statusMemo].filter(Boolean).join(' '),
+    dep: r.departureShip ?? '',
+    nd: r.nights.length || r.nightDriverId ? driverName(snap, r.nightDriverId) || '미배치' : '',
+    n: r.nights.map((o) => `${o.kind === 'load' ? '상차' : '하차'}${o.zone !== r.zone ? `(${ZONE[o.zone]})` : ''} ${orderText(snap, [o])}${o.departure_ship ? ` → ${o.departure_ship}` : ''}`).join(' / '),
+    st: [r.inRepair ? '수리' : '', r.status === 'empty' ? '공차' : r.status === 'rest' ? '휴차' : '', r.statusMemo].filter(Boolean).join(' '),
   });
   for (const r of [...b.land, ...b.jeju]) rows.push(line(r));
   for (const z of ['land', 'jeju'] as Zone[]) {
@@ -42,7 +46,8 @@ export function dispatchReport(snap: Snapshot, date: string): { sheet: ReportShe
     하차: all.reduce((a, r) => a + r.unloads.length, 0),
     상차: all.reduce((a, r) => a + r.loads.length, 0),
     배차대기: b.waiting.land.length + b.waiting.jeju.length,
-    미배치: all.filter((r) => missingDriver(r, 'unload') || missingDriver(r, 'load')).length,
+    미배치: all.filter((r) => missingDriver(r, 'unload') || missingDriver(r, 'load') || (r.nights.length > 0 && !r.nightDriverId)).length,
+    야간: all.reduce((a, r) => a + r.nights.length, 0),
     용차: b.external.land.length + b.external.jeju.length,
     수리: all.filter((r) => r.inRepair).length,
   };
