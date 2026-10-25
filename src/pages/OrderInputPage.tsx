@@ -29,6 +29,8 @@ export function OrderInputPage() {
     kind: params.get('kind') === 'unload' ? 'unload' : 'load',
   }));
   const [repeat, setRepeat] = useState(false);
+  /** 간편 입력(날짜·구역·구분·거래처·품목·수량) → "추가 내용"을 누르면 나머지 */
+  const [more, setMore] = useState(false);
   /** 같은 거래처에서 함께 나가는 다른 품목들 (저장하면 품목마다 오더 1건) */
   const [extras, setExtras] = useState<Extra[]>([]);
   /** "N대"면 오더 N건으로 나눠 저장 — 2번째부터 차량 (비우면 배차 대기) */
@@ -121,10 +123,10 @@ export function OrderInputPage() {
       <h2>오더 입력</h2>
       <label className="field"><span>날짜</span><input type="date" value={o.date} onChange={(e) => { set({ date: e.target.value }); setWeekdays([weekdayOf(e.target.value)]); }} /></label>
       <label className="field"><span>구역</span>
-        <Seg value={o.zone} onChange={(z: Zone) => set({ zone: z })} options={[{ value: 'land', label: '육지' }, { value: 'jeju', label: '제주' }]} />
+        <Seg className="soft" value={o.zone} onChange={(z: Zone) => set({ zone: z })} options={[{ value: 'land', label: '육지' }, { value: 'jeju', label: '제주' }]} />
       </label>
       <label className="field"><span>구분</span>
-        <Seg value={o.kind} onChange={(k: Kind) => set({ kind: k })} options={[{ value: 'load', label: kindLabel(o.zone, 'load') }, { value: 'unload', label: kindLabel(o.zone, 'unload') }]} />
+        <Seg className="soft" value={o.kind} onChange={(k: Kind) => set({ kind: k })} options={[{ value: 'load', label: kindLabel(o.zone, 'load') }, { value: 'unload', label: kindLabel(o.zone, 'unload') }]} />
       </label>
       <Row k="거래처" v={clientName(snap, o)} onClick={chooseClient} ph="검색 · 최근 · 자주 쓰는" />
       <Row k="품목" v={productName(snap, o)} onClick={chooseClient} />
@@ -140,6 +142,13 @@ export function OrderInputPage() {
           <QtyInput quantity={x.quantity} unit={x.unit} onChange={(quantity, unit) => setExtra(i, { quantity, unit })} />
         </div>
       ))}
+      {/* 간편 입력: 위까지만. 나머지는 "추가 내용"을 눌러 펼침 */}
+      {!more && (
+        <button className="more-btn" onClick={() => setMore(true)}>
+          ＋ 추가 내용 <span className="muted small">같은 거래처 품목 · 지역 · 상차지/하차지 · 시간 · 운송 · 차량 · 기사 · 선박 · 비고 · 매주 반복</span>
+        </button>
+      )}
+      {more && (<>
       {o.client_id && <button style={{ width: '100%', margin: '4px 0' }} onClick={addExtra}>＋ 같은 거래처 품목 추가</button>}
       <label className="field"><span>지역</span><input value={o.region} onChange={(e) => set({ region: e.target.value })} /></label>
       <PlaceFields pickup={o.pickup_place ?? ''} dropoff={o.dropoff_place ?? ''} onChange={(p) => set(p)} />
@@ -173,7 +182,9 @@ export function OrderInputPage() {
       {isLoad && (waitsForShip(o)
         ? <div className="banner yellow">선박이 없거나 "대기"면 차량은 이 지역에 그대로 있고, 다음 날 일정에 <b>[[ 상차짐 ]]</b>으로 이어집니다. 선박을 정하면 그때 반대편 하차가 생깁니다.</div>
         : <div className="banner blue">상차를 저장하면 반대편 {o.zone === 'land' ? '제주 오전 하차' : '육지 하차'}에 자동으로 들어갑니다 (기사는 비워 둠{o.shipment === 'bulk' ? ', 벌크라 차량도 비워 둠' : ''}).</div>)}
-      <div className="row" style={{ marginTop: 16 }}>
+      <button className="more-btn" onClick={() => setMore(false)}>▲ 추가 내용 접기</button>
+      </>)}
+      <div className="row order-save" style={{ marginTop: 16 }}>
         <button className="grow" onClick={() => nav(-1)}>취소</button>
         <button className="grow primary" onClick={save}>저장</button>
       </div>

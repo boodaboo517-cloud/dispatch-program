@@ -90,9 +90,9 @@ export function WeekdayChips(p: { value: number[]; onChange: (v: number[]) => vo
   );
 }
 
-export function Seg<T extends string>(p: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
+export function Seg<T extends string>(p: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; className?: string }) {
   return (
-    <div className="seg">
+    <div className={`seg ${p.className ?? ''}`}>
       {p.options.map((o) => (
         <button key={o.value} type="button" className={p.value === o.value ? 'on' : ''} onClick={() => p.onChange(o.value)}>
           {o.label}

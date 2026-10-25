@@ -403,3 +403,11 @@ button.admin-card { font: inherit; color: inherit; }
 /* 관리 탭 6개를 한 화면에 */
 .tabs.manage-tabs { overflow-x: visible; flex-wrap: nowrap; }
 .tabs.manage-tabs button { flex: 1 1 0; min-width: 0; padding: 0 2px; font-size: clamp(12px, 3.6vw, 16px); letter-spacing: -.3px; white-space: nowrap; }
+
+/* 오더 입력 구역·구분: 부드러운 연한 노란색 선택 */
+.seg.soft button.on { background: #fef3c7; color: #78350f; font-weight: 800; box-shadow: inset 0 0 0 2px #fcd34d; }
+
+.more-btn { width: 100%; margin: 10px 0 4px; min-height: 52px; display: flex; flex-direction: column; align-items: center; gap: 2px; background: #fff; border: 1px dashed #94a3b8; }
+.order-save { position: sticky; bottom: calc(env(safe-area-inset-bottom) + 72px); background: var(--bg, #f3f4f6); padding: 8px 0; z-index: 5; }
+.order-save button { min-height: 52px; font-size: 18px; }
+.more-btn { white-space: normal; padding: 6px 12px; text-align: center; line-height: 1.3; }
