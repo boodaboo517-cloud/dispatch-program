@@ -251,8 +251,6 @@ function StatusSheet(p: { date: string; zone: Zone | null; current: { status: Da
 
 export const EXTERNAL_HIRED = '__hired__';
 export const EXTERNAL_SHIPPER = '__shipper__';
-/** 배차 대기 짐: 차량 대신 날짜를 옮김 */
-export const MOVE_DATE = '__move_date__';
 /** 오전 기사 칸: 기사 대신 "오후도착" */
 export const PM_ARRIVAL = '__pm_arrival__';
 
@@ -276,7 +274,7 @@ export function usePickers() {
       ask<StatusResult | null>((close, done) => <StatusSheet date={date} zone={zone} current={current} staff={staff} close={close} done={done} />),
 
     /** 그날 그 지역 차량 — 공차·상차 없는 차량 먼저, 수리 차량은 경고, 현장근무 지급 차량 제외 */
-    /** withExternal: 맨 위에 "용차로 · 화주 배차로 · 날짜 변경" (값 EXTERNAL_HIRED / EXTERNAL_SHIPPER / MOVE_DATE) */
+    /** withExternal: 맨 위에 "용차배차 · 화주배차" (값 EXTERNAL_HIRED / EXTERNAL_SHIPPER) */
     vehicle: (board: Board, zone: Zone | null, withExternal = false) =>
       ask<string | null>((close, done) => {
         const s = snap();
@@ -298,9 +296,8 @@ export function usePickers() {
               onPick={(it) => { done(it.id); close(); }}
               top={withExternal ? (
                 <div className="row" style={{ padding: '8px 12px' }}>
-                  <button className="grow" onClick={() => { done(EXTERNAL_HIRED); close(); }}>🚚 용차로</button>
-                  <button className="grow" onClick={() => { done(EXTERNAL_SHIPPER); close(); }}>🏭 화주 배차로</button>
-                  <button className="grow" onClick={() => { done(MOVE_DATE); close(); }}>📅 날짜 변경</button>
+                  <button className="grow" onClick={() => { done(EXTERNAL_HIRED); close(); }}>🚚 용차배차</button>
+                  <button className="grow" onClick={() => { done(EXTERNAL_SHIPPER); close(); }}>🏭 화주배차</button>
                 </div>
               ) : undefined}
             />

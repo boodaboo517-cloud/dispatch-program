@@ -10,7 +10,8 @@ import { useRole, useSnap } from './hooks.ts';
 import { ZONE_LABEL, clientName, driverName, kindLabel, productName, qtyText, shipText, vehicleNo } from './labels.ts';
 import { fmtDate } from '../lib/time.ts';
 import { OrderSheet, QuickQtySheet } from './OrderSheet.tsx';
-import { EXTERNAL_HIRED, EXTERNAL_SHIPPER, MOVE_DATE, PM_ARRIVAL, usePickers } from './pickers.tsx';
+import { EXTERNAL_HIRED, EXTERNAL_SHIPPER, PM_ARRIVAL, usePickers } from './pickers.tsx';
+import { CarrierSheet } from './CarrierSheet.tsx';
 import { Sheet, useSheet } from './Sheet.tsx';
 import { VoyageSheet } from './ShipFares.tsx';
 
@@ -275,11 +276,9 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     const b = buildBoard(store.getState().snap, date);
     const vid = await pick.vehicle(b, o.zone, true);
     if (!vid) return;
-    if (vid === MOVE_DATE) return void moveDate(o);
     if (vid === EXTERNAL_HIRED || vid === EXTERNAL_SHIPPER) {
-      // 용차·화주배차: 업체·차량번호·연락처를 바로 적도록 수정 화면을 연다
-      store.run((tx) => saveOrder(tx, { ...o, vehicle_id: null, carrier_type: vid === EXTERNAL_HIRED ? 'hired' : 'shipper' }));
-      openOrder(o, true);
+      // 용차·화주배차: 업체·차량번호·연락처만 적는 화면으로 바로
+      sheet.open((close) => <CarrierSheet order={o} type={vid === EXTERNAL_HIRED ? 'hired' : 'shipper'} close={close} />);
       return;
     }
     const row = board.rows.find((r) => r.vehicle.id === vid);
