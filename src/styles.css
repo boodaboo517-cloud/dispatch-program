@@ -391,3 +391,6 @@ tr.err td { background: var(--red-soft); }
 .admin-table tbody tr:hover td { background: #fef2f2; }
 
 .cell.rownote.info { color: #b45309; background: #fffbeb; }
+
+button.admin-card { font: inherit; color: inherit; }
+.admin-card.on { border-color: var(--red); box-shadow: 0 0 0 2px #fecaca; }

@@ -7,19 +7,21 @@ import { exportReport, type ReportSheet } from '../../excel/exportReport.ts';
 import { dayjs, seoulToday } from '../../lib/time.ts';
 import { useRole, useSnap } from '../../ui/hooks.ts';
 import { AttendancePanel } from '../AttendancePanel.tsx';
+import { BillingPanel } from '../BillingPanel.tsx';
 import { clientReport, dispatchReport, monthlyReport, revenueListReport, shipReport } from './reports.ts';
 
-type Section = 'dispatch' | 'daily' | 'monthly' | 'period' | 'client' | 'attendance' | 'ships';
+type Section = 'dispatch' | 'daily' | 'monthly' | 'period' | 'client' | 'billing' | 'attendance' | 'ships';
 const MENU: [Section, string, string][] = [
   ['dispatch', '📋', '일별 배차현황'],
   ['daily', '💵', '일일 매출'],
   ['monthly', '📅', '월 매출'],
   ['period', '🗓', '기간별 매출'],
   ['client', '🏢', '거래처별 매출'],
+  ['billing', '🧾', '업체별 청구'],
   ['attendance', '👷', '직원·기사 근무현황'],
   ['ships', '🚢', '선박 이용현황'],
 ];
-const MONEY_SECTIONS: Section[] = ['daily', 'monthly', 'period', 'client', 'ships'];
+const MONEY_SECTIONS: Section[] = ['daily', 'monthly', 'period', 'client', 'billing', 'ships'];
 
 function Table({ sheet }: { sheet: ReportSheet }) {
   const all = sheet.totals ? [...sheet.rows, sheet.totals] : sheet.rows;
@@ -132,6 +134,7 @@ export function AdminPage() {
           </div>
         )}
 
+        {sec === 'billing' && <BillingPanel from={from} to={to} />}
         {sec === 'attendance' ? <AttendancePanel /> : data && (
           <>
             <Table sheet={data.sheet} />

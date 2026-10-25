@@ -9,6 +9,7 @@ import { clientName, productName, qtyText, vehicleNo } from '../ui/labels.ts';
 import { OrderSheet } from '../ui/OrderSheet.tsx';
 import { useSheet } from '../ui/Sheet.tsx';
 import { ShipCostPanel } from './ShipCostPanel.tsx';
+import { BillingPanel } from './BillingPanel.tsx';
 
 type Group = 'day' | 'month' | 'client' | 'vehicle';
 
@@ -20,7 +21,7 @@ export function RevenuePage() {
   const [from, setFrom] = useState(today.slice(0, 7) + '-01');
   const [to, setTo] = useState(dayjs(today).endOf('month').format('YYYY-MM-DD'));
   const [group, setGroup] = useState<Group>('client');
-  const [view, setView] = useState<'revenue' | 'ship'>('revenue');
+  const [view, setView] = useState<'revenue' | 'billing' | 'ship'>('revenue');
   const lines = useMemo(() => revenueLines(snap, from, to), [snap, from, to]);
   const sums = useMemo(() => sumBy(lines, (l) => {
     if (group === 'day') return l.order.date;
@@ -36,9 +37,10 @@ export function RevenuePage() {
   const setStatus = (ids: string[], s: BillingStatus) => store.run((tx) => {
     for (const r of tx.list('order_revenue').filter((r) => ids.includes(r.order_id))) saveRevenue(tx, { ...r, billing_status: s });
   });
-  const List = ({ title, ls, next }: { title: string; ls: typeof lines; next?: BillingStatus }) => (
+  const List = ({ title, ls, next, back }: { title: string; ls: typeof lines; next?: BillingStatus; back?: BillingStatus }) => (
     <div className="card">
       <div className="row"><h3 className="grow">{title} {ls.length}건</h3>
+        {back && ls.length > 0 && <button onClick={() => confirm(`${ls.length}건을 모두 ${back}(으)로 되돌릴까요?`) && setStatus(ls.map((l) => l.order.id), back)}>↩ 모두 {back}</button>}
         {next && ls.length > 0 && <button onClick={() => setStatus(ls.map((l) => l.order.id), next)}>모두 {next}</button>}</div>
       {ls.slice(0, 100).map((l) => (
         <div key={l.order.id} className="list-item" onClick={() => sheet.open((c) => <OrderSheet orderId={l.order.id} close={c} />)}>
@@ -52,9 +54,10 @@ export function RevenuePage() {
   return (
     <div className="page" style={{ maxWidth: 900 }}>
       <div className="row" style={{ alignItems: 'center' }}>
-        <h2 className="grow">{view === 'revenue' ? '매출' : '선박비'}</h2>
+        <h2 className="grow">{view === 'revenue' ? '매출' : view === 'billing' ? '업체별 청구' : '선박비'}</h2>
         <div className="seg fp-seg">
           <button className={view === 'revenue' ? 'on' : ''} onClick={() => setView('revenue')}>💰 매출</button>
+          <button className={view === 'billing' ? 'on' : ''} onClick={() => setView('billing')}>🧾 청구</button>
           <button className={view === 'ship' ? 'on' : ''} onClick={() => setView('ship')}>🚢 선박비</button>
         </div>
       </div>
@@ -64,7 +67,7 @@ export function RevenuePage() {
         <button onClick={() => { const m = dayjs(from).subtract(1, 'month'); setFrom(m.format('YYYY-MM-01')); setTo(m.endOf('month').format('YYYY-MM-DD')); }}>◀ 전월</button>
         <button onClick={() => { const m = dayjs(from).add(1, 'month'); setFrom(m.format('YYYY-MM-01')); setTo(m.endOf('month').format('YYYY-MM-DD')); }}>익월 ▶</button>
       </div>
-      {view === 'ship' ? <ShipCostPanel from={from} to={to} /> : (<>
+      {view === 'ship' ? <ShipCostPanel from={from} to={to} /> : view === 'billing' ? <BillingPanel from={from} to={to} /> : (<>
       <div className="card"><span className="muted">합계(부가세 포함)</span><div style={{ fontSize: 28, fontWeight: 800 }}>{won(total)}</div>
         {missing.length > 0 && <div className="banner yellow">금액 미입력 오더 {missing.length}건</div>}</div>
       <div className="tabs">{([['day', '일별'], ['month', '월별'], ['client', '거래처별'], ['vehicle', '차량별']] as [Group, string][]).map(([g, l]) => <button key={g} className={group === g ? 'on' : ''} onClick={() => setGroup(g)}>{l}</button>)}</div>
@@ -80,7 +83,8 @@ export function RevenuePage() {
       </div>
       <List title="금액 미입력" ls={missing} />
       <List title="미청구" ls={unbilled} next="청구" />
-      <List title="미입금 (청구됨)" ls={unpaid} next="입금" />
+      <List title="미입금 (청구됨)" ls={unpaid} next="입금" back="미청구" />
+      <p className="muted small">한 건씩 바꾸거나 원하는 업체만 보려면 위 <b>🧾 청구</b>를 누르세요.</p>
       </>)}
     </div>
   );
