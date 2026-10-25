@@ -17,6 +17,7 @@ import { saveSetting } from '../ui/Phrases.tsx';
 import { reloadFresh } from '../lib/recover.ts';
 import { Sheet, useSheet } from '../ui/Sheet.tsx';
 import { NewPasswordSheet } from './LoginPage.tsx';
+import { ProfileSheet } from './ProfileSheet.tsx';
 
 
 function UploadPreview({ rows, data, close }: { rows: PreviewRow[]; data: Awaited<ReturnType<typeof parseUpload>>; close: () => void }) {
@@ -265,7 +266,7 @@ function EmailBackup() {
   );
 }
 
-type UserRow = { id: string; name: string; role: Role; driver_id: string | null; blocked?: boolean; email?: string; created_at?: string; last_sign_in_at?: string | null };
+type UserRow = { id: string; name: string; role: Role; driver_id: string | null; blocked?: boolean; phone?: string; email?: string; created_at?: string; last_sign_in_at?: string | null };
 
 function UsersPanel() {
   const snap = useSnap();
@@ -275,10 +276,12 @@ function UsersPanel() {
   const [noInfo, setNoInfo] = useState(false);
   const load = async () => {
     if (!supabase) return;
-    const [{ data: profiles }, info] = await Promise.all([
-      supabase.from('profiles').select('id,name,role,driver_id,blocked'),
+    const [first, info] = await Promise.all([
+      supabase.from('profiles').select('id,name,role,driver_id,blocked,phone'),
       supabase.rpc('admin_users'),
     ]);
+    // 회원 정보 SQL 전이면 연락처 없이
+    const profiles = first.error ? (await supabase.from('profiles').select('id,name,role,driver_id,blocked')).data : first.data;
     // 서버에 회원 관리 SQL(20261025000018)을 아직 안 넣었으면 이메일·가입일 없이 보여 준다
     setNoInfo(!!info.error);
     const byId = new Map(((info.data ?? []) as { id: string; email: string; created_at: string; last_sign_in_at: string | null }[]).map((u) => [u.id, u]));
@@ -323,7 +326,7 @@ function UsersPanel() {
             {u.blocked && <span className="mk warn">막힘(퇴사)</span>}
             {u.id === me && <span className="muted small">나</span>}
           </div>
-          {u.email && <div className="muted small">{u.email} · 가입 {day(u.created_at)} · 최근 로그인 {day(u.last_sign_in_at)}</div>}
+          {u.email && <div className="muted small">{u.email}{u.phone ? ` · ${u.phone}` : ''} · 가입 {day(u.created_at)} · 최근 로그인 {day(u.last_sign_in_at)}</div>}
           <div className="row wrap" style={{ gap: 6, marginTop: 4 }}>
             <select style={{ width: 120 }} value={u.role} disabled={u.blocked} onChange={(e) => {
               if (u.role === 'admin' && e.target.value !== 'admin' && activeAdmins <= 1) { store.toast('관리자가 한 명은 남아 있어야 합니다', 'error'); return; }
@@ -334,6 +337,7 @@ function UsersPanel() {
             <select style={{ width: 140 }} value={u.driver_id ?? ''} disabled={u.blocked} onChange={(e) => update(u.id, { driver_id: e.target.value || null })}>
               <option value="">기사 연결 없음</option>{snap.drivers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
             </select>
+            <button className="chip" onClick={() => sheet.open((close) => <ProfileSheet userId={u.id} email={u.email} self={u.id === me} close={close} onSaved={() => void load()} />)}>✏ 정보</button>
             {!noInfo && <button className="chip" onClick={() => resetPw(u)}>🔑 비밀번호 재설정</button>}
             {!noInfo && u.id !== me && <button className={`chip ${u.blocked ? '' : 'danger'}`} onClick={() => void block(u)}>{u.blocked ? '다시 허용' : '🚫 계정 막기(퇴사)'}</button>}
           </div>
@@ -456,6 +460,7 @@ export function SettingsPage() {
         <p>{session?.name} · {{ admin: '관리자', dispatcher: '배차', viewer: '조회(기사)' }[session?.role ?? 'viewer']} {isDemo && <span className="badge warn">데모 모드 (이 기기에만 저장)</span>}</p>
         {!isDemo && <p className="muted small">전송 대기 {pending}건 {pending ? '— 연결되면 자동 동기화' : ''}</p>}
         <div className="row wrap">
+          {!isDemo && session?.userId && <button onClick={() => sheet.open((close) => <ProfileSheet userId={session.userId} self close={close} />)}>✏ 내 정보 수정</button>}
           {!isDemo && <button onClick={() => sheet.open((close) => <NewPasswordSheet close={close} />)}>🔑 비밀번호 바꾸기</button>}
           <button className="danger" onClick={async () => { await supabase?.auth.signOut(); await store.stop(); localStorage.removeItem('demo-role'); location.href = '/'; }}>로그아웃</button>
         </div>

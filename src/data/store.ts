@@ -62,6 +62,13 @@ class Store {
   watched = new Set<string>();
   /** 수정자 표시용 사용자 이름 */
   profiles = new Map<string, string>();
+  /** 내 정보에서 이름을 바꿨을 때 화면의 이름도 바로 */
+  setSessionName(name: string) {
+    const s = this.state.session;
+    if (s) this.setState({ session: { ...s, name } });
+    if (s?.userId) this.profiles.set(s.userId, name);
+  }
+
   profileName(id: string | null | undefined) {
     if (!id) return '';
     if (id === this.state.session?.userId) return this.state.session.name;
