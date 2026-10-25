@@ -4,7 +4,7 @@ import { blankOrder, findVehicleDay, saveOrder } from '../orders.ts';
 import { formatShip, parseShip, shipChoices, shipTimeOf } from '../ships.ts';
 import { Tx } from '../tx.ts';
 import type { Driver } from '../types.ts';
-import { monthlyDriverStatus, paySummary, setDayKind, setDayPay, setPayRate, setWorkLog } from '../workforce.ts';
+import { monthlyDriverStatus, paySummary, setDayKind, setDayPay, setPayRate, setWorkLog, swapDayOff } from '../workforce.ts';
 import { isDriverWorking } from '../board.ts';
 import { baseSnapshot, resetIds, ship } from './fixtures.ts';
 
@@ -195,5 +195,21 @@ describe('일정표 차량 순서', () => {
     expect([...tx.list('vehicles')].sort((a, b) => a.sort_order - b.sort_order).map((v) => v.short_no)).toEqual(['8948', '9915', '9914']);
     nudgeVehicle(tx, 'v8948', 1);
     expect([...tx.list('vehicles')].sort((a, b) => a.sort_order - b.sort_order).map((v) => v.short_no)).toEqual(['9915', '8948', '9914']);
+  });
+});
+
+describe('대체 휴무 (일요일 근무 · 월요일 휴무)', () => {
+  it('쉬는 날은 근무로, 바꾼 날은 휴무로', () => {
+    const s = baseSnapshot();
+    const d = driver({ work_days: [1, 2, 3, 4, 5, 6] }); // 일요일 고정 휴무
+    s.drivers = [d];
+    const tx = new Tx(s);
+    expect(isDriverWorking(tx.result(), d, '2026-10-25')).toBe(false); // 일
+    swapDayOff(tx, { driver_id: 'd1', workDate: '2026-10-25', offDate: '2026-10-26' });
+    expect(isDriverWorking(tx.result(), d, '2026-10-25')).toBe(true);
+    expect(isDriverWorking(tx.result(), d, '2026-10-26')).toBe(false); // 월 휴무
+    const [m] = monthlyDriverStatus(tx.result(), '2026-10-25', '2026-10-26');
+    expect(m.days.map((c) => c.off)).toEqual([false, true]);
+    expect(tx.list('field_assignments').find((f) => f.date === '2026-10-26' && f.is_off)?.task).toBe('대체 휴무');
   });
 });

@@ -21,6 +21,7 @@ function cellText(c: DayCell) {
   if (c.nonwork) return '－';
   if (c.types.length) return c.types.map((t) => WORK_TYPE_SHORT[t] + (t === '시간외근무' && c.overtimeHours ? c.overtimeHours : '')).join('');
   if (c.field) return '현';
+  if (c.assigned && c.memo.startsWith('대체 근무')) return '대';
   if (c.assigned) return '배';
   return '';
 }
@@ -198,7 +199,7 @@ export function AttendancePanel() {
         {narrowed && <button className="chip" onClick={() => { setPicked(null); savePeople(null); }}>전체 보기</button>}
       </div>
       <p className="muted small" style={{ margin: '0 0 6px' }}>
-        칸을 누르면 근무형태를 넣습니다{staff ? ' · 이름을 누르면 근무별 수당' : ''}. {WORK_TYPES.map((t) => `${WORK_TYPE_SHORT[t]}=${t}`).join(' · ')} · <b style={{ background: 'var(--yellow-soft)' }}>배·현</b>=배차·현장 잡혔지만 형태 미입력 · 휴=휴무 · －=근무일 아님 · 시2=시간외 2시간 · 회색=근무일 아님(근무조 기준)
+        칸을 누르면 근무형태를 넣습니다{staff ? ' · 이름을 누르면 근무별 수당' : ''}. {WORK_TYPES.map((t) => `${WORK_TYPE_SHORT[t]}=${t}`).join(' · ')} · <b style={{ background: 'var(--yellow-soft)' }}>배·현</b>=배차·현장 잡혔지만 형태 미입력 · 대=대체 근무 · 휴=휴무 · －=근무일 아님 · 시2=시간외 2시간 · 회색=근무일 아님(근무조 기준)
       </p>
       <div className="att-wrap">
         <table className="simple small att-table">

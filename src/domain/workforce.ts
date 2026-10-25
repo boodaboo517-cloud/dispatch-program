@@ -153,11 +153,13 @@ export function monthlyDriverStatus(snap: Snapshot, from: string, to: string, dr
       const off = snap.field_assignments.some((f) => f.date === date && f.staff_id === driver.id && f.is_off);
       const types = log?.work_types ?? [];
       const hours = types.includes('시간외근무') ? log?.overtime_hours ?? null : null;
-      if (types.length || isAssigned) workedDays++;
-      if (isAssigned && !types.length) missingType++;
+      // 근무형태 없이 메모만 적은 출근(대체 근무 등)도 근무한 날
+      const loggedWork = !!log && !nonwork && !!log.memo;
+      if (types.length || isAssigned || loggedWork) workedDays++;
+      if ((isAssigned || loggedWork) && !types.length) missingType++;
       for (const t of types) byType[t]++;
       overtimeHours += hours ?? 0;
-      return { date, types, memo: log?.memo ?? '', assigned: isAssigned, field, nonwork, overtimeHours: hours, scheduled: isDriverWorking(snap, driver, date), off };
+      return { date, types, memo: log?.memo ?? '', assigned: isAssigned || loggedWork, field, nonwork, overtimeHours: hours, scheduled: isDriverWorking(snap, driver, date), off };
     });
     return { driver, days: cells, workedDays, byType, missingType, overtimeHours };
   });
@@ -293,4 +295,13 @@ export function paySummary(snap: Pick<Snapshot, 'driver_pay_rates' | 'driver_day
     total += n * rate;
   }
   return { byType, total, missingRate };
+}
+
+/**
+ * 휴무 바꾸기 (대체 휴무): 쉬는 날(workDate)에 나와서 일하고 다른 날(offDate)에 쉰다.
+ * 근무형태를 안 골라도 "대체 근무" 메모로 그날 근무로 잡히고, offDate 는 "대체 휴무"로 휴무 처리 (그날 배차에서 빠짐).
+ */
+export function swapDayOff(tx: Tx, p: { driver_id: string; workDate: string; offDate: string; work_types?: WorkType[]; memo?: string }) {
+  setDayKind(tx, { date: p.workDate, driver_id: p.driver_id, kind: 'work', work_types: p.work_types ?? [], memo: p.memo?.trim() || `대체 근무 (${p.offDate.slice(5).replace('-', '/')} 휴무)` });
+  setDayKind(tx, { date: p.offDate, driver_id: p.driver_id, kind: 'off', memo: '대체 휴무' });
 }
