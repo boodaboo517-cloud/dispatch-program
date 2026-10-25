@@ -363,11 +363,20 @@ function DriverSheet(p: { date: string; current: string | null; pmArrival?: bool
   };
   const offIds = new Set(s.field_assignments.filter((f) => f.date === p.date && f.is_off).map((f) => f.staff_id));
   const all = s.drivers.filter((d) => d.staff_type === '기사' && !offIds.has(d.id));
+  // 현장·사무 직원도 기사로 배차 가능 (5톤 기사 대신 등)
+  const others = s.drivers.filter((d) => d.staff_type !== '기사' && !offIds.has(d.id) && (!team || driverGroup(d) === team))
+    .sort((a, b) => Number(!isDriverWorking(s, a, p.date)) - Number(!isDriverWorking(s, b, p.date)) || a.name.localeCompare(b.name, 'ko'));
   const teams = [...new Set(all.map(driverGroup))].sort(groupOrder);
   const ds = all.filter((d) => !team || driverGroup(d) === team).sort((a, b) => a.name.localeCompare(b.name, 'ko'));
   const working = ds.filter((d) => isDriverWorking(s, d, p.date));
   const onCall = ds.filter((d) => !working.includes(d) && d.shift === ON_CALL_SHIFT);
   const offDay = ds.filter((d) => !working.includes(d) && d.shift !== ON_CALL_SHIFT);
+  const fieldToday = (id: string) => {
+    const f = s.field_assignments.find((x) => x.date === p.date && x.staff_id === id && !x.is_off);
+    if (!f) return '';
+    const site = s.field_sites.find((x) => x.id === f.site_id)?.name ?? '현장';
+    return `${site} ${f.part === 'am' ? '오전' : f.part === 'pm' ? '오후' : '종일'} 근무`;
+  };
   const item = (d: (typeof ds)[number], faded = false) => ({ id: d.id, label: d.name, sub: [team ? '' : driverGroup(d), d.shift !== driverGroup(d) ? d.shift : '', d.memo].filter(Boolean).join(' · '), faded });
   const byTeam = (list: typeof ds, label: (t: string) => string, faded = false): PickSection[] =>
     [...new Set(list.map(driverGroup))].sort(groupOrder).map((t) => ({ label: label(t), items: list.filter((d) => driverGroup(d) === t).map((d) => item(d, faded)) }));
@@ -389,6 +398,7 @@ function DriverSheet(p: { date: string; current: string | null; pmArrival?: bool
           ...byTeam(working, (t) => `오늘 근무 · ${t}`),
           ...(onCall.length ? [{ label: '알바 (원할 때 출근 · 고르면 근무형태 입력)', items: onCall.map((d) => item(d)) }] : []),
           ...byTeam(offDay, (t) => `근무일 아님 · ${t}`, true),
+          ...(others.length ? [{ label: '현장·사무 직원 (기사로 배차)', items: others.map((d) => ({ ...item(d, !isDriverWorking(s, d, p.date)), sub: [d.staff_type, fieldToday(d.id)].filter(Boolean).join(' · ') })) }] : []),
         ]}
         onPick={(it) => finish(it.id)}
         top={<>

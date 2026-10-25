@@ -382,7 +382,12 @@ export interface FieldAssignment extends Base {
   is_off: boolean; // 휴무자 줄
   maintenance_record_id: string | null;
   sort_order: number;
+  /** 근무 시간: 빈 글자 = 종일, am = 오전만, pm = 오후만 (기사가 반나절 현장 지원 등) */
+  part?: FieldPart;
 }
+
+export type FieldPart = '' | 'am' | 'pm';
+export const FIELD_PART_LABEL: Record<FieldPart, string> = { '': '종일', am: '오전', pm: '오후' };
 
 export interface RecurringFieldWork extends Base {
   staff_id: string;

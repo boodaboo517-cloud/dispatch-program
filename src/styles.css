@@ -422,3 +422,5 @@ button.admin-card { font: inherit; color: inherit; }
 
 /* 일정표 선박 시간: 절반 크기, 줄 간격 최소 */
 .paper .ps-time { font-size: max(.4em, 5px); line-height: .9; margin-top: -1px; }
+
+.paper .ps-part { margin-left: 2px; color: #b45309; font-size: .75em; font-weight: 700; }

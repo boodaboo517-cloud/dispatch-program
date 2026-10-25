@@ -1,5 +1,5 @@
 // 현장근무 탭: 근무지별 · 이름 · 업무 · 지급 차량 / 휴무자
-import { blankField, offByZone, saveFieldAssignment, setDayOff, sitesGrouped, type FieldAssignment } from '../../domain/index.ts';
+import { FIELD_PART_LABEL, blankField, offByZone, saveFieldAssignment, setDayOff, sitesGrouped, type FieldAssignment } from '../../domain/index.ts';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FieldPeople } from './FieldPeople.tsx';
@@ -84,6 +84,7 @@ function FieldSites({ date }: { date: string }) {
         <div className="grow">
           <Cell className={f.task ? '' : 'empty'} onTap={() => (f.task ? show('업무', f.task, () => editTask(f)) : staff && editTask(f))} onLong={staff ? () => editTask(f) : undefined}>
             {f.task || '＋'}
+            {f.part && <span className="badge warn"> {FIELD_PART_LABEL[f.part]}만</span>}
             {f.source === 'recurring' && !f.edited_manually && <span className="muted small"> 고정</span>}
             {f.source === 'maintenance' && <span className="badge red">정비</span>}
           </Cell>

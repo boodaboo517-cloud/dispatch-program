@@ -3,7 +3,7 @@ import { addDays, eachDay, maxDate, weekdayOf } from './dates.ts';
 import { newId } from './ids.ts';
 import { HORIZON_DAYS, assertStartDate, closeVersionsFrom, versionOn } from './recurring.ts';
 import { Tx } from './tx.ts';
-import type { FieldAssignment, Mutation, RecurringFieldVersion, Snapshot } from './types.ts';
+import type { FieldAssignment, FieldPart, Mutation, RecurringFieldVersion, Snapshot } from './types.ts';
 
 export type FieldFields = Pick<RecurringFieldVersion, 'weekdays' | 'site_id' | 'task' | 'vehicle_id'>;
 
@@ -11,7 +11,7 @@ export function blankField(p: Partial<FieldAssignment> & { date: string }): Fiel
   return {
     id: newId(), site_id: null, staff_id: null, task: '', vehicle_id: null, source: 'manual',
     recurring_field_id: null, recurring_field_version_id: null, edited_manually: false, is_off: false,
-    maintenance_record_id: null, sort_order: 0, ...p,
+    maintenance_record_id: null, sort_order: 0, part: '', ...p,
   };
 }
 
@@ -172,6 +172,8 @@ export interface StaffDayPlan {
   site_id: string | null;
   task: string;
   vehicle_id: string | null;
+  /** 종일 / 오전 / 오후 */
+  part?: FieldPart;
 }
 
 /** 그날 한 사람의 현장근무를 정한다: 휴무 / 근무(근무지·업무·차량). 같은 날 줄이 여러 개면 첫 줄을 고친다 */
@@ -179,7 +181,7 @@ export function setStaffDay(tx: Tx, date: string, staffId: string, p: StaffDayPl
   if (p.off) return setDayOff(tx, date, staffId, true);
   setStaffWorking(tx, date, staffId);
   const f = tx.list('field_assignments').find((x) => x.date === date && x.staff_id === staffId && !x.is_off && x.source !== 'maintenance');
-  if (f) saveFieldAssignment(tx, { ...f, site_id: p.site_id, task: p.task, vehicle_id: p.vehicle_id });
+  if (f) saveFieldAssignment(tx, { ...f, site_id: p.site_id, task: p.task, vehicle_id: p.vehicle_id, part: p.part ?? f.part ?? '' });
 }
 
 /**

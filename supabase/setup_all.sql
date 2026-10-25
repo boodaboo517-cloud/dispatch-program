@@ -1130,3 +1130,7 @@ drop trigger if exists driver_notice on vehicle_days;
 create trigger driver_notice after insert or update on vehicle_days for each row execute function notify_driver_change();
 drop trigger if exists driver_notice on daily_orders;
 create trigger driver_notice after insert or update or delete on daily_orders for each row execute function notify_driver_change();
+
+-- ===== 20261026000026_field_part.sql =====
+-- 현장근무 시간: 빈 글자 = 종일, am = 오전만, pm = 오후만 (현장 직원이 반나절 기사 배차, 기사가 반나절 현장 지원)
+alter table field_assignments add column if not exists part text not null default '' check (part in ('', 'am', 'pm'));

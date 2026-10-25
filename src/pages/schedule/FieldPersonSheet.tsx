@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import {
   addDays, fixedOffDays, planCreateFieldRecurring, planFieldRecurringChange, setStaffDay, setStaffRange, usualField, versionOn, weekdayOf,
-  workDaysFromOff, type Weekday,
+  workDaysFromOff, FIELD_PART_LABEL, type FieldPart, type Weekday,
 } from '../../domain/index.ts';
 import { store } from '../../data/store.ts';
 import { fmtDate, seoulToday } from '../../lib/time.ts';
@@ -27,6 +27,7 @@ export function FieldPersonSheet({ date, staffId, close }: { date: string; staff
   const [site, setSite] = useState<string | null>(cur?.site_id ?? usual?.site_id ?? null);
   const [task, setTask] = useState(cur?.task ?? usual?.task ?? '');
   const [vehicle, setVehicle] = useState<string | null>(cur?.vehicle_id ?? usual?.vehicle_id ?? null);
+  const [part, setPart] = useState<FieldPart>(cur?.part ?? '');
   const [scope, setScope] = useState<Scope>('day');
   const [end, setEnd] = useState(addDays(date, 6));
   const [skipOff, setSkipOff] = useState(true);
@@ -35,7 +36,7 @@ export function FieldPersonSheet({ date, staffId, close }: { date: string; staff
   const canKeep = !off && date >= today;
 
   const save = () => {
-    const plan = { off, site_id: site, task: task.trim(), vehicle_id: vehicle };
+    const plan = { off, site_id: site, task: task.trim(), vehicle_id: vehicle, part };
     if (scope === 'day') {
       store.run((tx) => setStaffDay(tx, date, staffId, plan));
       store.toast(`${person?.name} ${fmtDate(date)} ${off ? '휴무' : '저장'}`);
@@ -69,6 +70,13 @@ export function FieldPersonSheet({ date, staffId, close }: { date: string; staff
 
       {!off && (
         <>
+          <div className="field">
+            <span>시간</span>
+            <div className="seg fp-seg" style={{ width: '100%' }}>
+              {(['', 'am', 'pm'] as FieldPart[]).map((k) => <button key={k || 'all'} className={`grow ${part === k ? 'on' : ''}`} style={{ flex: 1 }} onClick={() => setPart(k)}>{FIELD_PART_LABEL[k]}</button>)}
+            </div>
+            {part && <span className="muted small">{part === 'am' ? '오후에는 배차(오후 기사)를 받을 수 있습니다.' : '오전에는 배차(오전 기사)를 받을 수 있습니다.'}</span>}
+          </div>
           <div className="field">
             <span>근무지</span>
             <div className="chips" style={{ flexWrap: 'wrap', overflow: 'visible' }}>

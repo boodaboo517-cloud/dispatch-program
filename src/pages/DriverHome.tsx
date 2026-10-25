@@ -1,7 +1,7 @@
 // 기사 조회 전용 화면: 내 배차 카드 (수정 버튼 없음). 전체 일정 보기는 관리자·배차가 볼 때만
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HELPER_ROLE_LABEL, addDays, workText, buildBoard, buildIndex, isDriverWorking, type BoardRow, type Snapshot } from '../domain/index.ts';
+import { FIELD_PART_LABEL, HELPER_ROLE_LABEL, addDays, workText, buildBoard, buildIndex, isDriverWorking, type BoardRow, type Snapshot } from '../domain/index.ts';
 
 /** 내가 맡은 쪽(오전/오후)과 그날 처리 순서 */
 function myPart(row: BoardRow, me: string | null) {
@@ -74,15 +74,16 @@ function myDay(snap: Snapshot, driverId: string | null, date: string) {
   return { field, off };
 }
 
-function FieldCard({ snap, date, driverId, title }: { snap: Snapshot; date: string; driverId: string | null; title?: string }) {
-  const { field, off } = myDay(snap, driverId, date);
+function FieldCard({ snap, date, driverId, title, showOff = true }: { snap: Snapshot; date: string; driverId: string | null; title?: string; showOff?: boolean }) {
+  const { field, off: dayOff } = myDay(snap, driverId, date);
+  const off = dayOff && showOff;
   if (!field.length && !off) return null;
   return (
     <div className="card">
       <div className="muted small">{title ?? fmtDate(date)}</div>
       {field.map((f) => (
         <div key={f.id} style={{ marginTop: 4 }}>
-          <b style={{ fontSize: 20 }}>👷 현장근무 · {snap.field_sites.find((s) => s.id === f.site_id)?.name ?? '근무지 미정'}</b>
+          <b style={{ fontSize: 20 }}>👷 현장근무{f.part ? `(${FIELD_PART_LABEL[f.part]})` : ''} · {snap.field_sites.find((s) => s.id === f.site_id)?.name ?? '근무지 미정'}</b>
           {f.task && <div style={{ fontSize: 17 }}>{f.task}</div>}
           {f.vehicle_id && <div className="muted">차량 {snap.vehicles.find((v) => v.id === f.vehicle_id)?.short_no}</div>}
         </div>
@@ -164,12 +165,13 @@ export function DriverHome() {
           <DateBar date={date} onChange={setDate} />
           {!driverId && <div className="banner yellow">이 계정에 기사가 연결되어 있지 않습니다. 관리자에게 "설정 → 사용자 권한"에서 연결을 요청하세요.</div>}
           {mine(board).map((r) => <DispatchCard key={r.vehicle.id} row={r} date={date} me={driverId} />)}
-          {!mine(board).length && <FieldCard snap={snap} date={date} driverId={driverId} />}
+          {/* 현장근무(오전·오후만 포함)는 차량 배차가 있어도 같이 */}
+          <FieldCard snap={snap} date={date} driverId={driverId} showOff={!mine(board).length} />
           {driverId && !mine(board).length && !myDay(snap, driverId, date).field.length && !myDay(snap, driverId, date).off && <div className="card" style={{ textAlign: 'center' }}>이 날 배차가 없습니다</div>}
           {mine(tomorrow).map((r) => (
             <div key={r.vehicle.id} style={{ opacity: 0.8 }}><DispatchCard row={r} date={addDays(date, 1)} title="내일 배차 미리보기" me={driverId} /></div>
           ))}
-          {!mine(tomorrow).length && <div style={{ opacity: 0.8 }}><FieldCard snap={snap} date={addDays(date, 1)} driverId={driverId} title="내일 미리보기" /></div>}
+          <div style={{ opacity: 0.8 }}><FieldCard snap={snap} date={addDays(date, 1)} driverId={driverId} title="내일 미리보기" showOff={!mine(tomorrow).length} /></div>
         </>
       ) : (
         <OverviewPage embedded />

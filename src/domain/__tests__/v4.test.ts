@@ -538,6 +538,8 @@ describe('현장근무 사람별 일정 바꾸기', () => {
     expect(n).toBe(6);
     expect(tx.list('field_assignments').filter((f) => f.staff_id === 'dA' && !f.is_off && f.task === '목포 지원')).toHaveLength(6);
     expect(tx.list('field_assignments').some((f) => f.staff_id === 'dA' && f.date === '2026-10-25')).toBe(false);
+    setStaffDay(tx, '2026-10-20', 'dA', { off: false, site_id: site, task: '1톤 지원', vehicle_id: null, part: 'am' });
+    expect(tx.list('field_assignments').find((f) => f.staff_id === 'dA' && f.date === '2026-10-20' && !f.is_off)?.part).toBe('am');
     setStaffRange(tx, { staffId: 'dA', from: '2026-10-21', to: '2026-10-22', plan: { off: true, site_id: null, task: '', vehicle_id: null } });
     expect(tx.list('field_assignments').filter((f) => f.staff_id === 'dA' && (f.date === '2026-10-21' || f.date === '2026-10-22')).map((f) => f.is_off)).toEqual([true, true]);
   });

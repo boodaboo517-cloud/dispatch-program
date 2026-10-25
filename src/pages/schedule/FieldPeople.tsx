@@ -1,7 +1,7 @@
 // 현장근무 사람별 보기: 한 줄에 한 사람 — 근무/휴무 전환, 근무지(오늘만/계속), 업무, 지급 차량을 바로 바꾼다
 import {
   ON_CALL_SHIFT, driverZone, offByZone, planFieldRecurringChange, saveFieldAssignment, setDayOff, setDaySite, setStaffWorking,
-  usualField, versionOn, type Driver,
+  usualField, versionOn, FIELD_PART_LABEL, type Driver,
 } from '../../domain/index.ts';
 import { store } from '../../data/store.ts';
 import { seoulToday } from '../../lib/time.ts';
@@ -106,6 +106,7 @@ export function FieldPeople({ date }: { date: string }) {
               <div className="muted small" style={{ marginTop: 4 }}>{weekly ? '매주 고정 휴무 · "근무"를 누르면 이 날만 출근' : '이 날 휴무'}</div>
             ) : (
               <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                {f?.part && <span className="badge warn" style={{ alignSelf: 'center' }}>{FIELD_PART_LABEL[f.part]}만</span>}
                 <button className="chip fp-chip" disabled={!staff} onClick={() => void changeSite(d)}>📍 {siteName(f?.site_id ?? null) || '근무지'}</button>
                 <button className="chip fp-chip grow" style={{ justifyContent: 'flex-start' }} disabled={!staff} onClick={() => void editTask(d, f?.task ?? '')}>{f?.task || '업무'}</button>
                 <button className="chip fp-chip" disabled={!staff} onClick={() => void editVehicle(d)}>🚚 {f?.vehicle_id ? vehicleNo(snap, f.vehicle_id) : '차량'}</button>
