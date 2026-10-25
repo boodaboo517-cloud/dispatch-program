@@ -4,7 +4,7 @@ import {
   type BoardRow, type DailyOrder, type FieldAssignment, type Snapshot, type Zone,
 } from '../../domain/index.ts';
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
-import { unloadInfo } from './parts.tsx';
+import { regionOf, unloadInfo } from './parts.tsx';
 import { useSnap } from '../../ui/hooks.ts';
 import { clientName, driverName, productName, qtyText, shipTimeOf, vehicleNo } from '../../ui/labels.ts';
 
@@ -80,6 +80,7 @@ function Orders({ snap, list }: { snap: Snapshot; list: DailyOrder[] }) {
   return (
     <>
       {groups.map((g) => {
+        const regions = [...new Set(g.map((o) => regionOf(snap, o)).filter(Boolean))];
         const notes = [...new Set(g.flatMap((o) => {
           const product = snap.products.find((x) => x.id === o.product_id);
           return [
@@ -95,6 +96,7 @@ function Orders({ snap, list }: { snap: Snapshot; list: DailyOrder[] }) {
         return (
           <div key={g[0].id} className="ps-ord">
             {notes.length > 0 && <div className="ps-oline"><Fit><span className="ps-note">{notes.join(' · ')}</span></Fit></div>}
+            {regions.length > 0 && <div className="ps-oline"><Fit><span className="ps-region">{regions.join(' · ')}</span></Fit></div>}
             <div className="ps-oline"><Fit>{[clientName(snap, g[0]), items.join(', ')].filter(Boolean).join(' ') || '·'}</Fit></div>
           </div>
         );

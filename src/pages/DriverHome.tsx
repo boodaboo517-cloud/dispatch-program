@@ -19,7 +19,7 @@ import { clientName, driverName, productName, productOf, qtyText, setting, shipT
 import { StorageBadge, tempText } from '../ui/OrderSheet.tsx';
 import { OverviewPage } from './OverviewPage.tsx';
 import { ringAlert } from '../lib/alerts.ts';
-import { unloadInfo } from './schedule/parts.tsx';
+import { regionOf, unloadInfo } from './schedule/parts.tsx';
 import { DateBar } from './SchedulePage.tsx';
 
 function DispatchCard({ row, date, title, me }: { row: BoardRow; date: string; title?: string; me: string | null }) {
@@ -34,7 +34,8 @@ function DispatchCard({ row, date, title, me }: { row: BoardRow; date: string; t
     const p = productOf(snap, o);
     return (
       <li key={o.id} onClick={() => p && nav(`/products/${p.id}`)} style={{ cursor: p ? 'pointer' : 'default' }}>
-        <b>{clientName(snap, o)}</b> {productName(snap, o)} {qtyText(o)} {o.region && <span className="muted">· {o.region}</span>}
+        {regionOf(snap, o) && <div className="region-tag" style={{ fontSize: 11 }}>{regionOf(snap, o)}</div>}
+        <b>{clientName(snap, o)}</b> {productName(snap, o)} {qtyText(o)}
         {p && <> <StorageBadge storage={p.storage} temp={tempText(p)} /></>}
         {(o.pickup_place || o.dropoff_place) && <div>📍 {o.pickup_place || '-'} → {o.dropoff_place || '-'}</div>}
         {o.same_day && <div className="badge warn">당일 왕복</div>}

@@ -411,3 +411,8 @@ button.admin-card { font: inherit; color: inherit; }
 .order-save { position: sticky; bottom: calc(env(safe-area-inset-bottom) + 72px); background: var(--bg, #f3f4f6); padding: 8px 0; z-index: 5; }
 .order-save button { min-height: 52px; font-size: 18px; }
 .more-btn { white-space: normal; padding: 6px 12px; text-align: center; line-height: 1.3; }
+
+/* 품목 기본 지역: 빨간 글씨, 50% 크기, 품목 위 */
+.region-tag { color: var(--red); font-size: 50%; font-weight: 700; line-height: 1.2; }
+.cell .region-tag { font-size: 9px; }
+.paper .ps-region { color: #dc2626; font-size: .5em; font-weight: 700; }

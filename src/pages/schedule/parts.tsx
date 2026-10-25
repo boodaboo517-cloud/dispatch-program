@@ -26,12 +26,16 @@ export function OrderMarks({ snap, o, staff }: { snap: Snapshot; o: DailyOrder; 
   );
 }
 
+/** 품목 기본 지역 (오더에 적힌 지역 → 없으면 품목 기본 지역) */
+export const regionOf = (snap: Snapshot, o: DailyOrder) => o.region?.trim() || productOf(snap, o)?.default_region?.trim() || '';
+
 export function OrderCellText({ snap, o }: { snap: Snapshot; o: DailyOrder }) {
   return (
     <>
       {o.delayed_from && <div className="l2" style={{ color: '#b45309', fontWeight: 700 }}>⏸ 연기된 하차</div>}
       {workText(o) && <div className="l2" style={{ color: 'var(--red)', fontWeight: 700 }}>{abbrev(workText(o), 10)}</div>}
       <div className="l1">{abbrev(clientName(snap, o)) || '·'}</div>
+      {regionOf(snap, o) && <div className="region-tag">{regionOf(snap, o)}</div>}
       <div className="l2">{abbrev(productName(snap, o))} {qtyText(o)}</div>
       {o.kind === 'load' && o.shipment === 'bulk' && o.departure_ship && <div className="l2" style={{ color: '#075985' }}>🚢{abbrev(parseShip(o.departure_ship).name)}</div>}
       {o.memo && <div className="l2 muted">{abbrev(o.memo)}</div>}
