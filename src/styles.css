@@ -419,3 +419,6 @@ button.admin-card { font: inherit; color: inherit; }
 .region-tag { font-size: max(25%, 6px); }
 .cell .region-tag { font-size: 6px; }
 .paper .ps-region { font-size: max(.25em, 5px); }
+
+/* 일정표 선박 시간: 절반 크기, 줄 간격 최소 */
+.paper .ps-time { font-size: max(.4em, 5px); line-height: .9; margin-top: -1px; }
