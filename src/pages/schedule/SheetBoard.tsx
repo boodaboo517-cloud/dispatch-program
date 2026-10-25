@@ -80,7 +80,6 @@ function Orders({ snap, list }: { snap: Snapshot; list: DailyOrder[] }) {
   return (
     <>
       {groups.map((g) => {
-        const regions = [...new Set(g.map((o) => regionOf(snap, o)).filter(Boolean))];
         const notes = [...new Set(g.flatMap((o) => {
           const product = snap.products.find((x) => x.id === o.product_id);
           return [
@@ -92,12 +91,18 @@ function Orders({ snap, list }: { snap: Snapshot; list: DailyOrder[] }) {
             product?.caution?.split('\n')[0],
           ].map((x) => x?.trim() ?? '');
         }).filter(Boolean))];
-        const items = g.map((o) => [productName(snap, o), qtyText(o)].filter(Boolean).join(' ')).filter(Boolean);
+        // 품목마다 기본 지역을 품목 글자 바로 위에 아주 작게 (줄 높이는 그대로)
+        const items = g.map((o) => ({ id: o.id, text: [productName(snap, o), qtyText(o)].filter(Boolean).join(' '), region: regionOf(snap, o) })).filter((x) => x.text);
         return (
           <div key={g[0].id} className="ps-ord">
             {notes.length > 0 && <div className="ps-oline"><Fit><span className="ps-note">{notes.join(' · ')}</span></Fit></div>}
-            {regions.length > 0 && <div className="ps-oline"><Fit><span className="ps-region">{regions.join(' · ')}</span></Fit></div>}
-            <div className="ps-oline"><Fit>{[clientName(snap, g[0]), items.join(', ')].filter(Boolean).join(' ') || '·'}</Fit></div>
+            <div className="ps-oline"><Fit>
+              {clientName(snap, g[0])}{items.length ? ' ' : ''}
+              {items.map((x, i) => (
+                <span key={x.id} className="ps-prod">{x.region && <span className="ps-region">{x.region}</span>}{x.text}{i < items.length - 1 ? ', ' : ''}</span>
+              ))}
+              {!clientName(snap, g[0]) && !items.length && '·'}
+            </Fit></div>
           </div>
         );
       })}

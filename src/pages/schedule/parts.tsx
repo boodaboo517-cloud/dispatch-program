@@ -35,8 +35,7 @@ export function OrderCellText({ snap, o }: { snap: Snapshot; o: DailyOrder }) {
       {o.delayed_from && <div className="l2" style={{ color: '#b45309', fontWeight: 700 }}>⏸ 연기된 하차</div>}
       {workText(o) && <div className="l2" style={{ color: 'var(--red)', fontWeight: 700 }}>{abbrev(workText(o), 10)}</div>}
       <div className="l1">{abbrev(clientName(snap, o)) || '·'}</div>
-      {regionOf(snap, o) && <div className="region-tag">{regionOf(snap, o)}</div>}
-      <div className="l2">{abbrev(productName(snap, o))} {qtyText(o)}</div>
+      <div className="l2 with-region">{regionOf(snap, o) && <span className="region-tag">{regionOf(snap, o)}</span>}{abbrev(productName(snap, o))} {qtyText(o)}</div>
       {o.kind === 'load' && o.shipment === 'bulk' && o.departure_ship && <div className="l2" style={{ color: '#075985' }}>🚢{abbrev(parseShip(o.departure_ship).name)}</div>}
       {o.memo && <div className="l2 muted">{abbrev(o.memo)}</div>}
     </>

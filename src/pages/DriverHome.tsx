@@ -34,8 +34,7 @@ function DispatchCard({ row, date, title, me }: { row: BoardRow; date: string; t
     const p = productOf(snap, o);
     return (
       <li key={o.id} onClick={() => p && nav(`/products/${p.id}`)} style={{ cursor: p ? 'pointer' : 'default' }}>
-        {regionOf(snap, o) && <div className="region-tag" style={{ fontSize: 11 }}>{regionOf(snap, o)}</div>}
-        <b>{clientName(snap, o)}</b> {productName(snap, o)} {qtyText(o)}
+        <b>{clientName(snap, o)}</b> <span className="with-region">{regionOf(snap, o) && <span className="region-tag">{regionOf(snap, o)}</span>}{productName(snap, o)}</span> {qtyText(o)}
         {p && <> <StorageBadge storage={p.storage} temp={tempText(p)} /></>}
         {(o.pickup_place || o.dropoff_place) && <div>📍 {o.pickup_place || '-'} → {o.dropoff_place || '-'}</div>}
         {o.same_day && <div className="badge warn">당일 왕복</div>}
