@@ -1,5 +1,6 @@
 // 매출 보기 (관리자·배차 전용 — 기사·조회 계정은 서버에서 금액 행 자체를 받지 못함)
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { revenueLines, saveRevenue, sumBy, won, type BillingStatus } from '../domain/index.ts';
 import { store } from '../data/store.ts';
 import { exportBilling, exportRevenue } from '../excel/exportOther.ts';
@@ -9,7 +10,6 @@ import { clientName, productName, qtyText, vehicleNo } from '../ui/labels.ts';
 import { OrderSheet } from '../ui/OrderSheet.tsx';
 import { useSheet } from '../ui/Sheet.tsx';
 import { ShipCostPanel } from './ShipCostPanel.tsx';
-import { ManageTabs } from '../ui/ManageTabs.tsx';
 import { BillingPanel } from './BillingPanel.tsx';
 
 type Group = 'day' | 'month' | 'client' | 'vehicle';
@@ -17,7 +17,8 @@ type Group = 'day' | 'month' | 'client' | 'vehicle';
 export function RevenuePage() {
   const snap = useSnap();
   const sheet = useSheet();
-  const { staff } = useRole();
+  const { admin: staff } = useRole(); // 매출은 관리자만 (설정 안 메뉴)
+  const nav = useNavigate();
   const today = seoulToday();
   const [from, setFrom] = useState(today.slice(0, 7) + '-01');
   const [to, setTo] = useState(dayjs(today).endOf('month').format('YYYY-MM-DD'));
@@ -54,7 +55,7 @@ export function RevenuePage() {
   );
   return (
     <div className="page" style={{ maxWidth: 900 }}>
-      <ManageTabs />
+      <button className="ghost" style={{ marginBottom: 4 }} onClick={() => nav('/settings')}>← 설정</button>
       <div className="row" style={{ alignItems: 'center' }}>
         <h2 className="grow">{view === 'revenue' ? '매출' : view === 'billing' ? '업체별 청구' : '선박비'}</h2>
         <div className="seg fp-seg">

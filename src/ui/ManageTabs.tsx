@@ -1,17 +1,14 @@
-// 거래처 메뉴 위 탭: 거래처 · 차량 · 기사 · 근무현황 · 선박 · 현장 · 매출 (휴대폰은 좌우로 밀어도 이동)
+// 관리 메뉴 위 탭: 거래처 · 차량 · 기사 · 근무현황 · 선박 · 현장 (휴대폰은 좌우로 밀어도 이동). 매출은 설정(관리자)에
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useIsWide, useRole } from './hooks.ts';
+import { useIsWide } from './hooks.ts';
 import { useSwipe } from './useSwipe.ts';
 
 export const MANAGE_TABS: [string, string][] = [
   ['/clients', '거래처'], ['/fleet/vehicles', '차량'], ['/fleet/drivers', '기사'], ['/fleet/attendance', '근무현황'],
-  ['/fleet/ships', '선박'], ['/fleet/field', '현장'], ['/revenue', '매출'],
+  ['/fleet/ships', '선박'], ['/fleet/field', '현장'],
 ];
 
-function useTabs() {
-  const { staff } = useRole();
-  return MANAGE_TABS.filter(([to]) => staff || to !== '/revenue');
-}
+const useTabs = () => MANAGE_TABS;
 
 const indexOf = (tabs: [string, string][], path: string) => tabs.findIndex(([to]) => path === to || path.startsWith(`${to}/`));
 

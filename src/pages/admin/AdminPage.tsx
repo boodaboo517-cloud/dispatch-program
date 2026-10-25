@@ -47,13 +47,15 @@ export function AdminPage() {
   const { section = 'dispatch' } = useParams();
   const nav = useNavigate();
   const snap = useSnap();
-  const { staff } = useRole();
+  const { staff, admin } = useRole();
+  // 매출·선박비 같은 금액 화면은 관리자만
+  const menu = MENU.filter(([k]) => admin || !MONEY_SECTIONS.includes(k));
   const today = seoulToday();
   const [date, setDate] = useState(today);
   const [month, setMonth] = useState(today.slice(0, 7));
   const [from, setFrom] = useState(`${today.slice(0, 7)}-01`);
   const [to, setTo] = useState(today);
-  const sec = (MENU.some(([k]) => k === section) ? section : 'dispatch') as Section;
+  const sec = (menu.some(([k]) => k === section) ? section : 'dispatch') as Section;
 
   const data = useMemo(() => {
     if (sec === 'dispatch') return dispatchReport(snap, date);
@@ -103,10 +105,10 @@ export function AdminPage() {
     <div className="admin">
       <aside className="admin-nav">
         <div className="admin-nav-title">관리</div>
-        {MENU.map(([k, ic, l]) => (
+        {menu.map(([k, ic, l]) => (
           <button key={k} className={sec === k ? 'on' : ''} onClick={() => nav(`/admin/${k}`, { replace: true })}><span>{ic}</span>{l}</button>
         ))}
-        <p className="muted small" style={{ padding: '8px 10px' }}>PC 전용 화면입니다. 휴대폰 화면은 그대로입니다.{MONEY_SECTIONS.includes(sec) ? ' 금액은 관리자·배차만 보입니다.' : ''}</p>
+        <p className="muted small" style={{ padding: '8px 10px' }}>PC 전용 화면입니다. 휴대폰 화면은 그대로입니다.{admin ? ' 금액 화면은 관리자만 보입니다.' : ''}</p>
       </aside>
       <main className="admin-main">
         <div className="admin-head">

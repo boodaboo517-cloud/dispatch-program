@@ -6,8 +6,8 @@ export function menuOf(pathname: string): string {
   if (pathname === '/') return '/';
   if (pathname.startsWith('/all')) return '/all';
   if (pathname.startsWith('/order')) return '/order';
-  if (pathname.startsWith('/clients') || pathname.startsWith('/products') || pathname.startsWith('/fleet') || pathname.startsWith('/revenue')) return '/clients';
-  if (pathname.startsWith('/settings')) return '/settings';
+  if (pathname.startsWith('/clients') || pathname.startsWith('/products') || pathname.startsWith('/fleet')) return '/clients';
+  if (pathname.startsWith('/settings') || pathname.startsWith('/revenue')) return '/settings';
   if (pathname.startsWith('/driver')) return '/driver';
   return pathname;
 }
