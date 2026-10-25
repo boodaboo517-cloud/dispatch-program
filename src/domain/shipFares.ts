@@ -5,7 +5,7 @@ import { newId } from './ids.ts';
 import { ensureVehicleDay } from './orders.ts';
 import { isWaitShip, parseShip } from './ships.ts';
 import type { Tx } from './tx.ts';
-import type { FareKind, ShipFare, Snapshot, Zone } from './types.ts';
+import type { CalcMethod, DailyOrder, FareKind, ShipFare, Snapshot, Zone } from './types.ts';
 
 /** 그 선박·차종에 맞는 요금 (차종 요금이 있으면 차종, 없으면 기본 줄) */
 export function fareFor(snap: Pick<Snapshot, 'ships' | 'ship_fares'>, shipValue: string | null, vehicleType: string): { ship: string; fare: ShipFare | undefined; general: ShipFare | undefined } {
@@ -72,4 +72,40 @@ export function shipCosts(snap: Snapshot, from: string, to: string): Voyage[] {
     for (const r of board.rows) if (sails(r)) out.push(voyageOf(snap, d, r));
   }
   return out;
+}
+
+/** 품목 벌크 요금 저장 (fee 가 null 이면 지움) */
+export function setBulkFee(tx: Tx, productId: string, calc: CalcMethod, fee: number | null) {
+  const cur = tx.list('product_bulk_fees').find((f) => f.product_id === productId);
+  if (fee == null) { if (cur) tx.remove('product_bulk_fees', cur.id); return; }
+  if (cur) tx.update('product_bulk_fees', cur.id, { calc_method: calc, fee });
+  else tx.insert('product_bulk_fees', { id: newId(), product_id: productId, calc_method: calc, fee });
+}
+
+export interface BulkShipment {
+  order: DailyOrder;
+  /** 실제 선적일 (나중 선적이면 그날) */
+  date: string;
+  ship: string;
+  fee: number | null;
+  missing: string;
+}
+
+/** 기간 벌크 선적비: 벌크 상차마다 품목 요금 (대기는 아직 안 실음) */
+export function bulkCosts(snap: Snapshot, from: string, to: string): BulkShipment[] {
+  const out: BulkShipment[] = [];
+  for (const o of snap.daily_orders) {
+    if (o.kind !== 'load' || o.shipment !== 'bulk' || !o.departure_ship || isWaitShip(o.departure_ship)) continue;
+    const date = o.ship_date ?? o.date;
+    if (date < from || date > to) continue;
+    const f = o.product_id ? (snap.product_bulk_fees ?? []).find((x) => x.product_id === o.product_id) : undefined;
+    let fee: number | null = null;
+    let missing = '';
+    if (!f) missing = '품목 벌크 요금 미등록';
+    else if (f.calc_method === 'fixed') fee = f.fee;
+    else if (o.quantity == null) missing = '수량 없음';
+    else fee = Math.round(f.fee * o.quantity);
+    out.push({ order: o, date, ship: parseShip(o.departure_ship).name, fee, missing });
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
 }

@@ -1,0 +1,59 @@
+-- 2026-10-25 추가 업데이트 ④: 품목별 벌크 요금 (한 번에 붙여넣고 Run, 두 번 실행해도 괜찮음)
+
+-- 품목별 벌크(화물만 선적) 요금: 파렛트당·대당 = 수량 × 요금, 금액 직접 = 건당 (관리자·배차만)
+create table if not exists product_bulk_fees (
+  id uuid primary key default gen_random_uuid(),
+  product_id uuid not null unique references products on delete cascade,
+  calc_method text not null default 'per_pallet' check (calc_method in ('per_pallet','per_unit','fixed')),
+  fee numeric not null,
+  updated_at timestamptz not null default now(),
+  updated_by uuid
+);
+do $$ begin
+  if not exists (select 1 from pg_trigger where tgname = 'touch' and tgrelid = 'product_bulk_fees'::regclass) then
+    create trigger touch before insert or update on product_bulk_fees for each row execute function touch_row();
+    create trigger audit after insert or update or delete on product_bulk_fees for each row execute function audit_row();
+    alter publication supabase_realtime add table product_bulk_fees;
+  end if;
+end $$;
+alter table product_bulk_fees enable row level security;
+alter table product_bulk_fees replica identity full;
+drop policy if exists "staff all" on product_bulk_fees;
+create policy "staff all" on product_bulk_fees for all to authenticated using (is_staff()) with check (is_staff());
+
+-- 서버 자동 백업에 벌크 요금 포함
+-- 앱 백업 파일 형식: { app, version, exported_at, snapshot: { 표이름: [행…] } }
+create or replace function make_server_backup() returns bigint
+language plpgsql security definer set search_path = public as $$
+declare
+  t text;
+  rows jsonb;
+  snap jsonb := '{}';
+  doc jsonb;
+  new_id bigint;
+begin
+  foreach t in array array[
+    'clients','products','product_pricing','product_photos','product_suggestions',
+    'vehicles','drivers','driver_work_logs','driver_pay_rates','driver_day_pay','ships','ship_fares','product_bulk_fees','daily_orders','vehicle_days','recurring_orders',
+    'recurring_order_versions','order_revenue','field_sites','field_assignments',
+    'recurring_field_work','recurring_field_versions','maintenance_records',
+    'maintenance_schedules','odometer_logs','settings','notices'
+  ] loop
+    begin
+      execute format('select coalesce(jsonb_agg(to_jsonb(x)), ''[]''::jsonb) from %I x', t) into rows;
+    exception when undefined_table then
+      rows := '[]'::jsonb; -- 아직 만들지 않은 표는 빈 목록
+    end;
+    snap := snap || jsonb_build_object(t, rows);
+  end loop;
+  doc := jsonb_build_object('app', 'gyeongmin-dispatch', 'version', 1, 'exported_at', to_jsonb(now()), 'snapshot', snap);
+  insert into server_backups (summary, size_bytes, data)
+  values (
+    format('거래처 %s · 품목 %s · 차량 %s · 직원 %s · 오더 %s',
+      jsonb_array_length(snap->'clients'), jsonb_array_length(snap->'products'), jsonb_array_length(snap->'vehicles'),
+      jsonb_array_length(snap->'drivers'), jsonb_array_length(snap->'daily_orders')),
+    octet_length(doc::text), doc)
+  returning id into new_id;
+  delete from server_backups where created_at < now() - interval '30 days';
+  return new_id;
+end $$;

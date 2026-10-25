@@ -354,7 +354,7 @@ function isNetworkError(e: { message?: string; code?: string }) {
 /** DB numeric → number, 로컬 전용 필드 제거 */
 function normalize(t: TableName, r: Row): Row {
   const out = { ...r };
-  for (const k of ['quantity', 'default_quantity', 'unit_price', 'supply_amount', 'vat', 'total', 'cost', 'temp_min', 'temp_max', 'overtime_hours', 'amount']) {
+  for (const k of ['quantity', 'default_quantity', 'unit_price', 'supply_amount', 'vat', 'total', 'cost', 'temp_min', 'temp_max', 'overtime_hours', 'amount', 'fee']) {
     if (typeof out[k] === 'string') out[k] = Number(out[k]);
   }
   if (t === 'ship_fares') for (const k of ['base', 'empty', 'surcharge', 'boarding']) if (typeof out[k] === 'string') out[k] = Number(out[k]);

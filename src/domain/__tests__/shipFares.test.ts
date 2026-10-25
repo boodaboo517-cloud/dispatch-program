@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { blankOrder, setRowShip } from '../orders.ts';
 import { createOrder } from '../actions.ts';
-import { setShipFare, setVoyage, shipCosts } from '../shipFares.ts';
+import { bulkCosts, setBulkFee, setShipFare, setVoyage, shipCosts } from '../shipFares.ts';
 import { Tx } from '../tx.ts';
 import { baseSnapshot, resetIds } from './fixtures.ts';
 
@@ -36,5 +36,21 @@ describe('선박 운임', () => {
     const vs = shipCosts(tx.result(), D, D);
     expect(vs.map((v) => v.row.vehicle.id)).toEqual(['v9915']);
     expect(vs[0].missing).toEqual(['완도 요금']);
+  });
+});
+
+describe('벌크 요금 (품목마다)', () => {
+  it('파렛트당은 수량 × 요금, 금액 직접은 건당, 요금 없으면 미등록 · 대기는 제외', () => {
+    const tx = new Tx(baseSnapshot());
+    const [p1, p2] = tx.list('products');
+    setBulkFee(tx, p1.id, 'per_pallet', 15000);
+    setBulkFee(tx, p2.id, 'fixed', 120000);
+    createOrder(tx, blankOrder({ date: D, zone: 'land', kind: 'load', client_id: p1.client_id, product_id: p1.id, quantity: 10, unit: '파렛트', shipment: 'bulk', departure_ship: '제이엘' }));
+    createOrder(tx, blankOrder({ date: D, zone: 'land', kind: 'load', client_id: p2.client_id, product_id: p2.id, quantity: 3, shipment: 'bulk', departure_ship: '완도' }));
+    createOrder(tx, blankOrder({ date: D, zone: 'land', kind: 'load', client_id: p1.client_id, product_id: p1.id, quantity: 5, shipment: 'bulk', departure_ship: '대기' }));
+    const bs = bulkCosts(tx.result(), D, D);
+    expect(bs.map((b) => [b.ship, b.fee])).toEqual([['제이엘', 150000], ['완도', 120000]]);
+    setBulkFee(tx, p2.id, 'fixed', null);
+    expect(bulkCosts(tx.result(), D, D)[1].missing).toBe('품목 벌크 요금 미등록');
   });
 });

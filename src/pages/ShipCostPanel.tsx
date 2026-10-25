@@ -1,6 +1,8 @@
 // 매출 › 선박비: 기간 동안 배를 탄 차량마다 선박 요금(기본·공차·할증) + 기사 승선 금액
 import { useMemo, useState } from 'react';
-import { FARE_KIND_LABEL, shipCosts, won, type Voyage } from '../domain/index.ts';
+import { FARE_KIND_LABEL, bulkCosts, shipCosts, won, type Voyage } from '../domain/index.ts';
+import { useNavigate } from 'react-router-dom';
+import { clientName, productName, qtyText } from '../ui/labels.ts';
 import { fmtDate } from '../lib/time.ts';
 import { useSnap } from '../ui/hooks.ts';
 import { useSheet } from '../ui/Sheet.tsx';
@@ -10,7 +12,11 @@ export function ShipCostPanel({ from, to }: { from: string; to: string }) {
   const snap = useSnap();
   const sheet = useSheet();
   const [showAll, setShowAll] = useState(false);
+  const nav = useNavigate();
   const voyages = useMemo(() => shipCosts(snap, from, to), [snap, from, to]);
+  const bulks = useMemo(() => bulkCosts(snap, from, to), [snap, from, to]);
+  const bulkTotal = bulks.reduce((a, b) => a + (b.fee ?? 0), 0);
+  const bulkMissing = bulks.filter((b) => b.missing).length;
   const byShip = useMemo(() => {
     const m = new Map<string, { n: number; base: number; empty: number; surcharge: number; boardingN: number; boarding: number; total: number; missing: number }>();
     for (const v of voyages) {
@@ -31,8 +37,10 @@ export function ShipCostPanel({ from, to }: { from: string; to: string }) {
   const open = (v: Voyage) => sheet.open((close) => <VoyageSheet date={v.date} row={v.row} close={close} />);
   return (
     <>
-      <div className="card"><span className="muted">선박비 합계 ({voyages.length}건)</span><div style={{ fontSize: 28, fontWeight: 800 }}>{won(total)}</div>
-        {missing.length > 0 && <div className="banner yellow">요금 미등록 {missing.length}건 — 차량·설정 › 선박에서 요금을 넣으면 자동 계산됩니다</div>}</div>
+      <div className="card"><span className="muted">선박비 합계 (차량 {voyages.length}건{bulks.length ? ` · 벌크 ${bulks.length}건` : ''})</span><div style={{ fontSize: 28, fontWeight: 800 }}>{won(total + bulkTotal)}</div>
+        {bulks.length > 0 && <div className="muted small">차량 {won(total)} · 벌크 {won(bulkTotal)}</div>}
+        {missing.length > 0 && <div className="banner yellow">요금 미등록 {missing.length}건 — 차량·설정 › 선박에서 요금을 넣으면 자동 계산됩니다</div>}
+        {bulkMissing > 0 && <div className="banner yellow">벌크 요금 미등록 {bulkMissing}건 — 거래처 › 품목에서 "벌크 선적 요금"을 넣으세요</div>}</div>
       <table className="simple">
         <thead><tr><th>선박</th><th className="num">건수</th><th className="num">기본</th><th className="num">공차</th><th className="num">할증</th><th className="num">승선</th><th className="num">합계</th></tr></thead>
         <tbody>{byShip.map(([k, s]) => (
@@ -40,6 +48,18 @@ export function ShipCostPanel({ from, to }: { from: string; to: string }) {
             <td className="num">{s.boardingN ? `${s.boardingN}명` : ''}</td><td className="num"><b>{s.total.toLocaleString()}</b></td></tr>
         ))}</tbody>
       </table>
+      {bulks.length > 0 && (
+        <div className="card">
+          <h3>📦 벌크 (화물만 선적) {bulks.length}건 · {won(bulkTotal)}</h3>
+          {bulks.map((b) => (
+            <div key={b.order.id} className="list-item" onClick={() => b.order.product_id && nav(`/products/${b.order.product_id}`)}>
+              <span style={{ width: 70 }}>{fmtDate(b.date)}</span>
+              <span className="grow">{b.ship} · {clientName(snap, b.order)} {productName(snap, b.order)} {qtyText(b.order)}</span>
+              <b>{b.missing ? <span className="muted">{b.missing}</span> : won(b.fee)}</b>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="card">
         <h3>배편 목록 <span className="muted small">(누르면 할증·승선 수정)</span></h3>
         {list.map((v) => (

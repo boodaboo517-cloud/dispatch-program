@@ -2,9 +2,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  CALC_LABEL, newId, setProductDefaultPrice,
-  type CalcMethod, type Product, type ProductSuggestion, type Storage,
-} from '../domain/index.ts';
+  CALC_LABEL, newId, setBulkFee, setProductDefaultPrice,
+  type CalcMethod, type Product, type ProductSuggestion, type Storage, } from '../domain/index.ts';
 import { store } from '../data/store.ts';
 import { supabase } from '../data/supabase.ts';
 import { fmtStamp } from '../lib/time.ts';
@@ -25,11 +24,13 @@ export function ProductDetailPage() {
   const nav = useNavigate();
   const sheet = useSheet();
   useWatch(id);
+  const [bulkCalc, setBulkCalc] = useState<CalcMethod>('per_pallet');
   const p = snap.products.find((x) => x.id === id);
   if (!p) return <div className="page"><p>품목을 찾을 수 없습니다.</p><button onClick={() => nav(-1)}>뒤로</button></div>;
   const client = snap.clients.find((c) => c.id === p.client_id);
   const photos = snap.product_photos.filter((x) => x.product_id === p.id);
   const pricing = snap.product_pricing.find((x) => x.product_id === p.id);
+  const bulk = (snap.product_bulk_fees ?? []).find((x) => x.product_id === p.id);
   const allowSuggest = setting(snap, 'driver_suggestions', false);
   const edit = staff;
   const save = (patch: Partial<Product>) => store.run((tx) => tx.update('products', p.id, patch));
@@ -185,6 +186,17 @@ export function ProductDetailPage() {
           <Editable label="단가" value={pricing?.unit_price ?? null} type="number" placeholder="미입력"
             onSave={(v) => v !== '' && store.run((tx) => setProductDefaultPrice(tx, p.id, pricing?.calc_method ?? 'per_pallet', Number(v.replace(/,/g, ''))))} />
           <p className="muted small">새 오더(반복 발주 포함)에 자동 입력됩니다. 바꿔도 지난 오더 금액은 그대로입니다.</p>
+        </div>
+      )}
+
+      {staff && (
+        <div className="card">
+          <h3>🚢 벌크 선적 요금</h3>
+          <Editable label="계산 방식" value={bulk?.calc_method ?? bulkCalc} options={(Object.keys(CALC_LABEL) as CalcMethod[]).map((k) => ({ value: k, label: k === 'fixed' ? '건당 (금액 직접)' : CALC_LABEL[k] }))}
+            onSave={(v) => { setBulkCalc(v as CalcMethod); if (bulk) store.run((tx) => setBulkFee(tx, p.id, v as CalcMethod, bulk.fee)); }} />
+          <Editable label="요금 (원)" value={bulk?.fee ?? null} type="number" placeholder="미입력"
+            onSave={(v) => store.run((tx) => setBulkFee(tx, p.id, bulk?.calc_method ?? bulkCalc, v === '' ? null : Number(v.replace(/,/g, ''))))} />
+          <p className="muted small">이 품목을 벌크(화물만 선적)로 보낼 때 선박비입니다. 파렛트당·대당은 수량 × 요금, 건당은 한 번에 이 금액. 매출 › 선박비에 합산됩니다.</p>
         </div>
       )}
 

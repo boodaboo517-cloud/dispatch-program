@@ -174,6 +174,13 @@ export interface ShipFare extends Base {
   /** 승선 (기사 1인 추가 금액) */
   boarding: number | null;
 }
+/** 품목별 벌크(화물만 선적) 요금. 파렛트당·대당이면 수량 × 요금, 금액 직접이면 건당. 관리자·배차만 */
+export interface ProductBulkFee extends Base {
+  product_id: string;
+  calc_method: CalcMethod;
+  fee: number;
+}
+
 /** 배편 요금 구분: '' = 자동 (짐 있으면 기본, 없으면 공차) */
 export type FareKind = '' | 'base' | 'empty' | 'surcharge';
 export const FARE_KIND_LABEL: Record<Exclude<FareKind, ''>, string> = { base: '기본', empty: '공차', surcharge: '할증' };
@@ -463,6 +470,7 @@ export interface Snapshot {
   driver_pay_rates: DriverPayRate[];
   driver_day_pay: DriverDayPay[];
   ship_fares: ShipFare[];
+  product_bulk_fees: ProductBulkFee[];
   ships: Ship[];
   daily_orders: DailyOrder[];
   vehicle_days: VehicleDay[];
@@ -483,13 +491,13 @@ export interface Snapshot {
 export type TableName = keyof Snapshot;
 export const TABLES: TableName[] = [
   'clients', 'products', 'product_pricing', 'product_photos', 'product_suggestions',
-  'vehicles', 'drivers', 'driver_work_logs', 'driver_pay_rates', 'driver_day_pay', 'ships', 'ship_fares', 'daily_orders', 'vehicle_days', 'recurring_orders',
+  'vehicles', 'drivers', 'driver_work_logs', 'driver_pay_rates', 'driver_day_pay', 'ships', 'ship_fares', 'product_bulk_fees', 'daily_orders', 'vehicle_days', 'recurring_orders',
   'recurring_order_versions', 'order_revenue', 'field_sites', 'field_assignments',
   'recurring_field_work', 'recurring_field_versions', 'maintenance_records',
   'maintenance_schedules', 'odometer_logs', 'settings', 'notices',
 ];
 /** 금액 테이블 — 조회(기사) 계정에는 서버에서 내려주지 않는다 */
-export const MONEY_TABLES: TableName[] = ['order_revenue', 'product_pricing', 'driver_pay_rates', 'driver_day_pay', 'ship_fares'];
+export const MONEY_TABLES: TableName[] = ['order_revenue', 'product_pricing', 'driver_pay_rates', 'driver_day_pay', 'ship_fares', 'product_bulk_fees'];
 
 export type Mutation =
   | { table: TableName; op: 'upsert'; row: { id: string } & Record<string, unknown> }
