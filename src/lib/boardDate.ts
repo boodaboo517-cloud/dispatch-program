@@ -13,3 +13,8 @@ export function boardView(): { date: string; zone: string } | null {
     return v && v.day === seoulToday() && typeof v.date === 'string' ? { date: v.date, zone: v.zone } : null;
   } catch { return null; }
 }
+
+/** 일정표(육지·제주 함께)에서 보던 날짜: 구역은 배차 화면에서 마지막으로 보던 것 그대로 */
+export function rememberBoardDate(date: string) {
+  rememberBoardView(date, boardView()?.zone ?? 'land');
+}
