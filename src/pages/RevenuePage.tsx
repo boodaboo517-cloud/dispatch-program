@@ -9,6 +9,7 @@ import { clientName, productName, qtyText, vehicleNo } from '../ui/labels.ts';
 import { OrderSheet } from '../ui/OrderSheet.tsx';
 import { useSheet } from '../ui/Sheet.tsx';
 import { ShipCostPanel } from './ShipCostPanel.tsx';
+import { ManageTabs } from '../ui/ManageTabs.tsx';
 import { BillingPanel } from './BillingPanel.tsx';
 
 type Group = 'day' | 'month' | 'client' | 'vehicle';
@@ -53,6 +54,7 @@ export function RevenuePage() {
   );
   return (
     <div className="page" style={{ maxWidth: 900 }}>
+      <ManageTabs />
       <div className="row" style={{ alignItems: 'center' }}>
         <h2 className="grow">{view === 'revenue' ? '매출' : view === 'billing' ? '업체별 청구' : '선박비'}</h2>
         <div className="seg fp-seg">

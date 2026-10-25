@@ -423,8 +423,10 @@ export function SettingsPage() {
   return (
     <div className="page" style={{ maxWidth: 820 }}>
       {!staff && <button style={{ marginBottom: 8 }} onClick={() => nav('/driver')}>← 내 배차</button>}
-      <h2>더보기 · 설정</h2>
-      {staff && (
+      {staff && !admin && <button style={{ marginBottom: 8 }} onClick={() => nav('/')}>← 배차</button>}
+      {/* 설정은 관리자만. 배차 담당·기사는 내 계정(알림·비밀번호·로그아웃)만 */}
+      <h2>{admin ? '더보기 · 설정' : '내 계정'}</h2>
+      {admin && (
         <div className="menu-tiles">
           <button onClick={() => nav('/fleet/vehicles')}><span className="ic">🚚</span>차량·기사</button>
           <button onClick={() => nav('/fleet/ships')}><span className="ic">⛴</span>선박 등록·수정</button>
@@ -443,13 +445,13 @@ export function SettingsPage() {
         <button onClick={() => void reloadFresh()}>최신 버전 받기</button>
       </div>
 
-      {staff && suggestions.length > 0 && (
+      {admin && suggestions.length > 0 && (
         <div className="card"><h3>기사 제안 승인 대기 {suggestions.length}건</h3>
           {suggestions.map((s) => <div key={s.id} className="list-item" onClick={() => nav(`/products/${s.product_id}`)}>{snap.products.find((p) => p.id === s.product_id)?.name} · {s.kind === 'photo' ? '사진' : s.payload}</div>)}
         </div>
       )}
 
-      {staff && <div className="card">
+      {admin && <div className="card">
         <h3>엑셀 다운로드 (일정표 양식)</h3>
         <div className="row wrap">
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={{ width: 'auto' }} />~
@@ -462,7 +464,7 @@ export function SettingsPage() {
         </div>
       </div>}
 
-      {staff && (
+      {admin && (
         <div className="card">
           <h3>엑셀 업로드 (거래처·품목 / 차량·기사 / 오더 일괄)</h3>
           <p className="muted small">양식을 받아 채운 뒤 올리면 미리보기 후 반영합니다. 오류 행은 빨간색으로 표시되고 반영되지 않습니다.</p>
@@ -483,7 +485,7 @@ export function SettingsPage() {
           <Editable label="기사 제안 허용" value={String(setting(snap, 'driver_suggestions', false))} options={[{ value: 'false', label: '아니오 (관리자·배차만 수정)' }, { value: 'true', label: '예 (사진·주의사항 제안 → 승인 후 반영)' }]} onSave={(v) => saveSetting('driver_suggestions', v === 'true')} />
         </div>
       )}
-      {(staff || isDemo) && <DataPanel />}
+      {(admin || isDemo) && <DataPanel />}
       {admin && supabase && <UsersPanel />}
 
       <div className="card">

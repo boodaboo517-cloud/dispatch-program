@@ -70,7 +70,7 @@ function TopMenu({ role }: { role: Role }) {
           <NavLink to={loc.pathname === '/' ? '/' : menuUrl('/')} end className={() => (loc.pathname === '/' ? 'active' : '')}>배차</NavLink>
           <NavLink to="/revenue">매출</NavLink>
           <NavLink to={loc.pathname.startsWith('/admin') ? loc.pathname : '/admin/dispatch'} className={() => (loc.pathname.startsWith('/admin') ? 'active' : '')}>📊 관리</NavLink>
-          <NavLink to="/settings">설정</NavLink>
+          {role === 'admin' ? <NavLink to="/settings">설정</NavLink> : <NavLink to="/settings">👤 내 계정</NavLink>}
         </>
       ) : (
         <>
@@ -129,8 +129,10 @@ function NavMemory() {
 function TabBar({ role }: { role: Role }) {
   const loc = useLocation();
   if (role === 'viewer') return null;
+  // 설정은 관리자만 (배차 담당은 거래처 메뉴 안에서 차량·기사·근무현황·선박·매출)
   const tabs: [string, string, string][] = [
-    ['/', '📋', '배차'], ['/all', '🗓', '일정표'], ['/order', '➕', '오더'], ['/clients', '🏢', '거래처'], ['/settings', '🚚', '차량·설정'],
+    ['/', '📋', '배차'], ['/all', '🗓', '일정표'], ['/order', '➕', '오더'], ['/clients', '🏢', '거래처'],
+    ...(role === 'admin' ? [['/settings', '⚙', '설정'] as [string, string, string]] : []),
   ];
   return (
     <nav className="tabbar">

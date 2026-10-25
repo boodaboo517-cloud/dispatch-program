@@ -394,3 +394,8 @@ tr.err td { background: var(--red-soft); }
 
 button.admin-card { font: inherit; color: inherit; }
 .admin-card.on { border-color: var(--red); box-shadow: 0 0 0 2px #fecaca; }
+
+/* 거래처 메뉴 위 탭: 넘치면 옆으로 */
+.tabs.manage-tabs { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+.tabs.manage-tabs::-webkit-scrollbar { display: none; }
+.tabs.manage-tabs button { flex: none; white-space: nowrap; padding: 0 14px; }

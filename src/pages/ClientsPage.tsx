@@ -4,6 +4,7 @@ import { matchSearch, newId, won, type Client, type Product } from '../domain/in
 import { store } from '../data/store.ts';
 import { fmtDate } from '../lib/time.ts';
 import { Editable } from '../ui/Editable.tsx';
+import { ManageTabs, useManageSwipe } from '../ui/ManageTabs.tsx';
 import { useRole, useSnap } from '../ui/hooks.ts';
 import { ZONE_LABEL, kindLabel, orderText, vehicleNo } from '../ui/labels.ts';
 import { StorageBadge, tempText } from '../ui/OrderSheet.tsx';
@@ -46,7 +47,7 @@ function NewProductSheet({ clientId, close, onSaved }: { clientId: string; close
 export function ClientsPage() {
   const snap = useSnap();
   const nav = useNavigate();
-  const { staff } = useRole();
+  const { staff, admin } = useRole();
   const [q, setQ] = useState('');
   const list = useMemo(
     () => [...snap.clients].filter((c) => matchSearch(c.name + ' ' + c.manager, q)).sort((a, b) => a.name.localeCompare(b.name, 'ko')),
@@ -59,9 +60,13 @@ export function ClientsPage() {
     store.run((tx) => tx.insert('clients', { id, name, manager: '', phone: '', default_ship: null, memo: '' }));
     nav(`/clients/${id}`);
   };
+  const swipe = useManageSwipe();
   return (
-    <div className="page">
-      <div className="row"><h2 className="grow">거래처</h2>{staff && <button className="primary" onClick={add}>＋ 새 거래처</button>}</div>
+    <div className="page" style={{ minHeight: '80vh' }} {...swipe}>
+      <ManageTabs />
+      <div className="row"><h2 className="grow">거래처</h2>
+        {!admin && <button onClick={() => nav('/settings')}>👤 내 계정</button>}
+        {staff && <button className="primary" onClick={add}>＋ 새 거래처</button>}</div>
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="검색 (초성 가능)" />
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         {list.map((c) => {

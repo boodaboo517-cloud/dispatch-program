@@ -1,6 +1,6 @@
 // 차량·기사·선박·현장근무 등록
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import {
   activeRepair, newId, planCreateFieldRecurring, planFieldRecurringChange, planFieldRecurringEnd,
   versionOn, weekdaysLabel, fixedOffDays, planStaffFixedOff, LEAVE_REASONS, cancelLeave, leaveRanges, setLeave,
@@ -9,8 +9,8 @@ import {
 import { store } from '../data/store.ts';
 import { fmtDate, seoulToday } from '../lib/time.ts';
 import { Editable } from '../ui/Editable.tsx';
-import { useIsWide, useRole, useSnap } from '../ui/hooks.ts';
-import { useSwipe } from '../ui/useSwipe.ts';
+import { useRole, useSnap } from '../ui/hooks.ts';
+import { ManageTabs, useManageSwipe } from '../ui/ManageTabs.tsx';
 import { ZONE_LABEL, driverName, vehicleNo } from '../ui/labels.ts';
 import { WeekdayChips } from '../ui/Picker.tsx';
 import { usePickers } from '../ui/pickers.tsx';
@@ -213,26 +213,19 @@ function DriverSheet({ d, close }: { d: Driver; close: () => void }) {
 
 export function FleetPage() {
   const params = useParams();
-  const nav = useNavigate();
   const tab = (params.tab as Tab) ?? 'vehicles';
   const snap = useSnap();
   const sheet = useSheet();
   const { staff } = useRole();
   const today = seoulToday();
 
-  const tabs: [Tab, string][] = [['vehicles', '차량'], ['drivers', '기사'], ['attendance', '근무현황'], ['ships', '선박'], ['field', '현장']];
-  // 휴대폰: 좌우로 밀어 차량 ↔ 기사 ↔ 근무현황 ↔ 선박 ↔ 현장 (근무현황 표처럼 옆으로 스크롤되는 곳은 제외)
-  const wide = useIsWide();
-  const swipe = useSwipe((dir) => {
-    const next = tabs[tabs.findIndex(([t]) => t === tab) + dir];
-    if (next) { nav(`/fleet/${next[0]}`, { replace: true }); window.scrollTo({ top: 0 }); }
-  });
+  const swipe = useManageSwipe();
   const blankVehicle = (): Vehicle => ({ id: newId(), plate: '', short_no: '', vehicle_type: '5톤', usage: '배차', ownership: '자차', default_driver_id: null, status: '운행', home_zone: null, sort_order: snap.vehicles.length, oil_interval_km: null });
   const blankDriver = (): Driver => ({ id: newId(), name: '', phone: '', work_days: [], shift: '', affiliation: '', staff_type: '기사', memo: '' });
 
   return (
-    <div className="page" style={{ maxWidth: 900, minHeight: '80vh' }} {...(wide ? {} : swipe)}>
-      <div className="tabs">{tabs.map(([t, l]) => <button key={t} className={tab === t ? 'on' : ''} onClick={() => nav(`/fleet/${t}`)}>{l}</button>)}</div>
+    <div className="page" style={{ maxWidth: 900, minHeight: '80vh' }} {...swipe}>
+      <ManageTabs />
 
       {tab === 'vehicles' && (
         <>
