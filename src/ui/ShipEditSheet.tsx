@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { newId, type Ship } from '../domain/index.ts';
 import { store } from '../data/store.ts';
 import { Sheet } from './Sheet.tsx';
+import { useRole } from './hooks.ts';
+import { ShipFaresCard } from './ShipFares.tsx';
 
 /** 육지 출발 항구 바로 넣기 버튼 */
 const LAND_PORTS = ['목포', '부산', '완도', '삼천포', '녹동', '여수', '진도', '인천', '고흥'];
@@ -12,6 +14,7 @@ export const blankShip = (sortOrder: number): Ship =>
 
 export function ShipEditSheet({ ship, close }: { ship: Ship; close: () => void }) {
   const isNew = !store.getState().snap.ships.some((x) => x.id === ship.id);
+  const { staff } = useRole();
   const [x, setX] = useState<Ship>({ ...ship, port_times: ship.port_times ?? [] });
   const set = (p: Partial<Ship>) => setX({ ...x, ...p });
   const ports = x.port_times ?? [];
@@ -58,6 +61,7 @@ export function ShipEditSheet({ ship, close }: { ship: Ship; close: () => void }
       <label className="field"><span>도착일 차이 (상차 다음 며칠 뒤 하차, 기본 1)</span>
         <input inputMode="numeric" value={x.arrival_day_offset} onChange={(e) => set({ arrival_day_offset: Number(e.target.value) || 0 })} />
       </label>
+      {staff && (isNew ? <p className="muted small">선박을 저장한 뒤 다시 열면 요금(기본·공차·할증·승선)을 넣을 수 있습니다.</p> : <ShipFaresCard shipId={ship.id} />)}
     </Sheet>
   );
 }

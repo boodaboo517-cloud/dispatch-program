@@ -1,7 +1,7 @@
 // 일정표 칸 동작 (휴대폰·PC 공통)
 import {
   ON_CALL_SHIFT, abbrev, acceptShipPending, nudgeVehicle, workLogOf, assignVehicle, blankOrder, buildBoard, createOrder, ignoreShipPending, opposite, saveOrder,
-  DEFAULT_START, PM_ARRIVAL_LABEL, setRowAmLabel, HELPER_ROLE_LABEL, START_PLACES, setRowNote, lastStart, startText, setRowStart, rowDriver, seqMark, setDriverSeq, setRowDriver, setRowHelper, setRowShip, setVehicleDayStatus, setVehicleZone, shipTime,
+  DEFAULT_START, sails, PM_ARRIVAL_LABEL, setRowAmLabel, HELPER_ROLE_LABEL, START_PLACES, setRowNote, lastStart, startText, setRowStart, rowDriver, seqMark, setDriverSeq, setRowDriver, setRowHelper, setRowShip, setVehicleDayStatus, setVehicleZone, shipTime,
   type Board, type BoardRow, type DailyOrder, type DriverSide, type HelperRole, type Kind, type Zone,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
@@ -12,6 +12,7 @@ import { fmtDate } from '../lib/time.ts';
 import { OrderSheet, QuickQtySheet } from './OrderSheet.tsx';
 import { EXTERNAL_HIRED, EXTERNAL_SHIPPER, MOVE_DATE, PM_ARRIVAL, usePickers } from './pickers.tsx';
 import { Sheet, useSheet } from './Sheet.tsx';
+import { VoyageSheet } from './ShipFares.tsx';
 
 export function useBoardActions(date: string, board: Board, onFocusVehicle?: (vehicleId: string) => void) {
   const sheet = useSheet();
@@ -231,6 +232,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
             { label: '출근 시간·장소', run: () => editStart(row) },
             { label: '동승 (선탑·지원)', run: () => void editHelper(row) },
             ...(row.driverId ? [{ label: '근무형태', run: () => void pick.workType(date, row.driverId!) }] : []),
+            ...(sails(row) ? [{ label: '🚢 선박 요금 (할증·승선)', run: () => sheet.open((close) => <VoyageSheet date={date} row={row} close={close} />) }] : []),
             { label: '상태·위치', run: () => void editStatus(row) },
             { label: '▲ 위로', run: () => store.run((tx) => nudgeVehicle(tx, row.vehicle.id, -1, zoneRowIds(row))) },
             { label: '▼ 아래로', run: () => store.run((tx) => nudgeVehicle(tx, row.vehicle.id, 1, zoneRowIds(row))) },

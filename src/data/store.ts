@@ -357,7 +357,7 @@ function normalize(t: TableName, r: Row): Row {
   for (const k of ['quantity', 'default_quantity', 'unit_price', 'supply_amount', 'vat', 'total', 'cost', 'temp_min', 'temp_max', 'overtime_hours', 'amount']) {
     if (typeof out[k] === 'string') out[k] = Number(out[k]);
   }
-  void t;
+  if (t === 'ship_fares') for (const k of ['base', 'empty', 'surcharge', 'boarding']) if (typeof out[k] === 'string') out[k] = Number(out[k]);
   return out;
 }
 

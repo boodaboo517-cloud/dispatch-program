@@ -2,7 +2,7 @@ import type { Mutation, TableName } from './types.ts';
 
 /** 외래키 순서: 부모 테이블을 먼저 넣고, 지울 때는 반대 순서 */
 export const WRITE_ORDER: TableName[] = [
-  'settings', 'drivers', 'driver_work_logs', 'driver_pay_rates', 'driver_day_pay', 'ships', 'clients', 'products', 'product_pricing', 'product_photos', 'product_suggestions',
+  'settings', 'drivers', 'driver_work_logs', 'driver_pay_rates', 'driver_day_pay', 'ships', 'ship_fares', 'clients', 'products', 'product_pricing', 'product_photos', 'product_suggestions',
   'vehicles', 'recurring_orders', 'recurring_order_versions', 'daily_orders', 'vehicle_days', 'order_revenue',
   'field_sites', 'recurring_field_work', 'recurring_field_versions', 'maintenance_records', 'field_assignments',
   'maintenance_schedules', 'odometer_logs', 'notices',

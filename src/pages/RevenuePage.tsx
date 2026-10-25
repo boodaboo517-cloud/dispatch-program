@@ -8,6 +8,7 @@ import { useRole, useSnap } from '../ui/hooks.ts';
 import { clientName, productName, qtyText, vehicleNo } from '../ui/labels.ts';
 import { OrderSheet } from '../ui/OrderSheet.tsx';
 import { useSheet } from '../ui/Sheet.tsx';
+import { ShipCostPanel } from './ShipCostPanel.tsx';
 
 type Group = 'day' | 'month' | 'client' | 'vehicle';
 
@@ -19,6 +20,7 @@ export function RevenuePage() {
   const [from, setFrom] = useState(today.slice(0, 7) + '-01');
   const [to, setTo] = useState(dayjs(today).endOf('month').format('YYYY-MM-DD'));
   const [group, setGroup] = useState<Group>('client');
+  const [view, setView] = useState<'revenue' | 'ship'>('revenue');
   const lines = useMemo(() => revenueLines(snap, from, to), [snap, from, to]);
   const sums = useMemo(() => sumBy(lines, (l) => {
     if (group === 'day') return l.order.date;
@@ -49,13 +51,20 @@ export function RevenuePage() {
   );
   return (
     <div className="page" style={{ maxWidth: 900 }}>
-      <h2>매출</h2>
+      <div className="row" style={{ alignItems: 'center' }}>
+        <h2 className="grow">{view === 'revenue' ? '매출' : '선박비'}</h2>
+        <div className="seg fp-seg">
+          <button className={view === 'revenue' ? 'on' : ''} onClick={() => setView('revenue')}>💰 매출</button>
+          <button className={view === 'ship' ? 'on' : ''} onClick={() => setView('ship')}>🚢 선박비</button>
+        </div>
+      </div>
       <div className="row wrap">
         <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={{ width: 'auto' }} />~
         <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={{ width: 'auto' }} />
         <button onClick={() => { const m = dayjs(from).subtract(1, 'month'); setFrom(m.format('YYYY-MM-01')); setTo(m.endOf('month').format('YYYY-MM-DD')); }}>◀ 전월</button>
         <button onClick={() => { const m = dayjs(from).add(1, 'month'); setFrom(m.format('YYYY-MM-01')); setTo(m.endOf('month').format('YYYY-MM-DD')); }}>익월 ▶</button>
       </div>
+      {view === 'ship' ? <ShipCostPanel from={from} to={to} /> : (<>
       <div className="card"><span className="muted">합계(부가세 포함)</span><div style={{ fontSize: 28, fontWeight: 800 }}>{won(total)}</div>
         {missing.length > 0 && <div className="banner yellow">금액 미입력 오더 {missing.length}건</div>}</div>
       <div className="tabs">{([['day', '일별'], ['month', '월별'], ['client', '거래처별'], ['vehicle', '차량별']] as [Group, string][]).map(([g, l]) => <button key={g} className={group === g ? 'on' : ''} onClick={() => setGroup(g)}>{l}</button>)}</div>
@@ -72,6 +81,7 @@ export function RevenuePage() {
       <List title="금액 미입력" ls={missing} />
       <List title="미청구" ls={unbilled} next="청구" />
       <List title="미입금 (청구됨)" ls={unpaid} next="입금" />
+      </>)}
     </div>
   );
 }

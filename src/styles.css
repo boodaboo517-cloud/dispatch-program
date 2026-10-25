@@ -364,3 +364,7 @@ tr.err td { background: var(--red-soft); }
 /* 오전 기사 칸 "오후도착" */
 .pm-arrival { color: #1d4ed8; font-weight: 700; }
 .paper .ps-pmarr { color: #1d4ed8; font-weight: 700; font-size: .85em; }
+
+/* 선박 요금 표 */
+.fare-table td { padding: 4px 3px; }
+.fare-table input { font-size: 14px; padding: 6px 4px; min-width: 76px; }

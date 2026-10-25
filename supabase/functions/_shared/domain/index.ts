@@ -13,3 +13,4 @@ export * from './batches.ts';
 export * from './actions.ts';
 export * from './ships.ts';
 export * from './workforce.ts';
+export * from './shipFares.ts';
