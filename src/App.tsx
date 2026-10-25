@@ -18,6 +18,7 @@ import { OverviewPage } from './pages/OverviewPage.tsx';
 import { OrderInputPage } from './pages/OrderInputPage.tsx';
 import { ProductDetailPage } from './pages/ProductDetailPage.tsx';
 import { RevenuePage } from './pages/RevenuePage.tsx';
+import { AdminPage } from './pages/admin/AdminPage.tsx';
 import { SchedulePage } from './pages/SchedulePage.tsx';
 import { SettingsPage } from './pages/SettingsPage.tsx';
 
@@ -68,6 +69,7 @@ function TopMenu({ role }: { role: Role }) {
           <span style={{ width: 16 }} />
           <NavLink to={loc.pathname === '/' ? '/' : menuUrl('/')} end className={() => (loc.pathname === '/' ? 'active' : '')}>배차</NavLink>
           <NavLink to="/revenue">매출</NavLink>
+          <NavLink to={loc.pathname.startsWith('/admin') ? loc.pathname : '/admin/dispatch'} className={() => (loc.pathname.startsWith('/admin') ? 'active' : '')}>📊 관리</NavLink>
           <NavLink to="/settings">설정</NavLink>
         </>
       ) : (
@@ -186,6 +188,8 @@ function Shell() {
           <Route path="/fleet/maintenance" element={<Navigate to="/fleet/vehicles" replace />} />
           <Route path="/fleet/:tab" element={<FleetPage />} />
           <Route path="/revenue" element={<RevenuePage />} />
+          <Route path="/admin" element={<Navigate to="/admin/dispatch" replace />} />
+          <Route path="/admin/:section" element={<AdminPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
