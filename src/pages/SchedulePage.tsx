@@ -4,6 +4,7 @@ import { addDays, needsDriver, type Zone } from '../domain/index.ts';
 import { exportSchedule } from '../excel/exportSchedule.ts';
 import { fmtLong, fmtStamp, seoulToday } from '../lib/time.ts';
 import { useSwipe } from '../ui/useSwipe.ts';
+import { rememberBoardView } from '../lib/boardDate.ts';
 import { useBoard, useIsWide, useRole, useSnap, useStore } from '../ui/hooks.ts';
 import { setting } from '../ui/labels.ts';
 import { useBoardActions } from '../ui/useBoardActions.tsx';
@@ -37,6 +38,8 @@ export function SchedulePage() {
   const [params, setParams] = useSearchParams();
   const date = params.get('date') ?? seoulToday();
   const tab = (params.get('zone') as Tab) ?? 'land';
+  // 오더 입력을 열면 이 날짜·구역이 기본으로
+  useEffect(() => rememberBoardView(date, tab), [date, tab]);
   const focusParam = params.get('focus');
   const [filter, setFilter] = useState<Filter>('all');
   const [reorder, setReorder] = useState(false);

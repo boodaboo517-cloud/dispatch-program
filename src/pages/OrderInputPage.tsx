@@ -7,6 +7,7 @@ import {
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
 import { fmtDate, seoulToday } from '../lib/time.ts';
+import { boardView } from '../lib/boardDate.ts';
 import { useSnap } from '../ui/hooks.ts';
 import { arrivalShipLabel, clientName, departureShipLabel, driverName, kindLabel, productName, shipText, vehicleNo } from '../ui/labels.ts';
 import { PlaceFields, TransportFields, WorkFields, defaultPlaces } from '../ui/OrderSheet.tsx';
@@ -21,9 +22,10 @@ export function OrderInputPage() {
   const nav = useNavigate();
   const snap = useSnap();
   const pick = usePickers();
+  // 날짜·구역 기본값: 주소에 있으면 그것, 없으면 배차 화면에서 보던 날짜·구역, 없으면 오늘
   const [o, setO] = useState<DailyOrder>(() => blankOrder({
-    date: params.get('date') ?? seoulToday(),
-    zone: (params.get('zone') === 'jeju' ? 'jeju' : 'land') as Zone,
+    date: params.get('date') ?? boardView()?.date ?? seoulToday(),
+    zone: ((params.get('zone') ?? boardView()?.zone) === 'jeju' ? 'jeju' : 'land') as Zone,
     kind: params.get('kind') === 'unload' ? 'unload' : 'load',
   }));
   const [repeat, setRepeat] = useState(false);
