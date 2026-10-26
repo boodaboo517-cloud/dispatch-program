@@ -446,3 +446,4 @@ button.admin-card { font: inherit; color: inherit; }
 /* 야간 표시: 빨간 글씨, 빨간 버튼 안에서는 흰 바탕 */
 .night-red { color: #dc2626; font-weight: 800; }
 button.primary .night-red, button.danger .night-red { background: #fff; border-radius: 4px; padding: 0 4px; }
+.quick-price { background: #fffbeb; margin: 8px 0; }

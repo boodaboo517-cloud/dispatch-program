@@ -3,13 +3,13 @@ import { NightTag } from '../ui/NightTag.tsx';
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  assignVehicle, waitsForShip, blankOrder, buildBoard, createOrder, isPerVehicleSplittable, newId, splitPerVehicle, planCreateRecurring, weekdayOf,
-  type DailyOrder, type Kind, type Product, type Unit, type Weekday, type Zone,
+  CALC_LABEL, computeRevenue, saveRevenue, won, assignVehicle, waitsForShip, blankOrder, buildBoard, createOrder, isPerVehicleSplittable, newId, splitPerVehicle, planCreateRecurring, weekdayOf,
+  type CalcMethod, type DailyOrder, type Kind, type Product, type Unit, type Weekday, type Zone,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
 import { fmtDate, seoulToday } from '../lib/time.ts';
 import { boardView } from '../lib/boardDate.ts';
-import { useSnap } from '../ui/hooks.ts';
+import { useRole, useSnap } from '../ui/hooks.ts';
 import { arrivalShipLabel, clientName, departureShipLabel, driverName, kindLabel, productName, shipText, vehicleNo } from '../ui/labels.ts';
 import { PlaceFields, TransportFields, WorkFields, defaultPlaces } from '../ui/OrderSheet.tsx';
 import { QtyInput } from '../ui/QtyInput.tsx';
@@ -41,11 +41,24 @@ export function OrderInputPage() {
   const [weekdays, setWeekdays] = useState<Weekday[]>([weekdayOf(o.date)]);
   const set = (p: Partial<DailyOrder>) => setO({ ...o, ...p });
   const isLoad = o.kind === 'load';
+  // 금액(매출): 품목 기본 단가가 있으면 채워 두고, 바꾸면 이 오더만 그 금액으로 (배차 담당·관리자만)
+  const { staff } = useRole();
+  const [calc, setCalc] = useState<CalcMethod>('per_pallet');
+  const [price, setPrice] = useState<number | null>(null);
+  const [priceTouched, setPriceTouched] = useState(false);
+  const preview = computeRevenue({ calc_method: calc, unit_price: price, quantity: o.quantity, extras: [] });
+  const priceFromProduct = (productId: string | null) => {
+    if (priceTouched) return;
+    const pp = productId ? snap.product_pricing.find((x) => x.product_id === productId) : undefined;
+    setCalc(pp?.calc_method ?? (o.unit === '대' ? 'per_unit' : 'per_pallet'));
+    setPrice(pp?.unit_price ?? null);
+  };
 
   const chooseClient = async () => {
     const c = await pick.clientProduct(o.vehicle_id);
     if (!c) return;
     if (c.client_id !== o.client_id) setExtras([]);
+    priceFromProduct(c.product?.id ?? null);
     set({
       client_id: c.client_id, client_text: c.client_text, product_id: c.product?.id ?? null, product_text: c.product_text,
       region: c.product?.default_region ?? o.region, quantity: c.product?.default_quantity ?? o.quantity, unit: c.product?.default_unit ?? o.unit,
@@ -98,6 +111,14 @@ export function OrderInputPage() {
       store.run((tx) => {
         for (const x of all) {
           createOrder(tx, x);
+          // 직접 넣은 금액 (나누기 전에 넣어야 1대씩 나눌 때 금액도 1대분으로)
+          if (x.id === o.id && staff && priceTouched) {
+            const cur = tx.list('order_revenue').find((r) => r.order_id === x.id);
+            saveRevenue(tx, {
+              id: cur?.id ?? newId(), order_id: x.id, extras: cur?.extras ?? [], bill_to_client_id: cur?.bill_to_client_id ?? x.client_id, billing_status: cur?.billing_status ?? '미청구',
+              calc_method: calc, unit_price: price, quantity: x.quantity, supply_amount: null, vat: null, total: null,
+            });
+          }
           const ids = splitPerVehicle(tx, x.id);
           split += ids.length - 1;
           // 첫 품목을 나눈 건마다 고른 차량 배정
@@ -147,6 +168,22 @@ export function OrderInputPage() {
           <QtyInput quantity={x.quantity} unit={x.unit} onChange={(quantity, unit) => setExtra(i, { quantity, unit })} />
         </div>
       ))}
+      {staff && !repeat && (
+        <div className="card quick-price">
+          <div className="row" style={{ alignItems: 'center', gap: 6 }}>
+            <b>💰 금액</b>
+            <span className="muted small grow">{priceTouched ? '이 오더만 이 금액' : price != null ? '품목 기본 단가' : '비우면 금액 없이 저장'}</span>
+          </div>
+          <Seg className="soft" value={calc} onChange={(v: CalcMethod) => { setCalc(v); setPriceTouched(true); }} options={(Object.keys(CALC_LABEL) as CalcMethod[]).map((k) => ({ value: k, label: CALC_LABEL[k] }))} />
+          <div className="row" style={{ alignItems: 'center', gap: 8, marginTop: 6 }}>
+            <input inputMode="numeric" className="grow" placeholder={calc === 'fixed' ? '금액 (원)' : '단가 (원)'}
+              value={price == null ? '' : price.toLocaleString('ko-KR')}
+              onChange={(e) => { const d = e.target.value.replace(/[^\d]/g, ''); setPrice(d ? Number(d) : null); setPriceTouched(true); }} />
+            {calc !== 'fixed' && <span className="muted small">× {o.quantity ?? 0}</span>}
+          </div>
+          {preview.total != null && <div className="small" style={{ marginTop: 4 }}>공급가 {won(preview.supply_amount)} + 부가세 {won(preview.vat)} = <b>{won(preview.total)}</b></div>}
+        </div>
+      )}
       {/* 간편 입력: 위까지만. 나머지는 "추가 내용"을 눌러 펼침 */}
       {!more && (
         <button className="more-btn" onClick={() => setMore(true)}>
