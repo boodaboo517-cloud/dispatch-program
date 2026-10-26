@@ -7,7 +7,7 @@ import { useRole, useSnap } from '../../ui/hooks.ts';
 import { Cell } from '../../ui/Cell.tsx';
 import { clientName, driverName, productName, qtyText } from '../../ui/labels.ts';
 import type { useBoardActions } from '../../ui/useBoardActions.tsx';
-import { CarrierText, OrderMarks, ShipCellText, StatusChip, unloadInfo } from './parts.tsx';
+import { CarrierText, OrderMarks, ShipCellText, StatusChip, StorageTag, unloadInfo } from './parts.tsx';
 
 type Actions = ReturnType<typeof useBoardActions>;
 const FIELDS = ['업체명', '지역', '품목', '수량', '비고'] as const;
@@ -51,6 +51,7 @@ function OrderFields({ o, a, staff, carried }: { o: DailyOrder; a: Actions; staf
         <td key={i}>
           <Cell className={carried ? 'carried' : ''} onTap={carried ?? (() => a.openOrder(o))} onLong={staff && !carried ? () => a.openOrder(o, true) : undefined} title={v} draggableId={!o.vehicle_id ? o.id : undefined}>
             {abbrev(v)}
+            {i === 2 && <StorageTag snap={snap} o={o} />}
             {i === 0 && <OrderMarks snap={snap} o={o} staff={staff} />}
           </Cell>
         </td>
@@ -171,7 +172,7 @@ function VehicleGroup({ row, zone, a, staff, focus }: { row: BoardRow; zone: Zon
             <div className="row wrap" style={{ gap: 4 }}>
               {row.nights.map((o) => (
                 <Cell key={o.id} onTap={() => a.openOrder(o)} onLong={staff ? () => a.openOrder(o, true) : undefined}>
-                  <b>{o.kind === 'load' ? '상차' : '하차'}{o.zone !== row.zone ? `(${o.zone === 'land' ? '육지' : '제주'})` : ''}</b> {clientName(snap, o)} {productName(snap, o)} {qtyText(o)} {o.departure_ship ? `→ ${o.departure_ship}` : ''}
+                  <b>{o.kind === 'load' ? '상차' : '하차'}{o.zone !== row.zone ? `(${o.zone === 'land' ? '육지' : '제주'})` : ''}</b> {clientName(snap, o)} {productName(snap, o)}<StorageTag snap={snap} o={o} /> {qtyText(o)} {o.departure_ship ? `→ ${o.departure_ship}` : ''}
                 </Cell>
               ))}
               {staff && <Cell className="add" onTap={() => void a.addNight(row)}>＋ 야간</Cell>}

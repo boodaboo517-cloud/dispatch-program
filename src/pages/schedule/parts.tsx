@@ -6,24 +6,28 @@ export function hasMoney(snap: Snapshot, o: DailyOrder) {
 }
 
 export function OrderMarks({ snap, o, staff }: { snap: Snapshot; o: DailyOrder; staff: boolean }) {
-  const p = productOf(snap, o);
   const noMoney = staff && o.source !== 'linked' && !hasMoney(snap, o);
-  const cold = p && p.storage !== 'ambient';
   const ext = o.carrier_type && o.carrier_type !== 'own';
   const bulk = o.kind === 'load' && o.shipment === 'bulk';
   const late = o.kind === 'load' && !o.same_day && o.arrival_offset != null && o.arrival_offset > 1;
-  if (!cold && !o.linked_from_id && o.link_status !== 'source_changed' && !noMoney && !ext && !bulk && !late) return null;
+  if (!o.linked_from_id && o.link_status !== 'source_changed' && !noMoney && !ext && !bulk && !late) return null;
   return (
     <span className="marks">
       {ext && <span className="mk ext" title={CARRIER_LABEL[o.carrier_type!]}>{o.carrier_type === 'hired' ? '용차' : '화주'}</span>}
       {bulk && <span className="mk bulk" title="벌크 (화물만 선적)">벌크</span>}
       {late && <span className="mk warn" title="반대편 하차가 늦게 도착">+{o.arrival_offset}일</span>}
-      {p && p.storage !== 'ambient' && <span className={`dot ${p.storage}`} title={p.storage === 'chilled' ? '냉장' : '냉동'} />}
       {o.linked_from_id && <span className="mk link" title="상차와 연결됨">🔗</span>}
       {o.link_status === 'source_changed' && <span className="mk warn">!</span>}
       {noMoney && <span className="mk money" title="금액 미입력">₩</span>}
     </span>
   );
+}
+
+/** 냉동·냉장 품목: 품목명 뒤에 작은 글씨 (냉동 파랑, 냉장 하늘색) */
+export function StorageTag({ snap, o }: { snap: Snapshot; o: DailyOrder }) {
+  const st = productOf(snap, o)?.storage;
+  if (!st || st === 'ambient') return null;
+  return <span className={`st-tag ${st}`}>{st === 'frozen' ? '냉동' : '냉장'}</span>;
 }
 
 /** 품목 기본 지역 (오더에 적힌 지역 → 없으면 품목 기본 지역) */
@@ -35,7 +39,7 @@ export function OrderCellText({ snap, o }: { snap: Snapshot; o: DailyOrder }) {
       {o.delayed_from && <div className="l2" style={{ color: '#b45309', fontWeight: 700 }}>⏸ 연기된 하차</div>}
       {workText(o) && <div className="l2" style={{ color: 'var(--red)', fontWeight: 700 }}>{abbrev(workText(o), 10)}</div>}
       <div className="l1">{abbrev(clientName(snap, o)) || '·'}</div>
-      <div className="l2 with-region">{regionOf(snap, o) && <span className="region-tag">{regionOf(snap, o)}</span>}{abbrev(productName(snap, o))} {qtyText(o)}</div>
+      <div className="l2 with-region">{regionOf(snap, o) && <span className="region-tag">{regionOf(snap, o)}</span>}<span>{abbrev(productName(snap, o))}<StorageTag snap={snap} o={o} /> {qtyText(o)}</span></div>
       {o.kind === 'load' && o.shipment === 'bulk' && o.departure_ship && <div className="l2" style={{ color: '#075985' }}>🚢{abbrev(parseShip(o.departure_ship).name)}</div>}
       {o.memo && <div className="l2 muted">{abbrev(o.memo)}</div>}
     </>

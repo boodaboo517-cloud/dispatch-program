@@ -4,7 +4,7 @@ import {
   type BoardRow, type DailyOrder, type FieldAssignment, type Snapshot, type Zone,
 } from '../../domain/index.ts';
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
-import { regionOf, unloadInfo } from './parts.tsx';
+import { StorageTag, regionOf, unloadInfo } from './parts.tsx';
 import { useSnap } from '../../ui/hooks.ts';
 import { clientName, driverName, productName, qtyText, shipTimeOf, vehicleNo } from '../../ui/labels.ts';
 
@@ -92,14 +92,14 @@ function Orders({ snap, list, label }: { snap: Snapshot; list: DailyOrder[]; lab
           ].map((x) => x?.trim() ?? '');
         }).filter(Boolean))];
         // 품목마다 기본 지역을 품목 글자 바로 위에 아주 작게 (줄 높이는 그대로)
-        const items = g.map((o) => ({ id: o.id, text: [productName(snap, o), qtyText(o)].filter(Boolean).join(' '), region: regionOf(snap, o) })).filter((x) => x.text);
+        const items = g.map((o) => ({ id: o.id, o, name: productName(snap, o), qty: qtyText(o), text: [productName(snap, o), qtyText(o)].filter(Boolean).join(' '), region: regionOf(snap, o) })).filter((x) => x.text);
         return (
           <div key={g[0].id} className="ps-ord">
             {notes.length > 0 && <div className="ps-oline"><Fit><span className="ps-note">{notes.join(' · ')}</span></Fit></div>}
             <div className="ps-oline"><Fit>
               {label}{label ? ' ' : ''}{clientName(snap, g[0])}{items.length ? ' ' : ''}
               {items.map((x, i) => (
-                <span key={x.id} className="ps-prod">{x.region && <span className="ps-region">{x.region}</span>}{x.text}{i < items.length - 1 ? ', ' : ''}</span>
+                <span key={x.id} className="ps-prod">{x.region && <span className="ps-region">{x.region}</span>}<span>{x.name}<StorageTag snap={snap} o={x.o} />{x.name && x.qty ? ' ' : ''}{x.qty}{i < items.length - 1 ? ', ' : ''}</span></span>
               ))}
               {!clientName(snap, g[0]) && !items.length && '·'}
             </Fit></div>
@@ -159,7 +159,7 @@ function VehicleRow({ snap, row }: { snap: Snapshot; row: BoardRow }) {
         {row.nights.map((o) => (
           <div key={o.id} className="ps-oline"><Fit>
             <span className="ps-night">{o.kind === 'load' ? '상차' : '하차'}{o.zone !== row.zone ? `(${o.zone === 'land' ? '육지' : '제주'})` : ''}</span>{' '}
-            {clientName(snap, o)} {productName(snap, o)} {qtyText(o)}{o.departure_ship ? ` → ${parseShip(o.departure_ship).name}` : ''}
+            {clientName(snap, o)} {productName(snap, o)}<StorageTag snap={snap} o={o} /> {qtyText(o)}{o.departure_ship ? ` → ${parseShip(o.departure_ship).name}` : ''}
           </Fit></div>
         ))}
       </td>

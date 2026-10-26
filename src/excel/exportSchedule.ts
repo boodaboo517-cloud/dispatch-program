@@ -5,7 +5,7 @@ import {
   type BoardRow, type DailyOrder, type Snapshot, type Zone,
 } from '../domain/index.ts';
 import { dayjs } from '../lib/time.ts';
-import { clientName, driverName, productName, qtyText, setting, shipText, vehicleNo } from '../ui/labels.ts';
+import { clientName, driverName, productName, productOf, qtyText, setting, shipText, vehicleNo } from '../ui/labels.ts';
 import { RED, YELLOW, boxBorder, download, fill, header, newWorkbook } from './common.ts';
 
 const COLS = 16; // 상행선박 차량 기사 업체 지역 품목 수량 비고 | 차량 기사 업체 지역 품목 수량 비고 하행선박
@@ -15,7 +15,12 @@ function orderVals(s: Snapshot, o: DailyOrder | undefined) {
   const places = o.pickup_place || o.dropoff_place ? `${o.pickup_place || ''}→${o.dropoff_place || ''}` : '';
   const ext = o.carrier_type && o.carrier_type !== 'own' && o.vehicle_id ? transportSummary(s, o) : '';
   const extra = o.kind === 'load' ? [o.shipment === 'bulk' ? '벌크' : '', o.same_day ? '당일왕복' : '', !o.same_day && o.arrival_offset != null ? `하차+${o.arrival_offset}일` : ''] : [];
-  return [clientName(s, o), o.region, productName(s, o), qtyText(o), [workText(o), places, ...extra, ext, shownMemo(s, o)].filter(Boolean).join(' ')];
+  // 냉동(파랑)·냉장(하늘색): 품목명 뒤에 작은 글씨
+  const st = productOf(s, o)?.storage;
+  const product = st && st !== 'ambient'
+    ? { richText: [{ text: productName(s, o) }, { text: ` ${st === 'frozen' ? '냉동' : '냉장'}`, font: { size: 6, bold: true, color: { argb: st === 'frozen' ? 'FF1D4ED8' : 'FF0EA5E9' } } }] }
+    : productName(s, o);
+  return [clientName(s, o), o.region, product, qtyText(o), [workText(o), places, ...extra, ext, shownMemo(s, o)].filter(Boolean).join(' ')];
 }
 
 function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: BoardRow[], waiting: DailyOrder[], external: DailyOrder[] = []) {

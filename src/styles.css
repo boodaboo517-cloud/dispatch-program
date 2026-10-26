@@ -447,3 +447,6 @@ button.admin-card { font: inherit; color: inherit; }
 .night-red { color: #dc2626; font-weight: 800; }
 button.primary .night-red, button.danger .night-red { background: #fff; border-radius: 4px; padding: 0 4px; }
 .quick-price { background: #fffbeb; margin: 8px 0; }
+.st-tag { font-size: max(0.5em, 6px); font-weight: 800; margin-left: 2px; vertical-align: 0.15em; white-space: nowrap; }
+.st-tag.frozen { color: #1d4ed8; }
+.st-tag.chilled { color: #0ea5e9; }
