@@ -1,12 +1,13 @@
 // 기사 조회 전용 화면: 내 배차 카드 (수정 버튼 없음). 전체 일정 보기는 관리자·배차가 볼 때만
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FIELD_PART_LABEL, HELPER_ROLE_LABEL, addDays, workText, buildBoard, buildIndex, isDriverWorking, type BoardRow, type Snapshot } from '../domain/index.ts';
+import { FIELD_PART_LABEL, HELPER_ROLE_LABEL, addDays, pmArrival, shownMemo, workText, buildBoard, buildIndex, isDriverWorking, type BoardRow, type Snapshot } from '../domain/index.ts';
 
 /** 내가 맡은 쪽(오전/오후)과 그날 처리 순서 */
 function myPart(row: BoardRow, me: string | null) {
   const helper = !!me && row.helperId === me;
-  const unload = !!me && (row.driverId === me || helper);
+  // 오후도착이면 하차도 오후 기사가
+  const unload = !!me && (row.driverId === me || helper || (pmArrival(row) && row.loadDriverId === me));
   const load = !!me && (row.loadDriverId === me || helper);
   const night = !!me && row.nightDriverId === me;
   const seqs = [unload ? row.unloadSeq : null, load ? row.loadSeq : null].filter((n): n is number => !!n);
@@ -42,7 +43,7 @@ function DispatchCard({ row, date, title, me }: { row: BoardRow; date: string; t
         {(o.pickup_place || o.dropoff_place) && <div>📍 {o.pickup_place || '-'} → {o.dropoff_place || '-'}</div>}
         {o.same_day && <div className="badge warn">당일 왕복</div>}
         {workText(o) && <div style={{ color: 'var(--red)', fontWeight: 800 }}>⏰ {workText(o)}</div>}
-        {o.memo && <div className="muted">📝 {o.memo}</div>}
+        {shownMemo(snap, o) && <div className="muted">📝 {shownMemo(snap, o)}</div>}
         {i >= 0 && p && <div className="muted small">눌러서 주소·길찾기·전화 ›</div>}
       </li>
     );

@@ -127,7 +127,8 @@ export function linkedValues(tx: Tx, load: DailyOrder): OrderSnapshot {
     region: load.region,
     quantity: load.quantity,
     unit: load.unit,
-    memo: load.memo,
+    // 야간 상차 비고(픽업 시간 등)는 상차 쪽 일이라 하차로 복사하지 않음
+    memo: load.night ? '' : load.memo,
     arrival_ship: load.departure_ship,
     arrival_ship_tag: load.departure_ship_tag,
     date: addDays(load.date, unloadDayOffset(tx.snap, load)),

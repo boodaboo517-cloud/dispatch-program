@@ -172,6 +172,7 @@ function fromLoadNotes(snap: Snapshot, idx: Index, unloads: DailyOrder[]): strin
   const notes = new Set<string>();
   for (const u of unloads) {
     const src = u.linked_from_id ? snap.daily_orders.find((o) => o.id === u.linked_from_id) : undefined;
+    if (src?.night) continue; // 야간 상차 비고(픽업 시간 등)는 상차 쪽 일이라 하차 칸에 복사하지 않음
     const note = src?.vehicle_id ? idx.vd.get(`${src.date}|${src.vehicle_id}`)?.load_note?.trim() : '';
     if (note) notes.add(note);
   }
@@ -225,7 +226,8 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
     const driverId = vd?.driver_id ?? (vd?.load_driver_id || vd?.am_label ? null : orders.find((o) => o.driver_id)?.driver_id ?? null);
     // 제주 기사는 따로 적지 않으면 기본 출근(07:00 부두)
     const startDefault = zone === 'jeju' && !!driverId && !vd?.start_time && !vd?.start_place && status !== 'rest' && status !== 'repair';
-    rows.push({
+    const nightsElsewhere = !nights.length && elsewhere.some((o) => o.night);
+    const main: BoardRow = {
       vehicle: v,
       zone,
       vd,
@@ -235,7 +237,7 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
       postponed,
       held,
       nights,
-      nightDriverId: vd?.night_driver_id ?? null,
+      nightDriverId: nightsElsewhere ? null : vd?.night_driver_id ?? null,
       driverId,
       loadDriverId: vd?.load_driver_id || driverId,
       unloadSeq: vd?.unload_seq ?? null,
@@ -259,13 +261,19 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
       shipPending: !!vd?.arrival_pending,
       linkPending: mine.some((o) => o.link_status === 'source_changed'),
       secondary: false,
-    });
+    };
+    rows.push(main);
     if (elsewhere.length) {
       const u = elsewhere.filter((o) => o.kind === 'unload' && !o.night);
       const l = elsewhere.filter((o) => o.kind === 'load' && !o.night);
       const nt = elsewhere.filter((o) => o.night);
+      // 당일 왕복: 이 줄로 건너온 배는 아침에 들어온 배가 아니라 원래 줄에서 그날 타고 나간 배
+      const sailedIn = main.departureShip && !isWaitShip(main.departureShip) ? main : null;
       const arr = [...u, ...nt].find((o) => o.kind === 'unload' && o.arrival_ship);
       const dep = [...l, ...nt].find((o) => o.kind === 'load' && o.departure_ship);
+      // 건너간 쪽 일은 그쪽 기사(야간 작업이면 야간 기사)만. 원래 구역 기사를 복사하지 않음
+      const night = nt.length ? vd?.night_driver_id ?? null : null;
+      const ordDrv = (list: DailyOrder[]) => list.find((o) => o.driver_id)?.driver_id ?? null;
       rows.push({
         vehicle: v,
         zone: opposite(zone!),
@@ -276,9 +284,9 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
         postponed: [],
         held: [],
         nights: nt,
-        nightDriverId: vd?.night_driver_id ?? null,
-        driverId,
-        loadDriverId: vd?.load_driver_id || driverId,
+        nightDriverId: night,
+        driverId: u.length || nt.some((o) => o.kind === 'unload') ? ordDrv(u) ?? night : null,
+        loadDriverId: l.length || nt.some((o) => o.kind === 'load') ? ordDrv(l) ?? night : null,
         unloadSeq: null,
         loadSeq: null,
         helperId: vd?.helper_driver_id ?? null,
@@ -290,8 +298,8 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
         startPlace: '',
         startDefault: false,
         shortRepair: null,
-        arrivalShip: arr?.arrival_ship ?? null,
-        arrivalTag: arr?.arrival_ship_tag ?? '',
+        arrivalShip: sailedIn ? sailedIn.departureShip : arr?.arrival_ship ?? null,
+        arrivalTag: sailedIn ? sailedIn.departureTag : arr?.arrival_ship_tag ?? '',
         departureShip: dep?.departure_ship ?? null,
         departureTag: dep?.departure_ship_tag ?? '',
         status: '',
@@ -436,8 +444,16 @@ export type DriverSide = 'unload' | 'load';
 /** 그 줄에서 오더 종류(하차/상차)를 맡는 기사 */
 export const rowDriver = (row: Pick<BoardRow, 'driverId' | 'loadDriverId'>, kind: Kind) => (kind === 'load' ? row.loadDriverId : row.driverId);
 /** 그 오더를 맡을 기사 (야간 작업은 야간 기사) */
-export const orderDriver = (row: Pick<BoardRow, 'driverId' | 'loadDriverId' | 'nightDriverId'>, o: Pick<DailyOrder, 'kind' | 'night'>) =>
-  (o.night ? row.nightDriverId : rowDriver(row, o.kind));
+export const orderDriver = (row: Pick<BoardRow, 'driverId' | 'loadDriverId' | 'nightDriverId' | 'amLabel'>, o: Pick<DailyOrder, 'kind' | 'night'>) =>
+  (o.night ? row.nightDriverId : pmArrival(row) && o.kind === 'unload' ? row.loadDriverId : rowDriver(row, o.kind));
+/** 야간 상차에서 이어진 하차는 상차 비고(픽업 시간 등)를 보이지 않는다 (예전에 복사된 것 포함) */
+export function shownMemo(snap: Pick<Snapshot, 'daily_orders'>, o: DailyOrder): string {
+  if (o.kind !== 'unload' || !o.linked_from_id || !o.memo) return o.memo;
+  const src = snap.daily_orders.find((x) => x.id === o.linked_from_id);
+  return src?.night && src.memo === o.memo ? '' : o.memo;
+}
+/** 오후도착: 오전 기사 없이 배가 오후에 닿음 → 하차도 오후에 오후 기사가 */
+export const pmArrival = (row: Pick<BoardRow, 'driverId' | 'amLabel'>) => !row.driverId && !!row.amLabel;
 
 const seqField = (side: DriverSide) => (side === 'unload' ? 'unload_seq' : 'load_seq');
 
@@ -477,8 +493,15 @@ function tidyJobs(tx: Tx, date: string, driverId: string) {
  * 기사 지정. side='unload'(기본): 오전(하차) 기사 — 오후 기사가 따로 없으면 오후도 같은 기사.
  * side='load': 오후(상차) 기사 — 오전 기사와 같거나 비우면 "오전과 같음"으로 되돌린다.
  */
-export function setRowDriver(tx: Tx, p: { date: string; vehicle_id: string; zone: Zone | null; driver_id: string | null; side?: DriverSide }) {
+export function setRowDriver(tx: Tx, p: { date: string; vehicle_id: string; zone: Zone | null; driver_id: string | null; side?: DriverSide; secondary?: boolean }) {
   const side = p.side ?? 'unload';
+  // 당일 왕복으로 건너간 쪽 줄(보조 줄): 그 구역 오더의 기사만 바꾸고 차량 위치·원래 기사는 그대로
+  if (p.secondary) {
+    for (const o of tx.list('daily_orders').filter((o) => o.date === p.date && o.vehicle_id === p.vehicle_id && o.zone === p.zone && !o.night && o.kind === side)) {
+      if (o.driver_id !== p.driver_id) tx.update('daily_orders', o.id, { driver_id: p.driver_id });
+    }
+    return;
+  }
   const vd = ensureVehicleDay(tx, p.date, p.vehicle_id, p.zone);
   const d = p.driver_id;
   let old: string | null;
@@ -492,8 +515,9 @@ export function setRowDriver(tx: Tx, p: { date: string; vehicle_id: string; zone
     tx.update('vehicle_days', vd.id, { load_driver_id: ld, load_seq: null });
   }
   const now = tx.get('vehicle_days', vd.id)!;
-  for (const o of tx.list('daily_orders').filter((o) => o.date === p.date && o.vehicle_id === p.vehicle_id && !o.night)) {
-    const drv = o.kind === 'load' ? now.load_driver_id || now.driver_id : now.driver_id;
+  // 이 줄 구역 오더만 (당일 왕복으로 건너간 쪽은 그쪽 기사가 따로). 오후도착이면 하차도 오후 기사
+  for (const o of tx.list('daily_orders').filter((o) => o.date === p.date && o.vehicle_id === p.vehicle_id && !o.night && (!now.zone || o.zone === now.zone))) {
+    const drv = o.kind === 'load' || (!now.driver_id && now.am_label) ? now.load_driver_id || now.driver_id : now.driver_id;
     if (o.driver_id !== drv) tx.update('daily_orders', o.id, { driver_id: drv });
   }
   if (side === 'unload' && d) numberJobs(tx, p.date, d, vd.id, 'unload');
@@ -511,8 +535,9 @@ export function setRowAmLabel(tx: Tx, p: { date: string; vehicle_id: string; zon
   if (!label) return void tx.update('vehicle_days', vd.id, { am_label: '' });
   const pm = vd.load_driver_id || vd.driver_id || null;
   tx.update('vehicle_days', vd.id, { am_label: label, driver_id: null, unload_seq: null, load_driver_id: pm, load_seq: vd.load_driver_id ? vd.load_seq : vd.unload_seq });
-  for (const o of tx.list('daily_orders').filter((o) => o.date === p.date && o.vehicle_id === p.vehicle_id)) {
-    const drv = o.kind === 'load' ? pm : null;
+  // 오후도착: 하차도 오후 기사가 (건너간 쪽·야간 오더는 그대로)
+  for (const o of tx.list('daily_orders').filter((o) => o.date === p.date && o.vehicle_id === p.vehicle_id && !o.night && (!vd.zone || o.zone === vd.zone))) {
+    const drv = pm;
     if (o.driver_id !== drv) tx.update('daily_orders', o.id, { driver_id: drv });
   }
 }

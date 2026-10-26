@@ -1,7 +1,7 @@
 // 일정표 칸 동작 (휴대폰·PC 공통)
 import {
   ON_CALL_SHIFT, abbrev, acceptShipPending, nudgeVehicle, workLogOf, assignVehicle, blankOrder, buildBoard, createOrder, ignoreShipPending, opposite, saveOrder,
-  DEFAULT_START, sails, orderDriver, setRowNightDriver, PM_ARRIVAL_LABEL, setRowAmLabel, HELPER_ROLE_LABEL, START_PLACES, setRowNote, lastStart, startText, setRowStart, rowDriver, seqMark, setDriverSeq, setRowDriver, setRowHelper, setRowShip, setVehicleDayStatus, setVehicleZone, shipTime,
+  DEFAULT_START, sails, vehicleSails, isWaitShip, orderDriver, setRowNightDriver, PM_ARRIVAL_LABEL, setRowAmLabel, HELPER_ROLE_LABEL, START_PLACES, setRowNote, lastStart, startText, setRowStart, rowDriver, seqMark, setDriverSeq, setRowDriver, setRowHelper, setRowShip, setVehicleDayStatus, setVehicleZone, shipTime,
   type Board, type BoardRow, type DailyOrder, type DriverSide, type HelperRole, type Kind, type Zone,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
@@ -55,14 +55,17 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
   const addNight = async (row: BoardRow) => {
     if (!staff) return;
     const z = row.zone ?? 'land';
+    // 그날 배를 타고 건너가는 차량(당일 왕복)은 저녁에 반대편에 있으므로 건너간 쪽 야간 상차를 맨 위에
+    const leaves = !row.secondary && (row.loads.some(vehicleSails) || (!!row.vd?.departure_ship && !isWaitShip(row.vd.departure_ship)));
+    const here = [
+      { label: `🌙 야간 상차 (${ZONE_LABEL[z]})`, value: `load|${z}` },
+      { label: `🌙 야간 하차 (${ZONE_LABEL[z]})`, value: `unload|${z}` },
+    ];
+    const across = { label: `🌙 야간 상차 (${ZONE_LABEL[opposite(z)]} · 건너가서)`, value: `load|${opposite(z)}` };
     const k = await sheet.confirm({
       title: `${row.vehicle.short_no} 🌙 야간 작업`,
-      message: '',
-      actions: [
-        { label: `🌙 야간 상차 (${ZONE_LABEL[z]})`, value: `load|${z}`, kind: 'primary' },
-        { label: `🌙 야간 하차 (${ZONE_LABEL[z]})`, value: `unload|${z}` },
-        { label: `🌙 야간 상차 (${ZONE_LABEL[opposite(z)]} · 건너가서)`, value: `load|${opposite(z)}` },
-      ],
+      message: leaves ? `오늘 ${shipText(row.departureShip, row.departureTag)}로 ${ZONE_LABEL[opposite(z)]}에 건너갑니다.` : '',
+      actions: (leaves ? [across, ...here] : [...here, across]).map((a, i) => ({ ...a, kind: i === 0 ? 'primary' as const : undefined })),
     });
     if (!k) return;
     const [kind, zone] = k.split('|') as [Kind, Zone];
@@ -74,7 +77,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     if (!staff) return;
     const d = await pick.driver(date, row.nightDriverId);
     if (d === undefined || d === PM_ARRIVAL) return;
-    store.run((tx) => setRowNightDriver(tx, { date, vehicle_id: row.vehicle.id, zone: row.zone, driver_id: d }));
+    store.run((tx) => setRowNightDriver(tx, { date, vehicle_id: row.vehicle.id, zone: row.secondary ? null : row.zone, driver_id: d }));
   };
 
   const openOrder = (o: DailyOrder, edit = false) =>
@@ -139,7 +142,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
       if (now && !now.loadDriverId) await editDriver(now, 'load');
       return;
     }
-    store.run((tx) => setRowDriver(tx, { date, vehicle_id: row.vehicle.id, zone: row.zone, driver_id: d, side }));
+    store.run((tx) => setRowDriver(tx, { date, vehicle_id: row.vehicle.id, zone: row.zone, driver_id: d, side, secondary: row.secondary }));
     // 알바는 출근한 날 근무형태를 바로 입력
     const snap = store.getState().snap;
     const drv = snap.drivers.find((x) => x.id === d);

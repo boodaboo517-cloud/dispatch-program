@@ -1,7 +1,7 @@
 // 기존 "경민물류 일정표" 양식으로 내보내기 (하루 = 시트 1장). 엑셀에는 축약 없이 전체 내용.
 import type { Worksheet } from 'exceljs';
 import {
-  DAY_STATUS_LABEL, missingDriver, workText, seqMark, buildBoard, transportSummary, buildIndex, eachDay, isDriverWorking, sitesGrouped,
+  DAY_STATUS_LABEL, missingDriver, pmArrival, shownMemo, workText, seqMark, buildBoard, transportSummary, buildIndex, eachDay, isDriverWorking, sitesGrouped,
   type BoardRow, type DailyOrder, type Snapshot, type Zone,
 } from '../domain/index.ts';
 import { dayjs } from '../lib/time.ts';
@@ -15,7 +15,7 @@ function orderVals(s: Snapshot, o: DailyOrder | undefined) {
   const places = o.pickup_place || o.dropoff_place ? `${o.pickup_place || ''}→${o.dropoff_place || ''}` : '';
   const ext = o.carrier_type && o.carrier_type !== 'own' && o.vehicle_id ? transportSummary(s, o) : '';
   const extra = o.kind === 'load' ? [o.shipment === 'bulk' ? '벌크' : '', o.same_day ? '당일왕복' : '', !o.same_day && o.arrival_offset != null ? `하차+${o.arrival_offset}일` : ''] : [];
-  return [clientName(s, o), o.region, productName(s, o), qtyText(o), [workText(o), places, ...extra, ext, o.memo].filter(Boolean).join(' ')];
+  return [clientName(s, o), o.region, productName(s, o), qtyText(o), [workText(o), places, ...extra, ext, shownMemo(s, o)].filter(Boolean).join(' ')];
 }
 
 function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: BoardRow[], waiting: DailyOrder[], external: DailyOrder[] = []) {
@@ -37,27 +37,32 @@ function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: 
   for (const row of rows) {
     // 전날 대기 짐 [[ ]] 과 칸 비고(오더 없이)도 줄로 넣는다
     // 야간 작업은 상차 칸 아래에 "(야간)"으로
-    const loadList = [...row.carried, ...row.loads, ...row.nights];
-    const uLines = row.unloads.length + (row.unloadNote ? 1 : 0);
+    // 오후도착: 하차는 오후(상차) 칸에 "(하차)"로, 오후 기사가
+    const pm = !row.secondary && pmArrival(row);
+    const unloads = pm ? [] : row.unloads;
+    const loadList = [...(pm ? row.unloads : []), ...row.carried, ...row.loads, ...row.nights];
+    const uLines = unloads.length + (row.unloadNote ? 1 : 0);
     const lLines = loadList.length + (row.loadNote ? 1 : 0);
     const n = Math.max(uLines, lLines, 1);
     const hasOrders = uLines + lLines > 0;
     const seq = (n: number | null) => (n ? ` ${seqMark(n)}` : '');
-    const drv = driverName(s, row.driverId) ? driverName(s, row.driverId) + seq(row.unloadSeq) : row.amLabel || (missingDriver(row, 'unload') ? '미배치' : '');
+    const drv = row.driverId && row.driverId === row.nightDriverId ? `야간:${driverName(s, row.driverId)}`
+      : driverName(s, row.driverId) ? driverName(s, row.driverId) + seq(row.unloadSeq) : row.amLabel || (missingDriver(row, 'unload') ? '미배치' : '');
     const helper = row.helperId ? ` +${driverName(s, row.helperId)}${row.helperRole ? `(${row.helperRole})` : ''}` : '';
     // 상차 기사 칸: "김재표 / 야간:최현수" (상차 기사가 미배치여도 야간 기사가 있으면 "야간:최현수"만)
     const nightName = row.nightDriverId ? driverName(s, row.nightDriverId) : row.nights.length ? '미배치' : '';
-    const dayLoad = driverName(s, row.loadDriverId) ? driverName(s, row.loadDriverId) + seq(row.loadSeq) : missingDriver(row, 'load') && !row.nightDriverId ? '미배치' : '';
+    const dayLoad = row.loadDriverId === row.nightDriverId ? '' : driverName(s, row.loadDriverId) ? driverName(s, row.loadDriverId) + seq(row.loadSeq) : missingDriver(row, 'load') && !row.nightDriverId ? '미배치' : '';
     const loadDrv = [dayLoad, nightName && `야간:${nightName}`].filter(Boolean).join(' / ') + helper;
     const night = nightName ? loadDrv.indexOf('야간:') : -1;
     for (let i = 0; i < n; i++) {
       const line = ws.getRow(r + i);
       if (hasOrders) {
-        orderVals(s, row.unloads[i]).forEach((v, k) => (line.getCell(4 + k).value = v));
+        orderVals(s, unloads[i]).forEach((v, k) => (line.getCell(4 + k).value = v));
         orderVals(s, loadList[i]).forEach((v, k) => (line.getCell(11 + k).value = v));
         if (row.carried.includes(loadList[i])) line.getCell(11).value = `[[ ${line.getCell(11).value ?? ''} ]]`;
+        if (pm && row.unloads.includes(loadList[i])) line.getCell(11).value = `(하차) ${line.getCell(11).value ?? ''}`;
         if (row.nights.includes(loadList[i])) line.getCell(11).value = `(야간${loadList[i].kind === 'unload' ? ' 하차' : ''}) ${line.getCell(11).value ?? ''}`;
-        if (row.unloadNote && i === row.unloads.length) line.getCell(4).value = row.unloadNote;
+        if (row.unloadNote && i === unloads.length) line.getCell(4).value = row.unloadNote;
         if (row.loadNote && i === loadList.length) line.getCell(11).value = row.loadNote;
       }
     }
@@ -65,7 +70,10 @@ function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: 
     first.getCell(1).value = shipText(row.arrivalShip, row.arrivalTag);
     first.getCell(2).value = row.vehicle.short_no;
     first.getCell(3).value = drv + helper + (row.startTime || row.startPlace ? ` (출근 ${[row.startTime, row.startPlace].filter(Boolean).join(' ')})` : '');
-    first.getCell(16).value = shipText(row.departureShip, row.departureTag);
+    // 야간 상차 뒤 아침 배는 "(익일)"
+    const nextDay = !!row.departureShip && row.nights.some((o) => o.kind === 'load' && o.departure_ship === row.departureShip)
+      && !row.loads.some((o) => o.departure_ship === row.departureShip);
+    first.getCell(16).value = shipText(row.departureShip, row.departureTag) + (nextDay ? ' (익일)' : '');
     if (hasOrders) {
       first.getCell(9).value = row.vehicle.short_no;
       // "야간"은 빨간 글씨
@@ -106,7 +114,7 @@ function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: 
     r++;
   }
   // 기사 근무: 배차된 기사, 그 뒤에 빨간 "야간" + 야간 기사
-  const dayIds = new Set(rows.flatMap((x) => [x.driverId, x.loadDriverId, x.helperId]).filter((x): x is string => !!x));
+  const dayIds = new Set(rows.flatMap((x) => [x.driverId, x.loadDriverId, x.helperId].filter((id) => !x.secondary || id !== x.nightDriverId)).filter((x): x is string => !!x));
   const nightIds = new Set(rows.map((x) => x.nightDriverId).filter((x): x is string => !!x));
   const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'ko');
   const dayNames = s.drivers.filter((d) => dayIds.has(d.id)).sort(byName).map((d) => d.name);
