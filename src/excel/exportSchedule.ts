@@ -45,8 +45,10 @@ function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: 
     const seq = (n: number | null) => (n ? ` ${seqMark(n)}` : '');
     const drv = driverName(s, row.driverId) ? driverName(s, row.driverId) + seq(row.unloadSeq) : row.amLabel || (missingDriver(row, 'unload') ? '미배치' : '');
     const helper = row.helperId ? ` +${driverName(s, row.helperId)}${row.helperRole ? `(${row.helperRole})` : ''}` : '';
-    const loadDrv = (driverName(s, row.loadDriverId) ? driverName(s, row.loadDriverId) + seq(row.loadSeq) : missingDriver(row, 'load') ? '미배치' : '') + helper
-      + (row.nights.length || row.nightDriverId ? ` / 야간 ${driverName(s, row.nightDriverId) || '미배치'}` : '');
+    // 상차 기사 칸: "김재표 / 야간:최현수" (상차 기사가 미배치여도 야간 기사가 있으면 "야간:최현수"만)
+    const nightName = row.nightDriverId ? driverName(s, row.nightDriverId) : row.nights.length ? '미배치' : '';
+    const dayLoad = driverName(s, row.loadDriverId) ? driverName(s, row.loadDriverId) + seq(row.loadSeq) : missingDriver(row, 'load') && !row.nightDriverId ? '미배치' : '';
+    const loadDrv = [dayLoad, nightName && `야간:${nightName}`].filter(Boolean).join(' / ') + helper;
     for (let i = 0; i < n; i++) {
       const line = ws.getRow(r + i);
       if (hasOrders) {
@@ -95,6 +97,20 @@ function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: 
       line.getCell(isLoad ? 10 : 3).value = [o.carrier_name, o.carrier_phone].filter(Boolean).join(' ');
       fill(vcell, 'FFFFEDD5');
     } else fill(vcell, YELLOW);
+    r++;
+  }
+  // 기사 근무: 배차된 기사 + 🌙 야간 기사
+  const dayIds = new Set(rows.flatMap((x) => [x.driverId, x.loadDriverId, x.helperId]).filter((x): x is string => !!x));
+  const nightIds = new Set(rows.map((x) => x.nightDriverId).filter((x): x is string => !!x));
+  const workNames = [
+    ...s.drivers.filter((d) => dayIds.has(d.id)).map((d) => d.name + (nightIds.has(d.id) ? '🌙' : '')),
+    ...s.drivers.filter((d) => nightIds.has(d.id) && !dayIds.has(d.id)).map((d) => `🌙${d.name}`),
+  ].sort((a, b) => a.replace('🌙', '').localeCompare(b.replace('🌙', ''), 'ko'));
+  if (workNames.length) {
+    ws.getCell(r, 1).value = '기사 근무';
+    ws.getCell(r, 1).font = { bold: true };
+    ws.mergeCells(r, 2, r, COLS);
+    ws.getCell(r, 2).value = workNames.join(', ');
     r++;
   }
   for (let i = start + 3; i < r; i++) {

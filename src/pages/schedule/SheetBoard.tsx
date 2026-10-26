@@ -118,12 +118,15 @@ function VehicleRow({ snap, row }: { snap: Snapshot; row: BoardRow }) {
     : null;
   const noUnload = missingDriver(row, 'unload');
   const info = unloadInfo(snap, row);
-  const noLoad = missingDriver(row, 'load');
+  // 야간 기사는 상차(오후) 기사 칸에도 🌙로 함께 (상차 기사가 미배치면 미배치 대신 야간 기사만)
+  const nightDrv = row.nightDriverId ? <div className="ps-oline center"><Fit><span className="ps-nightdrv">🌙{driverName(snap, row.nightDriverId)}</span></Fit></div> : null;
+  const noLoad = missingDriver(row, 'load') && !nightDrv;
   const MISSING = <div className="ps-oline center"><Fit><span className="ps-nodrv">미배치</span></Fit></div>;
   const name = <>{start}{noUnload ? MISSING : !row.driverId && row.amLabel
     ? <div className="ps-oline center"><Fit><span className="ps-pmarr">{row.amLabel}</span></Fit></div>
     : <div className="ps-oline center"><Fit>{driverName(snap, row.driverId)}{seqMark(row.unloadSeq)}</Fit></div>}{helper}</>;
-  const loadName = <>{noLoad ? MISSING : <div className="ps-oline center"><Fit>{driverName(snap, row.loadDriverId)}{seqMark(row.loadSeq)}</Fit></div>}{helper}</>;
+  const loadDrvName = driverName(snap, row.loadDriverId);
+  const loadName = <>{noLoad ? MISSING : loadDrvName || !nightDrv ? <div className="ps-oline center"><Fit>{loadDrvName}{seqMark(row.loadSeq)}</Fit></div> : null}{nightDrv}{helper}</>;
   const statusText = status || row.statusMemo
     ? <>{status && <span className={`st ${status}`}>{DAY_STATUS_LABEL[status]}</span>}{row.statusMemo && <span className="ps-red"> {row.statusMemo}</span>}</>
     : null;
@@ -210,9 +213,13 @@ export function SheetBoard(p: { zone: Zone; date: string; rows: BoardRow[]; wait
   const assignedIds = new Set(p.rows.flatMap((r) => [r.driverId, r.loadDriverId, r.helperId]).filter((x): x is string => !!x));
   const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'ko');
   const working = snap.drivers.filter((d) => assignedIds.has(d.id) && !d.unlisted).sort(byName);
-  const busyElsewhere = new Set(snap.vehicle_days.filter((v) => v.date === p.date).flatMap((v) => [v.driver_id, v.load_driver_id, v.helper_driver_id]));
+  // 🌙 야간 기사도 근무 명단에 (낮에도 일하면 이름 옆에 🌙)
+  const nightIds = new Set(p.rows.map((r) => r.nightDriverId).filter((x): x is string => !!x));
+  const nightOnly = snap.drivers.filter((d) => nightIds.has(d.id) && !assignedIds.has(d.id)).sort(byName);
+  const workNames = [...working.map((d) => d.name + (nightIds.has(d.id) ? '🌙' : '')), ...nightOnly.map((d) => `🌙${d.name}`)];
+  const busyElsewhere = new Set(snap.vehicle_days.filter((v) => v.date === p.date).flatMap((v) => [v.driver_id, v.load_driver_id, v.helper_driver_id, v.night_driver_id]));
   const standby = snap.drivers
-    .filter((d) => d.staff_type === '기사' && d.shift !== ON_CALL_SHIFT && !d.unlisted && driverZone(d) === p.zone && !offIds.has(d.id) && !assignedIds.has(d.id) && !busyElsewhere.has(d.id) && isDriverWorking(snap, d, p.date))
+    .filter((d) => d.staff_type === '기사' && d.shift !== ON_CALL_SHIFT && !d.unlisted && driverZone(d) === p.zone && !offIds.has(d.id) && !assignedIds.has(d.id) && !nightIds.has(d.id) && !busyElsewhere.has(d.id) && isDriverWorking(snap, d, p.date))
     .sort(byName);
   return (
     <table className={`paper ${p.zone}`}>
@@ -226,14 +233,14 @@ export function SheetBoard(p: { zone: Zone; date: string; rows: BoardRow[]; wait
         {p.waiting.map((o) => <WaitingRow key={o.id} snap={snap} o={o} />)}
         {p.external.map((o) => <WaitingRow key={o.id} snap={snap} o={o} />)}
 
-        {(working.length > 0 || standby.length > 0) && (
+        {(workNames.length > 0 || standby.length > 0) && (
           <tr className="fieldrow workrow first">
             <td className="site"><Fit>기사 근무</Fit></td>
-            <td className="body" colSpan={7}><Fit>{working.map((d) => d.name).join(', ')}{standby.length ? <span className="ps-standby">{working.length ? '  ·  ' : ''}대기: {standby.map((d) => d.name).join(', ')}</span> : null}</Fit></td>
+            <td className="body" colSpan={7}><Fit>{workNames.join(', ')}{standby.length ? <span className="ps-standby">{workNames.length ? '  ·  ' : ''}대기: {standby.map((d) => d.name).join(', ')}</span> : null}</Fit></td>
           </tr>
         )}
         {off.some((d) => d.staff_type === '기사') && (
-          <tr className={`fieldrow offrow${working.length || standby.length ? '' : ' first'}`}>
+          <tr className={`fieldrow offrow${workNames.length || standby.length ? '' : ' first'}`}>
             <td className="site"><Fit>기사 휴무</Fit></td>
             <td className="body" colSpan={7}><Fit>{off.filter((d) => d.staff_type === '기사').map((d) => d.name).join(', ')}</Fit></td>
           </tr>
