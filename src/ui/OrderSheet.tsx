@@ -1,4 +1,5 @@
 // 오더 칸을 누르면 뜨는 시트: 내용 보기·수정 + 매출 입력 + 연결 상태
+import { NightTag } from './NightTag.tsx';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -219,7 +220,7 @@ export function OrderSheet({ orderId, close, startEditing = false }: { orderId: 
           <PlaceFields pickup={o.pickup_place ?? ''} dropoff={o.dropoff_place ?? ''} onChange={(p) => set(p)} />
           <label className="row night-toggle">
             <input type="checkbox" checked={!!o.night} onChange={(e) => set({ night: e.target.checked })} style={{ width: 24, height: 24 }} />
-            <span>🌙 야간 작업</span>
+            <span><NightTag /> 작업</span>
           </label>
           <WorkFields kind={o.kind} time={o.work_time ?? ''} detail={o.work_detail ?? ''} onChange={(p) => set(p)} />
           <div className="field"><span className="muted small">수량 (10파렛트 · 3대 처럼 써도 됨)</span>

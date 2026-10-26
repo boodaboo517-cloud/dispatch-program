@@ -1,4 +1,5 @@
 // 기사 조회 전용 화면: 내 배차 카드 (수정 버튼 없음). 전체 일정 보기는 관리자·배차가 볼 때만
+import { NightTag } from '../ui/NightTag.tsx';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FIELD_PART_LABEL, HELPER_ROLE_LABEL, addDays, pmArrival, shownMemo, workText, buildBoard, buildIndex, isDriverWorking, type BoardRow, type Snapshot } from '../domain/index.ts';
@@ -62,7 +63,7 @@ function DispatchCard({ row, date, title, me }: { row: BoardRow; date: string; t
       {unloadInfo(snap, row).map((t) => <div key={t} style={{ color: '#b45309', fontWeight: 700, margin: '4px 0' }}>{t}</div>)}</>}
       {showLoad && <><h3>{z === 'land' ? '상차' : '오후'} {row.loads.length}건 {row.departureShip && <span className="badge red">{z === 'land' ? '하행' : '출발'} {shipText(row.departureShip, row.departureTag)} {shipTimeOf(snap, row.departureShip)}</span>}</h3>
       {row.loads.length ? <ol>{row.loads.map(line)}</ol> : <p className="muted">없음</p>}</>}
-      {showNight && <><h3 style={{ color: '#3730a3' }}>🌙 야간 {row.nights.length}건 {row.nightDriverId && <span className="muted small">기사 {driverName(snap, row.nightDriverId)}</span>}</h3>
+      {showNight && <><h3><NightTag /> {row.nights.length}건 {row.nightDriverId && <span className="muted small">기사 {driverName(snap, row.nightDriverId)}</span>}</h3>
       <ol>{row.nights.map((o, i) => <div key={o.id}><span className="badge" style={{ background: '#e0e7ff', color: '#3730a3' }}>{o.kind === 'load' ? '상차' : '하차'}{o.zone !== row.zone ? ` · ${ZONE_LABEL[o.zone]}` : ''}{o.departure_ship ? ` → ${shipText(o.departure_ship, o.departure_ship_tag)}` : ''}</span>{line(o, i)}</div>)}</ol></>}
       {!row.unloads.length && !row.loads.length && row.statusMemo && <p>{row.statusMemo}</p>}
       {latest?.updated_at && <div className="muted small">마지막 변경 {fmtStamp(latest.updated_at)} {store.profileName(latest.updated_by) && `· ${store.profileName(latest.updated_by)}`}</div>}

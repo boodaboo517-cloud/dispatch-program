@@ -13,6 +13,7 @@ import { OrderSheet, QuickQtySheet } from './OrderSheet.tsx';
 import { EXTERNAL_HIRED, EXTERNAL_SHIPPER, PM_ARRIVAL, usePickers } from './pickers.tsx';
 import { CarrierSheet } from './CarrierSheet.tsx';
 import { Sheet, useSheet } from './Sheet.tsx';
+import { NightTag } from './NightTag.tsx';
 import { VoyageSheet } from './ShipFares.tsx';
 
 export function useBoardActions(date: string, board: Board, onFocusVehicle?: (vehicleId: string) => void) {
@@ -20,9 +21,9 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
   const pick = usePickers();
   const { staff } = useRole();
 
-  const showText = (title: string, body: React.ReactNode, actions?: { label: string; run: () => void; kind?: string }[]) =>
+  const showText = (title: string, body: React.ReactNode, actions?: { label: React.ReactNode; run: () => void; kind?: string }[]) =>
     sheet.open((close) => (
-      <Sheet title={title} onClose={close} footer={actions?.length ? actions.map((a) => <button key={a.label} className={a.kind} onClick={() => { close(); a.run(); }}>{a.label}</button>) : undefined}>
+      <Sheet title={title} onClose={close} footer={actions?.length ? actions.map((a, i) => <button key={i} className={a.kind} onClick={() => { close(); a.run(); }}>{a.label}</button>) : undefined}>
         <div style={{ fontSize: 19, padding: '12px 0', whiteSpace: 'pre-wrap' }}>{body}</div>
       </Sheet>
     ));
@@ -51,19 +52,19 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     sheet.open((close) => <QuickQtySheet orderId={order.id} close={close} onAddMore={more ? () => void addOrder(zone, kind, row, more, night) : undefined} />);
   };
 
-  /** 🌙 야간 작업 추가: 야간 상차 / 야간 하차 고르고 → 거래처·품목. 구역은 이 줄 구역 (건너간 지역이면 그 지역) */
+  /** 야간 작업 추가: 야간 상차 / 야간 하차 고르고 → 거래처·품목. 구역은 이 줄 구역 (건너간 지역이면 그 지역) */
   const addNight = async (row: BoardRow) => {
     if (!staff) return;
     const z = row.zone ?? 'land';
     // 그날 배를 타고 건너가는 차량(당일 왕복)은 저녁에 반대편에 있으므로 건너간 쪽 야간 상차를 맨 위에
     const leaves = !row.secondary && (row.loads.some(vehicleSails) || (!!row.vd?.departure_ship && !isWaitShip(row.vd.departure_ship)));
     const here = [
-      { label: `🌙 야간 상차 (${ZONE_LABEL[z]})`, value: `load|${z}` },
-      { label: `🌙 야간 하차 (${ZONE_LABEL[z]})`, value: `unload|${z}` },
+      { label: <><NightTag /> 상차 ({ZONE_LABEL[z]})</>, value: `load|${z}` },
+      { label: <><NightTag /> 하차 ({ZONE_LABEL[z]})</>, value: `unload|${z}` },
     ];
-    const across = { label: `🌙 야간 상차 (${ZONE_LABEL[opposite(z)]} · 건너가서)`, value: `load|${opposite(z)}` };
+    const across = { label: <><NightTag /> 상차 ({ZONE_LABEL[opposite(z)]} · 건너가서)</>, value: `load|${opposite(z)}` };
     const k = await sheet.confirm({
-      title: `${row.vehicle.short_no} 🌙 야간 작업`,
+      title: `${row.vehicle.short_no} 야간 작업`,
       message: leaves ? `오늘 ${shipText(row.departureShip, row.departureTag)}로 ${ZONE_LABEL[opposite(z)]}에 건너갑니다.` : '',
       actions: (leaves ? [across, ...here] : [...here, across]).map((a, i) => ({ ...a, kind: i === 0 ? 'primary' as const : undefined })),
     });
@@ -72,7 +73,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     await addOrder(zone, kind, row, undefined, true);
   };
 
-  /** 🌙 야간 기사 */
+  /** 야간 기사 */
   const editNightDriver = async (row: BoardRow) => {
     if (!staff) return;
     const d = await pick.driver(date, row.nightDriverId);
@@ -159,8 +160,8 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
         { label: `${sideLabel(row, 'unload')}·${sideLabel(row, 'load')} 같은 기사`, value: 'unload', kind: 'primary' },
         { label: `${sideLabel(row, 'load')}만 (${sideLabel(row, 'unload')}은 비움)`, value: 'load' },
         { label: '🚢 오후도착 (오전 기사 없음)', value: 'pm' },
-        { label: '🌙 야간 작업 추가', value: 'night' },
-        { label: '🌙 야간 기사', value: 'night-driver' },
+        { label: <><NightTag /> 작업 추가</>, value: 'night' },
+        { label: <><NightTag /> 기사</>, value: 'night-driver' },
       ],
     });
     if (side === 'night') return addNight(row);
@@ -254,7 +255,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
         <div>{sideLabel(row, 'unload')} 기사: {driverName(snap, row.driverId) || '미지정'} {seqMark(row.unloadSeq)}</div>
         <div>{sideLabel(row, 'load')} 기사: {row.loadDriverId !== row.driverId ? driverName(snap, row.loadDriverId) : <span className="muted">{sideLabel(row, 'unload')}과 같음</span>} {seqMark(row.loadSeq)}</div>
         <div>출근: {startText(row) || <span className="muted">미정</span>}</div>
-        <div>🌙 야간 기사: {row.nightDriverId ? driverName(snap, row.nightDriverId) : <span className="muted">없음</span>}{row.nights.length ? ` · 야간 작업 ${row.nights.length}건` : ''}</div>
+        <div><NightTag /> 기사: {row.nightDriverId ? driverName(snap, row.nightDriverId) : <span className="muted">없음</span>}{row.nights.length ? ` · 야간 작업 ${row.nights.length}건` : ''}</div>
         <div>동승: {row.helperId ? <>{driverName(snap, row.helperId)} <span className="badge warn">{row.helperRole ? HELPER_ROLE_LABEL[row.helperRole] : '동승'}</span></> : <span className="muted">없음</span>}</div>
         {row.driverId && <div>근무형태: {workLogOf(snap, row.driverId, date)?.work_types.join(', ') || <span className="muted">미입력</span>}</div>}
         {row.inRepair && <div style={{ color: 'var(--red)' }}>수리 중 {row.statusMemo}</div>}
@@ -266,8 +267,8 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
             { label: '순서 ①②', run: () => editSeq(row) },
             { label: '출근 시간·장소', run: () => editStart(row) },
             { label: '동승 (선탑·지원)', run: () => void editHelper(row) },
-            { label: '🌙 야간 작업 추가', run: () => void addNight(row) },
-            { label: '🌙 야간 기사', run: () => void editNightDriver(row) },
+            { label: <><NightTag /> 작업 추가</>, run: () => void addNight(row) },
+            { label: <><NightTag /> 기사</>, run: () => void editNightDriver(row) },
             ...(row.driverId ? [{ label: '근무형태', run: () => void pick.workType(date, row.driverId!) }] : []),
             ...(sails(row) ? [{ label: '🚢 선박 요금 (할증·승선)', run: () => sheet.open((close) => <VoyageSheet date={date} row={row} close={close} />) }] : []),
             { label: '상태·위치', run: () => void editStatus(row) },

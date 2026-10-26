@@ -1,4 +1,5 @@
 // PC 넓은 표: 하차일정 | 상차일정, 차량 기준 같은 줄, 차량별 빨간 구분선, 4글자 축약 + 클릭 시 전체 보기
+import { NightTag } from '../../ui/NightTag.tsx';
 import { useState } from 'react';
 import { abbrev, assignVehicle, isExternal, missingDriver, workText, rowDriver, seqMark, type BoardRow, type DriverSide, type DailyOrder, type Zone } from '../../domain/index.ts';
 import { store } from '../../data/store.ts';
@@ -164,7 +165,7 @@ function VehicleGroup({ row, zone, a, staff, focus }: { row: BoardRow; zone: Zon
       {rows}
       {(row.nights.length > 0 || row.nightDriverId) && (
         <tr className="night-row">
-          <td colSpan={2}><b>🌙 야간</b></td>
+          <td colSpan={2}><b><NightTag /></b></td>
           <td><Cell onTap={() => void a.editNightDriver(row)}>{row.nightDriverId ? abbrev(driverName(snap, row.nightDriverId)) : row.nights.length ? <span className="nodrv-badge">미배치</span> : '＋'}</Cell></td>
           <td colSpan={13}>
             <div className="row wrap" style={{ gap: 4 }}>

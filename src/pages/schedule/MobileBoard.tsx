@@ -1,4 +1,5 @@
 import type { BoardRow, DailyOrder, Zone } from '../../domain/index.ts';
+import { NightTag } from '../../ui/NightTag.tsx';
 import { useRole, useSnap } from '../../ui/hooks.ts';
 import { driverName } from '../../ui/labels.ts';
 import { Cell } from '../../ui/Cell.tsx';
@@ -91,7 +92,7 @@ function VehicleRow({ date, row, zone, a, focus }: { date: string; row: BoardRow
       {(row.nights.length > 0 || row.nightDriverId) && (
         <div className="night-strip">
           <Cell className="night-drv" onTap={() => void a.editNightDriver(row)}>
-            <span>🌙 야간</span>
+            <NightTag />
             {row.nightDriverId ? <span className="drv">{driverName(snap, row.nightDriverId)}</span> : row.nights.length ? <span className="nodrv-badge">미배치</span> : null}
           </Cell>
           <div className="night-orders">

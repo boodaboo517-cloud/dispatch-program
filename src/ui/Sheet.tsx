@@ -4,7 +4,7 @@ type Render = (close: () => void) => ReactNode;
 interface SheetApi {
   open: (r: Render) => void;
   close: () => void;
-  confirm: (p: { title: string; message?: string; actions: { label: string; value: string; kind?: 'primary' | 'danger' }[] }) => Promise<string | null>;
+  confirm: (p: { title: string; message?: string; actions: { label: ReactNode; value: string; kind?: 'primary' | 'danger' }[] }) => Promise<string | null>;
 }
 
 const Ctx = createContext<SheetApi | null>(null);

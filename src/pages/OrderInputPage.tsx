@@ -1,4 +1,5 @@
 // 오더 입력: 구역 → 구분 → 거래처 → 품목·지역 자동 → 수량·단위 → 차량·기사·선박 → 비고 → 매주 반복
+import { NightTag } from '../ui/NightTag.tsx';
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -130,7 +131,7 @@ export function OrderInputPage() {
       </label>
       <label className="row night-toggle">
         <input type="checkbox" checked={!!o.night} onChange={(e) => set({ night: e.target.checked })} style={{ width: 24, height: 24 }} />
-        <span>🌙 야간 작업 <span className="muted small">(오전·오후와 따로 야간 칸 · 야간 기사가 맡음)</span></span>
+        <span><NightTag /> 작업 <span className="muted small">(오전·오후와 따로 야간 칸 · 야간 기사가 맡음)</span></span>
       </label>
       <Row k="거래처" v={clientName(snap, o)} onClick={chooseClient} ph="검색 · 최근 · 자주 쓰는" />
       <Row k="품목" v={productName(snap, o)} onClick={chooseClient} />
