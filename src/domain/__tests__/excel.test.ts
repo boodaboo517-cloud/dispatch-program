@@ -26,7 +26,7 @@ describe('엑셀', () => {
     expect(yellow).toBeGreaterThan(0);
   });
 
-  it('일정표 양식: 야간 기사는 상차 기사 칸에 "기사 / 야간:이름", 기사 근무에 🌙', () => {
+  it('일정표 양식: 야간 기사는 상차 기사 칸에 "기사 / 야간:이름", 기사 근무에 "야간"', () => {
     const base = demoSnapshot('2026-10-21');
     const row = buildBoard(base, '2026-10-21').rows.find((r) => r.loads.length || r.unloads.length)!;
     const night = base.drivers.find((d) => d.staff_type === '기사' && d.id !== row.driverId && d.id !== row.loadDriverId)!;
@@ -37,9 +37,9 @@ describe('엑셀', () => {
     const ws = wb.addWorksheet('t');
     fillDaySheet(ws, s, '2026-10-21');
     const cells: string[] = [];
-    ws.eachRow((r) => r.eachCell((c) => { cells.push(String(c.value ?? '')); }));
+    ws.eachRow((r) => r.eachCell((c) => { cells.push(c.text); }));
     expect(cells.some((c) => c.includes(` / 야간:${night.name}`) || c === `야간:${night.name}`)).toBe(true);
-    expect(cells.some((c) => c.includes(`🌙${night.name}`))).toBe(true);
+    expect(cells.some((c) => c.includes(`야간 ${night.name}`))).toBe(true);
   });
 
   it('업로드: 오류 행 표시, 정상 행만 반영 + 상차는 연결 하차 생성', () => {

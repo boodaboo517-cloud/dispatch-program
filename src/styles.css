@@ -436,6 +436,7 @@ button.admin-card { font: inherit; color: inherit; }
 
 .paper tr.night td { background: #eef2ff; border-top: 1px dashed #6366f1; }
 .paper .ps-night { color: #3730a3; font-weight: 800; }
-.paper .ps-nightdrv { color: #4338ca; font-weight: 700; font-size: 0.85em; }
+.paper .ps-nightdrv { font-weight: 700; font-size: 0.85em; }
+.paper .ps-nightlbl { color: #dc2626; font-weight: 800; }
 
 .night-toggle { align-items: center; gap: 8px; min-height: 44px; margin: 4px 0; padding: 4px 10px; background: #eef2ff; border-radius: 10px; color: #3730a3; cursor: pointer; }

@@ -49,6 +49,7 @@ function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: 
     const nightName = row.nightDriverId ? driverName(s, row.nightDriverId) : row.nights.length ? '미배치' : '';
     const dayLoad = driverName(s, row.loadDriverId) ? driverName(s, row.loadDriverId) + seq(row.loadSeq) : missingDriver(row, 'load') && !row.nightDriverId ? '미배치' : '';
     const loadDrv = [dayLoad, nightName && `야간:${nightName}`].filter(Boolean).join(' / ') + helper;
+    const night = nightName ? loadDrv.indexOf('야간:') : -1;
     for (let i = 0; i < n; i++) {
       const line = ws.getRow(r + i);
       if (hasOrders) {
@@ -67,7 +68,12 @@ function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: 
     first.getCell(16).value = shipText(row.departureShip, row.departureTag);
     if (hasOrders) {
       first.getCell(9).value = row.vehicle.short_no;
-      first.getCell(10).value = loadDrv;
+      // "야간"은 빨간 글씨
+      first.getCell(10).value = night < 0 ? loadDrv : { richText: [
+        { text: loadDrv.slice(0, night) },
+        { text: '야간', font: { bold: true, color: { argb: 'FFDC2626' } } },
+        { text: loadDrv.slice(night + 2) },
+      ] };
     } else {
       ws.mergeCells(r, 4, r, 15);
       first.getCell(4).value = [row.status && row.status !== 'field' ? DAY_STATUS_LABEL[row.status] : '', row.statusMemo].filter(Boolean).join(' · ');
@@ -99,18 +105,20 @@ function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: 
     } else fill(vcell, YELLOW);
     r++;
   }
-  // 기사 근무: 배차된 기사 + 🌙 야간 기사
+  // 기사 근무: 배차된 기사, 그 뒤에 빨간 "야간" + 야간 기사
   const dayIds = new Set(rows.flatMap((x) => [x.driverId, x.loadDriverId, x.helperId]).filter((x): x is string => !!x));
   const nightIds = new Set(rows.map((x) => x.nightDriverId).filter((x): x is string => !!x));
-  const workNames = [
-    ...s.drivers.filter((d) => dayIds.has(d.id)).map((d) => d.name + (nightIds.has(d.id) ? '🌙' : '')),
-    ...s.drivers.filter((d) => nightIds.has(d.id) && !dayIds.has(d.id)).map((d) => `🌙${d.name}`),
-  ].sort((a, b) => a.replace('🌙', '').localeCompare(b.replace('🌙', ''), 'ko'));
-  if (workNames.length) {
+  const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'ko');
+  const dayNames = s.drivers.filter((d) => dayIds.has(d.id)).sort(byName).map((d) => d.name);
+  const nightNames = s.drivers.filter((d) => nightIds.has(d.id)).sort(byName).map((d) => d.name);
+  if (dayNames.length || nightNames.length) {
     ws.getCell(r, 1).value = '기사 근무';
     ws.getCell(r, 1).font = { bold: true };
     ws.mergeCells(r, 2, r, COLS);
-    ws.getCell(r, 2).value = workNames.join(', ');
+    ws.getCell(r, 2).value = { richText: [
+      { text: dayNames.join(', ') },
+      ...nightNames.flatMap((n, i) => [{ text: i || dayNames.length ? ', ' : '' }, { text: '야간', font: { bold: true, color: { argb: 'FFDC2626' } } }, { text: ` ${n}` }]),
+    ] };
     r++;
   }
   for (let i = start + 3; i < r; i++) {
