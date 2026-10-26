@@ -226,7 +226,8 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
     const driverId = vd?.driver_id ?? (vd?.load_driver_id || vd?.am_label ? null : orders.find((o) => o.driver_id)?.driver_id ?? null);
     // 제주 기사는 따로 적지 않으면 기본 출근(07:00 부두)
     const startDefault = zone === 'jeju' && !!driverId && !vd?.start_time && !vd?.start_place && status !== 'rest' && status !== 'repair';
-    const nightsElsewhere = !nights.length && elsewhere.some((o) => o.night);
+    // 야간 기사: 야간 작업이 있는 쪽 줄에. 야간 작업이 아직 없으면 당일 왕복으로 건너간 쪽(저녁에 차량이 있는 곳) 줄에
+    const nightsElsewhere = !nights.length && elsewhere.length > 0;
     const main: BoardRow = {
       vehicle: v,
       zone,
@@ -272,7 +273,7 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
       const arr = [...u, ...nt].find((o) => o.kind === 'unload' && o.arrival_ship);
       const dep = [...l, ...nt].find((o) => o.kind === 'load' && o.departure_ship);
       // 건너간 쪽 일은 그쪽 기사(야간 작업이면 야간 기사)만. 원래 구역 기사를 복사하지 않음
-      const night = nt.length ? vd?.night_driver_id ?? null : null;
+      const night = nightsElsewhere ? vd?.night_driver_id ?? null : null;
       const ordDrv = (list: DailyOrder[]) => list.find((o) => o.driver_id)?.driver_id ?? null;
       rows.push({
         vehicle: v,

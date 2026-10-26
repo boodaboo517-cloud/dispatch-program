@@ -110,7 +110,10 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
       return;
     }
     const snap = store.getState().snap;
-    const actions: { label: string; run: () => void; kind?: string }[] = staff ? [{ label: '변경', run: () => void editShip(row, which) }] : [];
+    // 당일 왕복으로 건너간 쪽 줄의 들어온 배 = 원래 줄에서 그날 타고 나간 배 (원래 줄 출발 선박에서 바꿈)
+    const sailedIn = row.secondary && which === 'arrival' && !!row.zone
+      && buildBoard(snap, date).rows.find((r) => r.vehicle.id === row.vehicle.id && !r.secondary)?.departureShip === ship;
+    const actions: { label: string; run: () => void; kind?: string }[] = staff && !sailedIn ? [{ label: '변경', run: () => void editShip(row, which) }] : [];
     if (pending && staff && row.vd) {
       const vdId = row.vd.id;
       actions.unshift(
@@ -124,6 +127,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
         {shipText(ship, tag) || '없음'} {ship && <span className="muted">{shipTime(snap, ship) !== '99:98' ? shipTime(snap, ship) : ''}</span>}
         {pending && <div className="banner yellow">전날 선박이 바뀌었습니다 → {shipText(pending.ship, pending.tag) || '없음'}</div>}
         {which === 'arrival' && row.vd?.arrival_from_id && <div className="muted">전날 출발 선박에서 자동으로 이어짐</div>}
+        {sailedIn && <div className="muted">{ZONE_LABEL[opposite(row.zone!)]}에서 오늘 타고 온 배 · 바꾸려면 {ZONE_LABEL[opposite(row.zone!)]} 줄 출발 선박을 바꾸세요</div>}
       </>,
       actions,
     );
@@ -156,7 +160,13 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     const side = await sheet.confirm({
       title: `${row.vehicle.short_no} 기사 배정`,
       message: '',
-      actions: [
+      // 당일 왕복으로 건너간 쪽 줄: 이쪽 하차·상차 기사를 따로 (오후도착은 원래 줄에서만)
+      actions: row.secondary ? [
+        { label: `${sideLabel(row, 'unload')} 기사`, value: 'unload', kind: 'primary' },
+        { label: `${sideLabel(row, 'load')} 기사`, value: 'load' },
+        { label: <><NightTag /> 작업 추가</>, value: 'night' },
+        { label: <><NightTag /> 기사</>, value: 'night-driver' },
+      ] : [
         { label: `${sideLabel(row, 'unload')}·${sideLabel(row, 'load')} 같은 기사`, value: 'unload', kind: 'primary' },
         { label: `${sideLabel(row, 'load')}만 (${sideLabel(row, 'unload')}은 비움)`, value: 'load' },
         { label: '🚢 오후도착 (오전 기사 없음)', value: 'pm' },
@@ -260,7 +270,15 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
         {row.driverId && <div>근무형태: {workLogOf(snap, row.driverId, date)?.work_types.join(', ') || <span className="muted">미입력</span>}</div>}
         {row.inRepair && <div style={{ color: 'var(--red)' }}>수리 중 {row.statusMemo}</div>}
       </>,
-      staff
+      staff && row.secondary
+        ? [
+            // 당일 왕복으로 건너간 쪽 줄: 이쪽 기사·야간만 (차량 위치·순서 등은 원래 줄에서)
+            { label: `${sideLabel(row, 'unload')} 기사`, run: () => void editDriver(row, 'unload') },
+            { label: `${sideLabel(row, 'load')} 기사`, run: () => void editDriver(row, 'load') },
+            { label: <><NightTag /> 작업 추가</>, run: () => void addNight(row) },
+            { label: <><NightTag /> 기사</>, run: () => void editNightDriver(row) },
+          ]
+        : staff
         ? [
             { label: `${sideLabel(row, 'unload')} 기사`, run: () => void editDriver(row, 'unload') },
             { label: `${sideLabel(row, 'load')} 기사`, run: () => void editDriver(row, 'load') },

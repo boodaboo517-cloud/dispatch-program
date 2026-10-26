@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildBoard, lastStart, missingNightDriver, orderDriver, setRowAmLabel, setRowNightDriver, setVehicleDayStatus, missingDriver, needsDriver, setRowNote, setDriverSeq, setRowDriver, setRowHelper, setRowStart, startText } from '../board.ts';
-import { blankOrder, postponeUnload, repairShipLinks, saveOrder, setRowShip, workText } from '../orders.ts';
+import { blankOrder, deleteOrder, postponeUnload, repairShipLinks, saveOrder, setRowShip, workText } from '../orders.ts';
 import { Tx, applyMutations } from '../tx.ts';
 import { addDays } from '../dates.ts';
 import { copyOrder, createOrder, splitPerVehicle } from '../actions.ts';
@@ -639,6 +639,31 @@ describe('야간 작업 · 야간 기사', () => {
     setRowDriver(tx, { date: D, vehicle_id: 'v9915', zone: 'land', driver_id: 'dC', side: 'unload', secondary: true });
     const vd = tx.list('vehicle_days').find((v) => v.date === D && v.vehicle_id === 'v9915')!;
     expect([vd.zone, vd.driver_id, vd.load_driver_id]).toEqual(['jeju', null, 'dA']);
+  });
+  it('왕복 차량: 제주 상차 → 그날 배 → 목포 그날 저녁 하차로 이어지고, 양쪽 기사 따로 · 야간 기사는 육지 줄에만', () => {
+    const tx = new Tx(baseSnapshot());
+    // 제주 오전 하차 + 오후 상차(제이엘) — 아직 육지 야간 작업이 없으면 하차는 다음 날
+    saveOrder(tx, blankOrder({ date: D, zone: 'jeju', kind: 'unload', vehicle_id: 'v9915', client_id: 'c-sin' }));
+    const jl = createOrder(tx, blankOrder({ date: D, zone: 'jeju', kind: 'load', vehicle_id: 'v9915', client_id: 'c-dm', departure_ship: '제이엘' }));
+    const linked = () => tx.list('daily_orders').find((o) => o.linked_from_id === jl.id)!;
+    expect(linked().date).toBe(addDays(D, 1));
+    setRowDriver(tx, { date: D, vehicle_id: 'v9915', zone: 'jeju', driver_id: 'dA' });
+    // 육지 야간 상차가 생기면 → 제주 상차분은 그날 저녁 목포 하차
+    const night = createOrder(tx, blankOrder({ date: D, zone: 'land', kind: 'load', vehicle_id: 'v9915', client_id: 'c-jr', departure_ship: '완도', night: true }));
+    expect([linked().date, linked().zone, linked().vehicle_id]).toEqual([D, 'land', 'v9915']);
+    // 육지 줄에서 야간 기사 지정 → 제주 줄에는 안 나옴
+    setRowNightDriver(tx, { date: D, vehicle_id: 'v9915', zone: null, driver_id: 'dB' });
+    // 육지 하차 기사는 따로 (제주 기사 dA 그대로)
+    setRowDriver(tx, { date: D, vehicle_id: 'v9915', zone: 'land', driver_id: 'dC', side: 'unload', secondary: true });
+    const b = buildBoard(tx.result(), D);
+    const jeju = b.rows.find((r) => r.vehicle.id === 'v9915' && !r.secondary)!;
+    const land = b.rows.find((r) => r.vehicle.id === 'v9915' && r.secondary)!;
+    expect([jeju.zone, jeju.driverId, jeju.loadDriverId, jeju.nightDriverId, jeju.departureShip]).toEqual(['jeju', 'dA', 'dA', null, '제이엘']);
+    expect([land.zone, land.arrivalShip, land.unloads.map((o) => o.id), land.driverId, land.nightDriverId, land.nights.map((o) => o.id)])
+      .toEqual(['land', '제이엘', [linked().id], 'dC', 'dB', [night.id]]);
+    // 야간 작업을 지우면 다시 다음 날 하차
+    deleteOrder(tx, night.id);
+    expect(linked().date).toBe(addDays(D, 1));
   });
   it('제주 야간 상차는 야간 칸, 오전·오후 기사를 바꿔도 야간 기사는 그대로', () => {
     const tx = new Tx(baseSnapshot());

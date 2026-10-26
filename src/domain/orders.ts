@@ -93,6 +93,24 @@ export function arrivalOffset(snap: Pick<Snapshot, 'ships'>, shipName: string | 
   return findShip(snap.ships, shipName)?.arrival_day_offset ?? 1;
 }
 
+/**
+ * 당일 왕복: 그 차량이 그날 밤 반대편에서 야간 작업을 하면, 이 상차는 그날 배로 건너가 그날 저녁 반대편에서 하차한다.
+ * (예: 제주 오후 상차 → 마린 → 목포 저녁 하차 → 목포 야간 상차)
+ */
+function turnaroundSameDay(tx: Tx, load: DailyOrder): boolean {
+  if (load.kind !== 'load' || load.night || !load.vehicle_id || load.unload_date || load.shipment === 'bulk') return false;
+  if (!load.departure_ship || isWaitShip(load.departure_ship) || (load.ship_date && load.ship_date > load.date)) return false;
+  return tx.list('daily_orders').some((o) => o.night && o.date === load.date && o.vehicle_id === load.vehicle_id && o.zone === opposite(load.zone));
+}
+
+/** 야간 작업이 생기거나 없어지면 그날 반대편 상차의 연결 하차 날짜(당일 저녁 / 다음 날)를 다시 맞춘다 */
+function resyncTurnaround(tx: Tx, o: Pick<DailyOrder, 'night' | 'date' | 'vehicle_id' | 'zone'>) {
+  if (!o.night || !o.vehicle_id) return;
+  for (const l of tx.list('daily_orders').filter((x) => x.kind === 'load' && !x.night && x.date === o.date && x.vehicle_id === o.vehicle_id && x.zone === opposite(o.zone))) {
+    syncLinkedUnload(tx, l.id);
+  }
+}
+
 /** 상차 → 연결 하차로 복사되는 값 (기사는 복사하지 않음) */
 /** 상차 → 연결 하차까지 날 수: 당일 왕복 0, 직접 정한 값, 없으면 선박 설정(기본 1) */
 export function unloadDayOffset(snap: Pick<Snapshot, 'ships'>, load: DailyOrder): number {
@@ -131,7 +149,7 @@ export function linkedValues(tx: Tx, load: DailyOrder): OrderSnapshot {
     memo: load.night ? '' : load.memo,
     arrival_ship: load.departure_ship,
     arrival_ship_tag: load.departure_ship_tag,
-    date: addDays(load.date, unloadDayOffset(tx.snap, load)),
+    date: turnaroundSameDay(tx, load) ? load.date : addDays(load.date, unloadDayOffset(tx.snap, load)),
     pickup_place: load.pickup_place ?? '',
     dropoff_place: load.dropoff_place ?? '',
   };
@@ -411,6 +429,8 @@ export function saveOrder(tx: Tx, order: DailyOrder, opts: { userEdit?: boolean 
     const other = tx.list('vehicle_days').find((v) => v.date === saved.date && v.vehicle_id === saved.vehicle_id && v.zone && v.zone !== saved.zone);
     if (other) syncShipCarryover(tx, other.id);
   }
+  if (existing) resyncTurnaround(tx, { ...existing, night: existing.night || saved.night });
+  resyncTurnaround(tx, saved);
   return tx.get('daily_orders', saved.id)!;
 }
 
@@ -471,6 +491,7 @@ export function deleteOrder(tx: Tx, orderId: string, linkedChoice: LinkedDeleteC
     if (linkedChoice === 'delete') deleteOrder(tx, linked.id);
     else tx.update('daily_orders', linked.id, { linked_from_id: null, link_status: 'source_deleted', link_pending: null });
   }
+  resyncTurnaround(tx, o);
 }
 
 /** 배차 대기 상차에 차량 배정 → 하차 쪽 차량번호도 함께 채운다 (saveOrder → syncLinkedUnload) */
