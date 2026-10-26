@@ -192,7 +192,8 @@ function Shell() {
           <Route path="/fleet" element={<Navigate to="/fleet/vehicles" replace />} />
           <Route path="/fleet/maintenance" element={<Navigate to="/fleet/vehicles" replace />} />
           <Route path="/fleet/:tab" element={<FleetPage />} />
-          <Route path="/revenue" element={<RevenuePage />} />
+          {/* 매출은 관리자만: 배차 담당이 예전 주소로 들어오면 관리(거래처)로 */}
+          <Route path="/revenue" element={session.role === 'admin' ? <RevenuePage /> : <Navigate to="/clients" replace />} />
           <Route path="/admin" element={<Navigate to="/admin/dispatch" replace />} />
           <Route path="/admin/:section" element={<AdminPage />} />
           <Route path="/settings" element={<SettingsPage />} />

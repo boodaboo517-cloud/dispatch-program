@@ -54,7 +54,9 @@ export function remember(pathname: string, search: string) {
 
 /** 메뉴 링크 주소: 그 메뉴에서 마지막으로 본 화면 (없으면 기본). 배차·일정표는 마지막으로 본 날짜를 같이 쓴다 */
 export function menuUrl(menu: string) {
-  const url = fresh(mem.menus[menu] ?? menu);
+  // 예전 버전에서 다른 메뉴(예: 매출이 관리 안에 있던 때)로 기억된 주소는 버리고 그 메뉴 기본 화면으로
+  const saved = mem.menus[menu];
+  const url = fresh(saved && menuOf(saved.split('?')[0]) === menu ? saved : menu);
   const shared = boardView()?.date;
   if (!shared || (menu !== '/' && menu !== '/all')) return url;
   const [path, q = ''] = url.split('?');
