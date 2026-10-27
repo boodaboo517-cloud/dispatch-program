@@ -457,3 +457,6 @@ button.primary .night-red, button.danger .night-red { background: #fff; border-r
 .paper-saved { margin: 8px 0; }
 .paper-saved-list { display: flex; gap: 8px; margin-top: 8px; }
 .paper-saved-list a.btn { flex: 1; min-height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 10px; border: 1px solid var(--line); background: #fff; color: var(--text); font-size: 16px; font-weight: 700; text-decoration: none; }
+.driver-text-btn { width: 100%; min-height: 48px; margin: 4px 0 8px; font-size: 16px; font-weight: 700; border-radius: 10px; }
+.driver-text { width: 100%; font-size: 15px; line-height: 1.45; font-family: inherit; white-space: pre-wrap; }
+button.kakao-btn { background: #fee500; border-color: #fee500; color: #191919; }

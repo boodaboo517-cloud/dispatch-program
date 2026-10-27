@@ -11,6 +11,7 @@ import { addDays } from '../domain/index.ts';
 import { setting } from '../ui/labels.ts';
 import { DateBar } from './SchedulePage.tsx';
 import { SheetBoard, SheetExtras } from './schedule/SheetBoard.tsx';
+import { DriverTextButton } from './schedule/DriverTextSheet.tsx';
 
 export function OverviewPage({ embedded }: { embedded?: boolean } = {}) {
   const [params, setParams] = useSearchParams();
@@ -57,6 +58,7 @@ export function OverviewPage({ embedded }: { embedded?: boolean } = {}) {
         <button disabled={busy} className="kakao" onClick={() => run(async (el) => { clearSaved(); setSaved(await shareImage(el, fileName, label)); })}>💬 카톡 공유</button>
         {wide && staff && <button onClick={() => exportSchedule(snap, date, date)}>⬇ 엑셀</button>}
       </div>
+      {staff && <DriverTextButton board={board} date={date} />}
       {busy && <p className="muted small" style={{ textAlign: 'center' }}>이미지 만드는 중…</p>}
       {saved.length > 0 && (
         <div ref={savedRef} className="card paper-saved">
