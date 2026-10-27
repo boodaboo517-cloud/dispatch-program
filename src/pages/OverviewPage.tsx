@@ -30,7 +30,8 @@ export function OverviewPage({ embedded }: { embedded?: boolean } = {}) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
   const title = setting(snap, 'header_notice', '경민물류 일정표');
-  const fileName = `경민물류 일정표 ${dayjs(date).format('YYYY-MM-DD(dd)')}.png`;
+  const fileName = `경민물류 일정표 ${dayjs(date).format('YYYY-MM-DD(dd)')}`;
+  const label = `${title} ${dayjs(date).format('M월 D일 (dd)')}`;
   const run = async (f: (el: HTMLElement) => Promise<void>) => {
     if (!sheetRef.current || busy) return;
     setBusy(true);
@@ -46,8 +47,8 @@ export function OverviewPage({ embedded }: { embedded?: boolean } = {}) {
         <SheetExtras date={date} field={board.field} />
       </div>
       <div className="paper-share">
-        <button disabled={busy} onClick={() => run((el) => downloadImage(el, fileName))}>🖼 이미지 저장</button>
-        <button disabled={busy} className="kakao" onClick={() => run((el) => shareImage(el, fileName, `${title} ${dayjs(date).format('M월 D일 (dd)')}`))}>💬 카톡 공유</button>
+        <button disabled={busy} onClick={() => run((el) => downloadImage(el, fileName, label))}>🖼 이미지 저장</button>
+        <button disabled={busy} className="kakao" onClick={() => run((el) => shareImage(el, fileName, label))}>💬 카톡 공유</button>
         {wide && staff && <button onClick={() => exportSchedule(snap, date, date)}>⬇ 엑셀</button>}
       </div>
       {busy && <p className="muted small" style={{ textAlign: 'center' }}>이미지 만드는 중…</p>}
