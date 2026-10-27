@@ -53,20 +53,20 @@ function shipLabel(name: string, port: string, word: '출항' | '출발', fallba
   return name.includes('(') || !fallback ? name : `${name}(${fallback}${word})`;
 }
 
-/** 도착 선박: "제이엘오션(목포출항)" (시간 없이) */
-function arrivalText(snap: Snapshot, value: string | null, tag: string, zone: Zone): string {
+/** 도착 선박: "제이엘오션(목포출항)" (시간 없이 · 예약해 준 업체 등 표시는 빼고) */
+function arrivalText(snap: Snapshot, value: string | null, zone: Zone): string {
   if (!value || isWaitShip(value)) return '';
   const { name, port } = splitShip(snap, value);
-  return `${tag ? `${tag} ` : ''}${shipLabel(name, port, '출항', zone === 'land' ? '제주' : '')}`;
+  return shipLabel(name, port, '출항', zone === 'land' ? '제주' : '');
 }
 
-/** 마감(출발) 선박: "제이엘오션(제주출발) 16시10분" */
-function departureText(snap: Snapshot, value: string | null, tag: string, zone: Zone): string {
+/** 마감(출발) 선박: "제이엘오션(제주출발) 16시10분" (예약 업체 등 표시는 빼고) */
+function departureText(snap: Snapshot, value: string | null, zone: Zone): string {
   if (!value || isWaitShip(value)) return '';
   const { name, port } = splitShip(snap, value);
   const time = shipTimeOf(snap, value);
   const hm = /^(\d{1,2}):(\d{2})$/.exec(time);
-  return `${tag ? `${tag} ` : ''}${shipLabel(name, port, '출발', zone === 'jeju' ? '제주' : '육지')}${hm ? ` ${Number(hm[1])}시${hm[2]}분` : time ? ` ${time}` : ''}`;
+  return `${shipLabel(name, port, '출발', zone === 'jeju' ? '제주' : '육지')}${hm ? ` ${Number(hm[1])}시${hm[2]}분` : time ? ` ${time}` : ''}`;
 }
 
 function rowText(snap: Snapshot, r: BoardRow, me: string): string[] {
@@ -76,7 +76,7 @@ function rowText(snap: Snapshot, r: BoardRow, me: string): string[] {
   const load = helper || r.loadDriverId === me;
   const night = r.nightDriverId === me && r.nights.length > 0;
   const out: string[] = [];
-  const arr = unload ? arrivalText(snap, r.arrivalShip, r.arrivalTag, z) : '';
+  const arr = unload ? arrivalText(snap, r.arrivalShip, z) : '';
   if (arr) out.push(`도착 ${arr}`);
   out.push(`${r.vehicle.short_no}${r.vehicle.plate && r.vehicle.plate !== r.vehicle.short_no ? ` (${r.vehicle.plate})` : ''} · ${ZONE_LABEL[z]}`);
   if (helper) out.push(`${r.helperRole ? HELPER_ROLE_LABEL[r.helperRole] : '동승'} (기사 ${driverName(snap, r.driverId) || '미정'})`);
@@ -100,8 +100,8 @@ function rowText(snap: Snapshot, r: BoardRow, me: string): string[] {
   if (r.status && r.status !== 'field' && !r.unloads.length && !r.loads.length && r.statusMemo) out.push('', r.statusMemo);
   // 마감 선박은 맨 밑에 출발 시간과 함께 (야간 상차 뒤 배는 그 배)
   const nightDep = night ? r.nights.find((o) => o.kind === 'load' && o.departure_ship && !isWaitShip(o.departure_ship)) : undefined;
-  const dep = load && r.departureShip ? departureText(snap, r.departureShip, r.departureTag, z)
-    : nightDep ? departureText(snap, nightDep.departure_ship, nightDep.departure_ship_tag, nightDep.zone) : '';
+  const dep = load && r.departureShip ? departureText(snap, r.departureShip, z)
+    : nightDep ? departureText(snap, nightDep.departure_ship, nightDep.zone) : '';
   if (dep) out.push('', dep);
   return out;
 }

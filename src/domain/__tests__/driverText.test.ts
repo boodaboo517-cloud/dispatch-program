@@ -52,12 +52,13 @@ describe('기사별 일정 문자', () => {
     const tx = new Tx(s);
     saveOrder(tx, blankOrder({ date: D, zone: 'jeju', kind: 'unload', vehicle_id: 'v9915', client_id: 'c-sin', arrival_ship: '제이엘오션(목포출항) (목포)' }));
     saveOrder(tx, blankOrder({ date: D, zone: 'jeju', kind: 'load', vehicle_id: 'v9915', client_id: 'c-dm' }));
-    setRowShip(tx, { date: D, vehicle_id: 'v9915', zone: 'jeju', which: 'arrival', ship: '제이엘오션(목포출항) (목포)', tag: '' });
+    setRowShip(tx, { date: D, vehicle_id: 'v9915', zone: 'jeju', which: 'arrival', ship: '제이엘오션(목포출항) (목포)', tag: '대한물류 예약' as never });
     setRowShip(tx, { date: D, vehicle_id: 'v9915', zone: 'jeju', which: 'departure', ship: '제이엘오션(제주출발)', tag: '' });
     setRowDriver(tx, { date: D, vehicle_id: 'v9915', zone: 'jeju', driver_id: 'dA' });
     const snap = tx.result();
     const t = driverDayText(snap, buildBoard(snap, D), D, 'dA');
-    expect(t).toContain('도착 제이엘오션(목포출항)\n');
+    expect(t).toContain('도착 제이엘오션(목포출항)\n'); // 예약해 준 업체 표시는 빼고
+    expect(t).not.toContain('대한물류');
     expect(t.trim().split('\n').pop()).toBe('제이엘오션(제주출발) 16시10분');
     // 항구만 적힌 보통 배
     expect(driverDayText(snap, buildBoard(snap, D), D, 'dA')).not.toContain('출항)(');
