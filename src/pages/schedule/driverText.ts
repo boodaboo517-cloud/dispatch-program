@@ -1,12 +1,18 @@
 // 기사 한 사람의 그날 일정을 카톡 문자로 (그림 없이): 도착 선박 · 차량 · 출근 · 오전(하차)/오후(상차) · 야간 · 마감 선박
 import {
-  FIELD_PART_LABEL, HELPER_ROLE_LABEL, isWaitShip, parseShip, pmArrival, shownMemo, workText, type Board, type BoardRow, type DailyOrder, type Snapshot, type Zone,
+  FIELD_PART_LABEL, HELPER_ROLE_LABEL, isWaitShip, offByZone, parseShip, pmArrival, shownMemo, workText, type Board, type BoardRow, type DailyOrder, type Snapshot, type Zone,
 } from '../../domain/index.ts';
 import { dayjs } from '../../lib/time.ts';
 import { ZONE_LABEL, clientName, driverName, productName, productOf, qtyText, shipTimeOf, vehicleNo } from '../../ui/labels.ts';
 import { regionOf } from './parts.tsx';
 
-/** 그날 일이 있는 사람 (배차 기사 · 야간 · 동승 · 현장근무), 이름순 */
+/** 그날 휴무인 사람 (일정표 휴무 명단과 같음) */
+const offIds = (snap: Snapshot, date: string) => {
+  const off = offByZone(snap, date);
+  return new Set([...off.land, ...off.jeju].filter((d) => !d.unlisted).map((d) => d.id));
+};
+
+/** 그날 일이 있는 사람 (배차 기사 · 야간 · 동승 · 현장근무) 다음에 휴무자, 이름순 */
 export function peopleOn(snap: Snapshot, board: Board): { id: string; name: string; what: string }[] {
   const what = new Map<string, Set<string>>();
   const add = (id: string | null, w: string) => { if (id) what.set(id, (what.get(id) ?? new Set()).add(w)); };
@@ -17,11 +23,13 @@ export function peopleOn(snap: Snapshot, board: Board): { id: string; name: stri
     add(r.helperId, `${r.vehicle.short_no} 동승`);
   }
   for (const f of board.field) if (!f.is_off) add(f.staff_id, '현장');
+  for (const id of offIds(snap, board.date)) if (!what.has(id)) add(id, '휴무');
+  const rank = (w: string) => (w === '휴무' ? 2 : w === '현장' ? 1 : 0);
   return [...what.entries()]
     .map(([id, w]) => ({ id, name: driverName(snap, id), what: [...w].join(' · ') }))
     .filter((x) => x.name)
-    // 배차 기사 먼저, 현장근무만 있는 사람은 뒤에
-    .sort((a, b) => Number(a.what === '현장') - Number(b.what === '현장') || a.name.localeCompare(b.name, 'ko'));
+    // 배차 기사 먼저, 현장근무만 있는 사람, 휴무자 순
+    .sort((a, b) => rank(a.what) - rank(b.what) || a.name.localeCompare(b.name, 'ko'));
 }
 
 function orderLine(snap: Snapshot, o: DailyOrder, i: number): string[] {
@@ -119,6 +127,6 @@ export function driverDayText(snap: Snapshot, board: Board, date: string, me: st
     const site = snap.field_sites.find((s) => s.id === f.site_id)?.name ?? '근무지 미정';
     blocks.push([`현장근무 · ${site}${f.part ? ` (${FIELD_PART_LABEL[f.part]})` : ''}`, ...(f.task ? [f.task] : []), ...(f.vehicle_id ? [`지급 차량 ${vehicleNo(snap, f.vehicle_id)}`] : [])]);
   }
-  if (!blocks.length) blocks.push(['배차 없음']);
+  if (!blocks.length) blocks.push([offIds(snap, date).has(me) ? '휴무' : '배차 없음']);
   return [`${dayjs(date).format('M/D(dd)')} ${driverName(snap, me)}`, '', blocks.map((b) => b.join('\n')).join('\n\n')].join('\n');
 }

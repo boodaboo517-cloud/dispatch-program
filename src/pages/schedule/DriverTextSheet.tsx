@@ -52,7 +52,7 @@ export function DriverTextButton({ board, date }: { board: Board; date: string }
     const people = peopleOn(snap, board);
     return (
       <Sheet title={`${fmtDate(date)} 기사별 일정 문자`} onClose={close}>
-        {!people.length && <p className="muted">이날 배차된 사람이 없습니다.</p>}
+        {!people.length && <p className="muted">이날 배차·휴무인 사람이 없습니다.</p>}
         {people.map((p) => (
           <div key={p.id} className="list-item" onClick={() => { close(); openPerson(p.id, p.name); }}>
             <div className="grow"><div style={{ fontWeight: 700, fontSize: 17 }}>{p.name}</div><div className="muted small">{p.what}</div></div>

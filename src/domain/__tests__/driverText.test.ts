@@ -12,8 +12,8 @@ describe('기사별 일정 문자', () => {
   it('맡은 오전·오후 · 선박 · 야간이 문자에 들어가고, 다른 사람 일은 빠진다', () => {
     const s = baseSnapshot();
     s.drivers = [
-      { id: 'dA', name: '김재표' } as never,
-      { id: 'dB', name: '최현수' } as never,
+      { id: 'dA', name: '김재표', work_days: [], shift: '', staff_type: '기사' } as never,
+      { id: 'dB', name: '최현수', work_days: [], shift: '', staff_type: '기사' } as never,
     ];
     const tx = new Tx(s);
     saveOrder(tx, blankOrder({ date: D, zone: 'jeju', kind: 'unload', vehicle_id: 'v9915', client_id: 'c-sin', product_id: 'p-sin', quantity: 2, unit: '파렛트', memo: '오전 9시까지' }));
@@ -44,7 +44,7 @@ describe('기사별 일정 문자', () => {
   });
   it('괄호까지 이름으로 등록된 배는 출항·출발을 겹쳐 붙이지 않고, 출발 시간도 나온다', () => {
     const s = baseSnapshot();
-    s.drivers = [{ id: 'dA', name: '강기성' } as never];
+    s.drivers = [{ id: 'dA', name: '강기성', work_days: [], shift: '', staff_type: '기사' } as never];
     s.ships.push(
       { id: 's1', name: '제이엘오션(목포출항)', departs_at: '', route: 'both', arrival_day_offset: 1, sort_order: 5 },
       { id: 's2', name: '제이엘오션(제주출발)', departs_at: '16:10', route: 'both', arrival_day_offset: 1, sort_order: 6 },
@@ -62,5 +62,13 @@ describe('기사별 일정 문자', () => {
     expect(t.trim().split('\n').pop()).toBe('제이엘오션(제주출발) 16시10분');
     // 항구만 적힌 보통 배
     expect(driverDayText(snap, buildBoard(snap, D), D, 'dA')).not.toContain('출항)(');
+  });
+  it('휴무자도 목록에 나오고 문자는 "휴무"', () => {
+    const s = baseSnapshot();
+    s.drivers = [{ id: 'dA', name: '김재표', work_days: [], shift: '', staff_type: '기사' } as never];
+    s.field_assignments = [{ id: 'f1', date: D, staff_id: 'dA', is_off: true, site_id: null, task: '휴무', vehicle_id: null, sort_order: 0 } as never];
+    const board = buildBoard(s, D);
+    expect(peopleOn(s, board)).toEqual([{ id: 'dA', name: '김재표', what: '휴무' }]);
+    expect(driverDayText(s, board, D, 'dA')).toBe('10/20(화) 김재표\n\n휴무');
   });
 });
