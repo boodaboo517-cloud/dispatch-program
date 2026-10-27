@@ -68,7 +68,7 @@ function rowText(snap: Snapshot, r: BoardRow, me: string): string[] {
   if (helper) out.push(`${r.helperRole ? HELPER_ROLE_LABEL[r.helperRole] : '동승'} (기사 ${driverName(snap, r.driverId) || '미정'})`);
   if ((unload || load) && (r.startTime || r.startPlace)) out.push(`출근 ${[r.startTime, r.startPlace].filter(Boolean).join(' ')}`);
   if (unload && r.unloads.length) {
-    out.push('', `■ ${z === 'jeju' ? (pmArrival(r) ? '오후 하차' : '오전') : '하차'}`);
+    out.push('', `■ ${z === 'jeju' ? (pmArrival(r) ? '오후 하차' : '오전') : '하차'} 일정`);
     r.unloads.forEach((o, i) => out.push(...orderLine(snap, o, i)));
   }
   if (load && (r.loads.length || r.carried.length)) {

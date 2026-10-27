@@ -28,7 +28,7 @@ describe('기사별 일정 문자', () => {
     const a = driverDayText(snap, board, D, 'dA');
     expect(a.split('\n')[0]).toBe('10/20(화) 김재표');
     expect(a).toContain('9915');
-    expect(a).toContain('■ 오전');
+    expect(a).toContain('■ 오전 일정');
     expect(a).toContain('1. 신제주운송');
     expect(a).toContain('   오전 9시까지');
     expect(a).toContain('■ 오후 일정');
