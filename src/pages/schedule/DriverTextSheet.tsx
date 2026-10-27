@@ -5,7 +5,7 @@ import { store } from '../../data/store.ts';
 import { fmtDate } from '../../lib/time.ts';
 import { useSnap } from '../../ui/hooks.ts';
 import { Sheet, useSheet } from '../../ui/Sheet.tsx';
-import { PERSON_GROUPS, driverDayText, peopleOn } from './driverText.ts';
+import { driverDayText, peopleOn, type PersonGroup } from './driverText.ts';
 
 async function copy(text: string) {
   try {
@@ -42,33 +42,44 @@ function TextSheet({ initial, title, close }: { initial: string; title: string; 
   );
 }
 
-export function DriverTextButton({ board, date }: { board: Board; date: string }) {
+type Tab = '육지' | '제주' | '현장';
+const TABS: Tab[] = ['육지', '제주', '현장'];
+
+/** 사람 고르기: 육지 · 제주 · 현장 화면으로 나누고, 미분류(휴무자)는 현장 목록 밑에 */
+function PeopleSheet({ board, date, close, onPick }: { board: Board; date: string; close: () => void; onPick: (id: string, name: string) => void }) {
   const snap = useSnap();
+  const people = peopleOn(snap, board);
+  const of = (g: PersonGroup) => people.filter((p) => p.group === g);
+  const count = (t: Tab) => of(t).length + (t === '현장' ? of('휴무').length : 0);
+  const [tab, setTab] = useState<Tab>(TABS.find((t) => count(t) > 0) ?? '육지');
+  const item = (p: (typeof people)[number]) => (
+    <div key={p.id} className="list-item" onClick={() => { close(); onPick(p.id, p.name); }}>
+      <div className="grow"><div style={{ fontWeight: 700, fontSize: 17 }}>{p.name}</div><div className="muted small">{p.what}</div></div>
+      <span className="muted">›</span>
+    </div>
+  );
+  return (
+    <Sheet title={`${fmtDate(date)} 기사별 일정 문자`} onClose={close}>
+      <div className="tabs">
+        {TABS.map((t) => <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>{t} {count(t)}</button>)}
+      </div>
+      {of(tab).map(item)}
+      {!of(tab).length && <p className="muted">{tab === '현장' ? '현장 근무자가 없습니다.' : `${tab} 배차 기사가 없습니다.`}</p>}
+      {tab === '현장' && of('휴무').length > 0 && (
+        <>
+          <div className="section-label">미분류 · 휴무자 {of('휴무').length}</div>
+          {of('휴무').map(item)}
+        </>
+      )}
+    </Sheet>
+  );
+}
+
+export function DriverTextButton({ board, date }: { board: Board; date: string }) {
   const sheet = useSheet();
   const openPerson = (id: string, name: string) => sheet.open((c) => (
     <TextSheet initial={driverDayText(store.getState().snap, board, date, id)} title={`${name} · ${fmtDate(date)} 일정 문자`} close={c} />
   ));
-  const openList = () => sheet.open((close) => {
-    const people = peopleOn(snap, board);
-    return (
-      <Sheet title={`${fmtDate(date)} 기사별 일정 문자`} onClose={close}>
-        {!people.length && <p className="muted">이날 배차·휴무인 사람이 없습니다.</p>}
-        {PERSON_GROUPS.map((g) => {
-          const list = people.filter((p) => p.group === g);
-          return list.length ? (
-            <div key={g}>
-              <div className="section-label">{g === '현장' ? '현장 근무자' : g === '휴무' ? '휴무자' : `${g} 기사`} {list.length}</div>
-              {list.map((p) => (
-                <div key={p.id} className="list-item" onClick={() => { close(); openPerson(p.id, p.name); }}>
-                  <div className="grow"><div style={{ fontWeight: 700, fontSize: 17 }}>{p.name}</div><div className="muted small">{p.what}</div></div>
-                  <span className="muted">›</span>
-                </div>
-              ))}
-            </div>
-          ) : null;
-        })}
-      </Sheet>
-    );
-  });
+  const openList = () => sheet.open((close) => <PeopleSheet board={board} date={date} close={close} onPick={openPerson} />);
   return <button className="driver-text-btn" onClick={openList}>📝 기사별 일정 문자 (카톡)</button>;
 }
