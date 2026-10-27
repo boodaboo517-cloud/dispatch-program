@@ -450,3 +450,7 @@ button.primary .night-red, button.danger .night-red { background: #fff; border-r
 .st-tag { font-size: max(0.5em, 6px); font-weight: 800; margin-left: 2px; vertical-align: 0.15em; white-space: nowrap; }
 .st-tag.frozen { color: #1d4ed8; }
 .st-tag.chilled { color: #0ea5e9; }
+.paper-capture { background: #fff; padding: 4px 0; }
+.paper-share { display: flex; gap: 8px; margin: 12px 0 4px; }
+.paper-share button { flex: 1; min-height: 48px; font-size: 16px; font-weight: 700; border-radius: 10px; }
+.paper-share button.kakao { background: #fee500; border-color: #fee500; color: #191919; }

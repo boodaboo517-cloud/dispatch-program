@@ -1,8 +1,9 @@
 // 일정표 한눈에 보기 (확인용): 종이 일정표처럼 한 화면에 육지(위) · 제주(아래). 수정은 배차 화면에서.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { exportSchedule } from '../excel/exportSchedule.ts';
-import { seoulToday } from '../lib/time.ts';
+import { dayjs, seoulToday } from '../lib/time.ts';
+import { downloadImage, shareImage } from '../lib/shareImage.ts';
 import { boardView, rememberBoardDate } from '../lib/boardDate.ts';
 import { useBoard, useIsWide, useRole, useSnap } from '../ui/hooks.ts';
 import { useSwipe } from '../ui/useSwipe.ts';
@@ -25,18 +26,31 @@ export function OverviewPage({ embedded }: { embedded?: boolean } = {}) {
   const { staff } = useRole();
   // 휴대폰: 왼쪽으로 밀면 다음 날, 오른쪽으로 밀면 전날
   const swipe = useSwipe((dir) => setDate(addDays(date, dir)));
+  // 이미지로 저장·공유할 부분: 제목 · 날짜 · 육지 · 제주 · 현장 (버튼은 빼고)
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const [busy, setBusy] = useState(false);
+  const title = setting(snap, 'header_notice', '경민물류 일정표');
+  const fileName = `경민물류 일정표 ${dayjs(date).format('YYYY-MM-DD(dd)')}.png`;
+  const run = async (f: (el: HTMLElement) => Promise<void>) => {
+    if (!sheetRef.current || busy) return;
+    setBusy(true);
+    try { await f(sheetRef.current); } finally { setBusy(false); }
+  };
   return (
     <div className={`paper-page ${embedded ? '' : 'page'}`} {...(wide ? {} : swipe)}>
-      <div className="paper-title">{setting(snap, 'header_notice', '경민물류 일정표')}</div>
-      <DateBar date={date} onChange={setDate} />
-      <SheetBoard zone="land" date={date} rows={board.land} waiting={board.waiting.land} external={board.external.land} field={board.field} />
-      <SheetBoard zone="jeju" date={date} rows={board.jeju} waiting={board.waiting.jeju} external={board.external.jeju} field={board.field} />
-      <SheetExtras date={date} field={board.field} />
-      {wide && staff && (
-        <div className="row" style={{ justifyContent: 'flex-end', marginTop: 8 }}>
-          <button className="chip" onClick={() => exportSchedule(snap, date, date)}>⬇ 엑셀</button>
-        </div>
-      )}
+      <div ref={sheetRef} className="paper-capture">
+        <div className="paper-title">{title}</div>
+        <DateBar date={date} onChange={setDate} />
+        <SheetBoard zone="land" date={date} rows={board.land} waiting={board.waiting.land} external={board.external.land} field={board.field} />
+        <SheetBoard zone="jeju" date={date} rows={board.jeju} waiting={board.waiting.jeju} external={board.external.jeju} field={board.field} />
+        <SheetExtras date={date} field={board.field} />
+      </div>
+      <div className="paper-share">
+        <button disabled={busy} onClick={() => run((el) => downloadImage(el, fileName))}>🖼 이미지 저장</button>
+        <button disabled={busy} className="kakao" onClick={() => run((el) => shareImage(el, fileName, `${title} ${dayjs(date).format('M월 D일 (dd)')}`))}>💬 카톡 공유</button>
+        {wide && staff && <button onClick={() => exportSchedule(snap, date, date)}>⬇ 엑셀</button>}
+      </div>
+      {busy && <p className="muted small" style={{ textAlign: 'center' }}>이미지 만드는 중…</p>}
     </div>
   );
 }
