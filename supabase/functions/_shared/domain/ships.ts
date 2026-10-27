@@ -19,6 +19,10 @@ export const departDelay = (value: string | null | undefined) => (isNextDayShip(
 export const formatShip = (name: string, port = '') => (port ? `${name} (${port})` : name);
 
 export function findShip(ships: Ship[], value: string | null | undefined): Ship | undefined {
+  // "제이엘오션(제주출발)"처럼 괄호까지 이름으로 등록된 배는 이름 그대로 먼저
+  const whole = value?.trim();
+  const exact = whole ? ships.find((s) => s.name === whole) : undefined;
+  if (exact) return exact;
   const { name } = parseShip(value);
   return ships.find((s) => s.name === name);
 }
@@ -31,6 +35,9 @@ export function isBulkShip(ships: Ship[], value: string | null | undefined): boo
 
 /** 선박 칸 값의 출발 시간: 기항지가 있으면 그 기항지 하행 시간, 없으면 제주 출발 시간 */
 export function shipTimeOf(ships: Ship[], value: string | null | undefined): string {
+  const whole = value?.trim();
+  const exact = whole ? ships.find((s) => s.name === whole) : undefined;
+  if (exact) return exact.departs_at ?? '';
   const { name, port } = parseShip(value);
   if (!name) return '';
   const same = ships.filter((s) => s.name === name);

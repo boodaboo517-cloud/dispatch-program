@@ -42,4 +42,24 @@ describe('기사별 일정 문자', () => {
     expect(b).toContain('제주로지');
     expect(b).not.toContain('■ 오전');
   });
+  it('괄호까지 이름으로 등록된 배는 출항·출발을 겹쳐 붙이지 않고, 출발 시간도 나온다', () => {
+    const s = baseSnapshot();
+    s.drivers = [{ id: 'dA', name: '강기성' } as never];
+    s.ships.push(
+      { id: 's1', name: '제이엘오션(목포출항)', departs_at: '', route: 'both', arrival_day_offset: 1, sort_order: 5 },
+      { id: 's2', name: '제이엘오션(제주출발)', departs_at: '16:10', route: 'both', arrival_day_offset: 1, sort_order: 6 },
+    );
+    const tx = new Tx(s);
+    saveOrder(tx, blankOrder({ date: D, zone: 'jeju', kind: 'unload', vehicle_id: 'v9915', client_id: 'c-sin', arrival_ship: '제이엘오션(목포출항) (목포)' }));
+    saveOrder(tx, blankOrder({ date: D, zone: 'jeju', kind: 'load', vehicle_id: 'v9915', client_id: 'c-dm' }));
+    setRowShip(tx, { date: D, vehicle_id: 'v9915', zone: 'jeju', which: 'arrival', ship: '제이엘오션(목포출항) (목포)', tag: '' });
+    setRowShip(tx, { date: D, vehicle_id: 'v9915', zone: 'jeju', which: 'departure', ship: '제이엘오션(제주출발)', tag: '' });
+    setRowDriver(tx, { date: D, vehicle_id: 'v9915', zone: 'jeju', driver_id: 'dA' });
+    const snap = tx.result();
+    const t = driverDayText(snap, buildBoard(snap, D), D, 'dA');
+    expect(t).toContain('도착 제이엘오션(목포출항)\n');
+    expect(t.trim().split('\n').pop()).toBe('제이엘오션(제주출발) 16시10분');
+    // 항구만 적힌 보통 배
+    expect(driverDayText(snap, buildBoard(snap, D), D, 'dA')).not.toContain('출항)(');
+  });
 });

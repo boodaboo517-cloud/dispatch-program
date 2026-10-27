@@ -38,21 +38,35 @@ function orderLine(snap: Snapshot, o: DailyOrder, i: number): string[] {
   return lines;
 }
 
+/** 선박 칸 값 → 이름 · 항구. 괄호까지 이름으로 등록된 배("제이엘오션(목포출항)")는 이름 그대로 */
+function splitShip(snap: Snapshot, value: string): { name: string; port: string } {
+  const whole = value.trim();
+  return snap.ships.some((s) => s.name === whole) ? { name: whole, port: '' } : parseShip(whole);
+}
+
+/** "이름(항구출항)" / "이름(항구출발)". 이름이나 항구에 이미 출항·출발·괄호가 있으면 겹쳐 붙이지 않는다 */
+function shipLabel(name: string, port: string, word: '출항' | '출발', fallback: string): string {
+  if (port) {
+    if (/출항|출발/.test(port)) return `${name}(${port})`;
+    return name.includes('(') ? name : `${name}(${port}${word})`;
+  }
+  return name.includes('(') || !fallback ? name : `${name}(${fallback}${word})`;
+}
+
 /** 도착 선박: "제이엘오션(목포출항)" (시간 없이) */
-function arrivalText(value: string | null, tag: string, zone: Zone): string {
+function arrivalText(snap: Snapshot, value: string | null, tag: string, zone: Zone): string {
   if (!value || isWaitShip(value)) return '';
-  const { name, port } = parseShip(value);
-  const from = port || (zone === 'land' ? '제주' : '');
-  return `${tag ? `${tag} ` : ''}${name}${from ? `(${from}출항)` : ''}`;
+  const { name, port } = splitShip(snap, value);
+  return `${tag ? `${tag} ` : ''}${shipLabel(name, port, '출항', zone === 'land' ? '제주' : '')}`;
 }
 
 /** 마감(출발) 선박: "제이엘오션(제주출발) 16시10분" */
 function departureText(snap: Snapshot, value: string | null, tag: string, zone: Zone): string {
   if (!value || isWaitShip(value)) return '';
-  const { name, port } = parseShip(value);
+  const { name, port } = splitShip(snap, value);
   const time = shipTimeOf(snap, value);
   const hm = /^(\d{1,2}):(\d{2})$/.exec(time);
-  return `${tag ? `${tag} ` : ''}${name}(${port || (zone === 'jeju' ? '제주' : '육지')}출발)${hm ? ` ${Number(hm[1])}시${hm[2]}분` : time ? ` ${time}` : ''}`;
+  return `${tag ? `${tag} ` : ''}${shipLabel(name, port, '출발', zone === 'jeju' ? '제주' : '육지')}${hm ? ` ${Number(hm[1])}시${hm[2]}분` : time ? ` ${time}` : ''}`;
 }
 
 function rowText(snap: Snapshot, r: BoardRow, me: string): string[] {
@@ -62,7 +76,7 @@ function rowText(snap: Snapshot, r: BoardRow, me: string): string[] {
   const load = helper || r.loadDriverId === me;
   const night = r.nightDriverId === me && r.nights.length > 0;
   const out: string[] = [];
-  const arr = unload ? arrivalText(r.arrivalShip, r.arrivalTag, z) : '';
+  const arr = unload ? arrivalText(snap, r.arrivalShip, r.arrivalTag, z) : '';
   if (arr) out.push(`도착 ${arr}`);
   out.push(`${r.vehicle.short_no}${r.vehicle.plate && r.vehicle.plate !== r.vehicle.short_no ? ` (${r.vehicle.plate})` : ''} · ${ZONE_LABEL[z]}`);
   if (helper) out.push(`${r.helperRole ? HELPER_ROLE_LABEL[r.helperRole] : '동승'} (기사 ${driverName(snap, r.driverId) || '미정'})`);
