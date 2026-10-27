@@ -1,5 +1,6 @@
 // 일정표를 이미지(PNG)로: 내려받기 · 휴대폰 공유(카카오톡 등). 공유가 안 되는 컴퓨터는 저장
 // 카톡은 사진을 열면 전체를 한 화면에 맞추므로 육지 · 제주 · 현장 3장으로 나눠 각각 크게 보이게
+import { store } from '../data/store.ts';
 
 const PIXEL_RATIO = 3;
 
@@ -48,40 +49,35 @@ const PART_NAMES = ['육지', '제주', '현장'];
 const nameOf = (base: string, i: number) => `${base} ${PART_NAMES[i] ?? i + 1}.png`;
 
 
-export interface SavedImage { name: string; part: string; url: string; blob: Blob }
-
-/** 이미지 3장(육지 · 제주 · 현장)을 만든다. baseName: 확장자 없이 (뒤에 육지 · 제주 · 현장) */
-export async function makeImages(el: HTMLElement, baseName: string, label: string): Promise<SavedImage[]> {
-  const blobs = await toBlobs(el, label);
-  return blobs.map((b, i) => ({ name: nameOf(baseName, i), part: PART_NAMES[i] ?? String(i + 1), url: URL.createObjectURL(b), blob: b }));
-}
-
-export const releaseImages = (imgs: SavedImage[]) => imgs.forEach((x) => URL.revokeObjectURL(x.url));
+export interface SavedImage { name: string; part: string; url: string }
 
 /**
- * 3장을 한꺼번에 내려받기. 휴대폰 브라우저는 누른 그 순간(같은 동작 안)에 시작한 다운로드만 허용하므로
- * 이미지는 미리 만들어 두고 여기서는 기다림 없이 바로 내려받는다.
+ * 저장할 이미지 3장(육지 · 제주 · 현장)을 만든다. 휴대폰 브라우저는 자동으로 여러 장을 연달아 받으면 첫 장만 받으므로,
+ * 화면에 저장 버튼을 장마다 보여 주고 사람이 눌러서 받게 한다. baseName: 확장자 없이 (뒤에 육지 · 제주 · 현장)
  */
-export function saveImages(imgs: SavedImage[]) {
-  for (const x of imgs) {
-    const a = document.createElement('a');
-    a.href = x.url;
-    a.download = x.name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+export async function makeImages(el: HTMLElement, baseName: string, label: string): Promise<SavedImage[]> {
+  try {
+    const blobs = await toBlobs(el, label);
+    return blobs.map((b, i) => ({ name: nameOf(baseName, i), part: PART_NAMES[i] ?? String(i + 1), url: URL.createObjectURL(b) }));
+  } catch (e) {
+    store.toast(`이미지 만들기 실패: ${(e as Error).message}`, 'warn');
+    return [];
   }
 }
 
-/** 휴대폰: 공유 창 → 카카오톡 선택 (3장 한 번에). 바로 공유가 안 되는 기기면 false */
-export async function shareImages(imgs: SavedImage[], title: string): Promise<boolean> {
-  const files = imgs.map((x) => new File([x.blob], x.name, { type: 'image/png' }));
-  if (!navigator.canShare?.({ files })) return false;
+/** 휴대폰: 공유 창 → 카카오톡 선택 (3장 한 번에). 바로 공유가 안 되는 기기(컴퓨터 등)는 저장 버튼용 이미지를 돌려준다 */
+export async function shareImage(el: HTMLElement, baseName: string, title: string): Promise<SavedImage[]> {
   try {
-    await navigator.share({ files, title });
+    const blobs = await toBlobs(el, title);
+    const files = blobs.map((b, i) => new File([b], nameOf(baseName, i), { type: 'image/png' }));
+    if (navigator.canShare?.({ files })) {
+      await navigator.share({ files, title });
+      return [];
+    }
+    store.toast('이 기기는 바로 공유가 안 됩니다. 아래에서 저장한 이미지를 카카오톡에서 보내세요', 'warn');
+    return blobs.map((b, i) => ({ name: files[i].name, part: PART_NAMES[i] ?? String(i + 1), url: URL.createObjectURL(b) }));
   } catch (e) {
-    if ((e as Error).name === 'AbortError') return true; // 공유 창을 닫음
-    throw e;
+    if ((e as Error).name !== 'AbortError') store.toast(`공유 실패: ${(e as Error).message}`, 'warn'); // AbortError = 공유 창을 닫음
+    return [];
   }
-  return true;
 }
