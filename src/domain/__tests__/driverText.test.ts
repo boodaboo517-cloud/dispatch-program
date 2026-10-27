@@ -26,16 +26,19 @@ describe('기사별 일정 문자', () => {
     const board = buildBoard(snap, D);
     expect(peopleOn(snap, board).map((p) => p.name)).toEqual(['김재표', '최현수']);
     const a = driverDayText(snap, board, D, 'dA');
-    expect(a).toContain('김재표 기사님 일정');
-    expect(a).toContain('🚚 9915');
+    expect(a.split('\n')[0]).toBe('10/20(화) 김재표');
+    expect(a).toContain('9915');
     expect(a).toContain('■ 오전');
     expect(a).toContain('1. 신제주운송');
-    expect(a).toContain('📝 오전 9시까지');
-    expect(a).toContain('■ 오후 (출발 제이엘 16:10)');
+    expect(a).toContain('   오전 9시까지');
+    expect(a).toContain('■ 오후 일정');
     expect(a).toContain('도민물류');
     expect(a).not.toContain('■ 야간');
+    // 마감 선박은 맨 밑에 출발 시간
+    expect(a.trim().split('\n').pop()).toBe('제이엘(제주출발) 16시10분');
+    expect(a).not.toMatch(/[🚚📝⏰📍🙏]/u);
     const b = driverDayText(snap, board, D, 'dB');
-    expect(b).toContain('■ 야간');
+    expect(b).toContain('■ 야간 일정');
     expect(b).toContain('제주로지');
     expect(b).not.toContain('■ 오전');
   });
