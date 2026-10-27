@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { exportSchedule } from '../excel/exportSchedule.ts';
 import { dayjs, seoulToday } from '../lib/time.ts';
-import { downloadImage, shareImage } from '../lib/shareImage.ts';
+import { makeImages, shareImage, type SavedImage } from '../lib/shareImage.ts';
 import { boardView, rememberBoardDate } from '../lib/boardDate.ts';
 import { useBoard, useIsWide, useRole, useSnap } from '../ui/hooks.ts';
 import { useSwipe } from '../ui/useSwipe.ts';
@@ -32,6 +32,12 @@ export function OverviewPage({ embedded }: { embedded?: boolean } = {}) {
   const title = setting(snap, 'header_notice', '경민물류 일정표');
   const fileName = `경민물류 일정표 ${dayjs(date).format('YYYY-MM-DD(dd)')}`;
   const label = `${title} ${dayjs(date).format('M월 D일 (dd)')}`;
+  // 이미지 저장: 육지 · 제주 · 현장 저장 버튼 (하나씩 눌러서 받기)
+  const [saved, setSaved] = useState<SavedImage[]>([]);
+  const clearSaved = () => { saved.forEach((x) => URL.revokeObjectURL(x.url)); setSaved([]); };
+  useEffect(() => clearSaved, [date]); // eslint-disable-line react-hooks/exhaustive-deps
+  const savedRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (saved.length) savedRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, [saved]);
   const run = async (f: (el: HTMLElement) => Promise<void>) => {
     if (!sheetRef.current || busy) return;
     setBusy(true);
@@ -47,11 +53,22 @@ export function OverviewPage({ embedded }: { embedded?: boolean } = {}) {
         <SheetExtras date={date} field={board.field} />
       </div>
       <div className="paper-share">
-        <button disabled={busy} onClick={() => run((el) => downloadImage(el, fileName, label))}>🖼 이미지 저장</button>
-        <button disabled={busy} className="kakao" onClick={() => run((el) => shareImage(el, fileName, label))}>💬 카톡 공유</button>
+        <button disabled={busy} onClick={() => run(async (el) => { clearSaved(); setSaved(await makeImages(el, fileName, label)); })}>🖼 이미지 저장</button>
+        <button disabled={busy} className="kakao" onClick={() => run(async (el) => { clearSaved(); setSaved(await shareImage(el, fileName, label)); })}>💬 카톡 공유</button>
         {wide && staff && <button onClick={() => exportSchedule(snap, date, date)}>⬇ 엑셀</button>}
       </div>
       {busy && <p className="muted small" style={{ textAlign: 'center' }}>이미지 만드는 중…</p>}
+      {saved.length > 0 && (
+        <div ref={savedRef} className="card paper-saved">
+          <div className="row" style={{ alignItems: 'center' }}>
+            <b className="grow">이미지 {saved.length}장 · 눌러서 저장</b>
+            <button className="ghost" aria-label="닫기" onClick={clearSaved}>✕</button>
+          </div>
+          <div className="paper-saved-list">
+            {saved.map((x) => <a key={x.url} className="btn" href={x.url} download={x.name}>⬇ {x.part}</a>)}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

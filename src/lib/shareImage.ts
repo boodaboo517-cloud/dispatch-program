@@ -48,39 +48,36 @@ async function toBlobs(el: HTMLElement, label: string): Promise<Blob[]> {
 const PART_NAMES = ['육지', '제주', '현장'];
 const nameOf = (base: string, i: number) => `${base} ${PART_NAMES[i] ?? i + 1}.png`;
 
-function save(blob: Blob, name: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
-}
 
-/** baseName: 확장자 없이 (뒤에 육지 · 제주 · 현장) */
-export async function downloadImage(el: HTMLElement, baseName: string, label: string) {
+export interface SavedImage { name: string; part: string; url: string }
+
+/**
+ * 저장할 이미지 3장(육지 · 제주 · 현장)을 만든다. 휴대폰 브라우저는 자동으로 여러 장을 연달아 받으면 첫 장만 받으므로,
+ * 화면에 저장 버튼을 장마다 보여 주고 사람이 눌러서 받게 한다. baseName: 확장자 없이 (뒤에 육지 · 제주 · 현장)
+ */
+export async function makeImages(el: HTMLElement, baseName: string, label: string): Promise<SavedImage[]> {
   try {
     const blobs = await toBlobs(el, label);
-    blobs.forEach((b, i) => setTimeout(() => save(b, nameOf(baseName, i)), i * 400));
-    store.toast(`이미지 ${blobs.length}장 (육지 · 제주 · 현장) 저장했습니다`);
+    return blobs.map((b, i) => ({ name: nameOf(baseName, i), part: PART_NAMES[i] ?? String(i + 1), url: URL.createObjectURL(b) }));
   } catch (e) {
-    store.toast(`이미지 저장 실패: ${(e as Error).message}`, 'warn');
+    store.toast(`이미지 만들기 실패: ${(e as Error).message}`, 'warn');
+    return [];
   }
 }
 
-/** 휴대폰: 공유 창 → 카카오톡 선택 (3장 한 번에). 컴퓨터: 바로 공유가 안 되면 3장 저장 */
-export async function shareImage(el: HTMLElement, baseName: string, title: string) {
+/** 휴대폰: 공유 창 → 카카오톡 선택 (3장 한 번에). 바로 공유가 안 되는 기기(컴퓨터 등)는 저장 버튼용 이미지를 돌려준다 */
+export async function shareImage(el: HTMLElement, baseName: string, title: string): Promise<SavedImage[]> {
   try {
     const blobs = await toBlobs(el, title);
     const files = blobs.map((b, i) => new File([b], nameOf(baseName, i), { type: 'image/png' }));
     if (navigator.canShare?.({ files })) {
       await navigator.share({ files, title });
-      return;
+      return [];
     }
-    blobs.forEach((b, i) => setTimeout(() => save(b, files[i].name), i * 400));
-    store.toast(`이 기기는 바로 공유가 안 됩니다. 저장한 이미지${blobs.length > 1 ? ` ${blobs.length}장` : ''}을 카카오톡에서 보내세요`, 'warn');
+    store.toast('이 기기는 바로 공유가 안 됩니다. 아래에서 저장한 이미지를 카카오톡에서 보내세요', 'warn');
+    return blobs.map((b, i) => ({ name: files[i].name, part: PART_NAMES[i] ?? String(i + 1), url: URL.createObjectURL(b) }));
   } catch (e) {
-    if ((e as Error).name === 'AbortError') return; // 공유 창을 닫음
-    store.toast(`공유 실패: ${(e as Error).message}`, 'warn');
+    if ((e as Error).name !== 'AbortError') store.toast(`공유 실패: ${(e as Error).message}`, 'warn'); // AbortError = 공유 창을 닫음
+    return [];
   }
 }
