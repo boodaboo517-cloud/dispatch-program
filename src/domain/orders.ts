@@ -1,7 +1,7 @@
 // 오더 저장·삭제와 "상차 → 다음 날 반대 지역 하차", "선박 자동 이어짐" 연결 로직.
 import { addDays, diffDays } from './dates.ts';
 import { newId } from './ids.ts';
-import { findShip, isNextDayShip, isWaitShip } from './ships.ts';
+import { findShip, isBulkShip, isNextDayShip, isWaitShip } from './ships.ts';
 import { CARRIER_LABEL } from './types.ts';
 import type { Tx } from './tx.ts';
 import type {
@@ -266,8 +266,8 @@ export function syncShipCarryover(tx: Tx, vehicleDayId: string) {
     for (const p of previous) clearCarried(tx, p.id);
     return;
   }
-  // 출발 선박이 없거나 "대기"면 다음 날로 넘어가지 않는다 (대기 = 그 지역에 그대로)
-  if (!vd.departure_ship || isWaitShip(vd.departure_ship)) {
+  // 출발 선박이 없거나 "대기"면 다음 날로 넘어가지 않는다 (대기 = 그 지역에 그대로). 벌크 선박은 차량이 안 탐
+  if (!vd.departure_ship || isWaitShip(vd.departure_ship) || isBulkShip(tx.list('ships'), vd.departure_ship)) {
     for (const p of previous) clearCarried(tx, p.id);
     return;
   }
@@ -366,9 +366,11 @@ export function setRowShip(
     }
     return;
   }
-  tx.update('vehicle_days', vd.id, { departure_ship: p.ship, departure_ship_tag: p.tag });
+  // 벌크 선박: 화물만 배를 타므로 차량 줄 출발 선박(차량 이동)은 비워 두고, 상차 오더만 벌크로
+  const bulkShip = isBulkShip(tx.list('ships'), p.ship);
+  tx.update('vehicle_days', vd.id, bulkShip ? { departure_ship: null, departure_ship_tag: '' } : { departure_ship: p.ship, departure_ship_tag: p.tag });
   for (const o of rowOrders(tx, p.date, p.vehicle_id, 'load')) {
-    tx.update('daily_orders', o.id, { departure_ship: p.ship, departure_ship_tag: p.tag });
+    tx.update('daily_orders', o.id, withShipShipment(tx, { ...o, departure_ship: p.ship, departure_ship_tag: p.tag }, o));
     syncLinkedUnload(tx, o.id);
   }
   // 전날까지 "대기"로 싣고 있던 짐 [[ 상차짐 ]]: 이 날 선박을 정하면 이 날 선적 (또 대기면 다음 날로 계속)
@@ -399,11 +401,23 @@ function rowOrders(tx: Tx, date: string, vehicleId: string, kind: Kind) {
  * 오더 저장 (신규·수정 공통). userEdit=true 면 사람이 고친 것으로 표시해
  * 반복 발주 변경·원본 상차 변경 때 덮어쓰지 않는다.
  */
+/**
+ * 벌크 선박을 고르면 그 상차는 벌크(화물만 선적, 차량은 그대로 → 도착지 하차는 차량 없이 배차 대기).
+ * 벌크 선박에서 일반 선박으로 바꾸면 다시 차량 선적으로.
+ */
+function withShipShipment(tx: Tx, o: DailyOrder, before?: DailyOrder): DailyOrder {
+  if (o.kind !== 'load') return o;
+  const ships = tx.list('ships');
+  if (isBulkShip(ships, o.departure_ship)) return o.shipment === 'bulk' ? o : { ...o, shipment: 'bulk', same_day: false };
+  const wasBulkShip = isBulkShip(ships, before?.departure_ship);
+  return wasBulkShip && o.shipment === 'bulk' && before?.departure_ship !== o.departure_ship ? { ...o, shipment: 'vehicle' } : o;
+}
+
 export function saveOrder(tx: Tx, order: DailyOrder, opts: { userEdit?: boolean } = {}): DailyOrder {
   const existing = tx.get('daily_orders', order.id);
   const isEdit = !!existing && opts.userEdit !== false;
   const row: DailyOrder = {
-    ...order,
+    ...withShipShipment(tx, order, existing),
     edited_manually: order.edited_manually || (isEdit && order.source !== 'manual'),
   };
   const saved = existing
@@ -526,12 +540,24 @@ export function workText(o: Pick<DailyOrder, 'kind' | 'work_time' | 'work_detail
  * 연결 하차를 다시 맞춰서(대기면 자동 하차 지움, 익일선적이면 날짜 +2) 차량이 엉뚱한 지역에 나오지 않게 한다.
  */
 export function repairShipLinks(tx: Tx, fromDate: string) {
+  const ships = tx.list('ships');
   for (const o of tx.list('daily_orders')) {
     if (o.kind !== 'load' || o.date < fromDate) continue;
+    // 벌크 선박으로 적혀 있는데 벌크가 아닌 상차 → 벌크로 (도착지 하차는 차량 없이)
+    if (o.shipment !== 'bulk' && isBulkShip(ships, o.departure_ship)) {
+      tx.update('daily_orders', o.id, { shipment: 'bulk', same_day: false });
+      syncLinkedUnload(tx, o.id);
+      continue;
+    }
     if (waitsForShip(o) || isNextDayShip(o.departure_ship) || o.ship_date) syncLinkedUnload(tx, o.id);
   }
   for (const vd of tx.list('vehicle_days')) {
     if (vd.date < fromDate) continue;
+    if (isBulkShip(ships, vd.departure_ship)) {
+      tx.update('vehicle_days', vd.id, { departure_ship: null, departure_ship_tag: '' });
+      syncShipCarryover(tx, vd.id);
+      continue;
+    }
     if (isWaitShip(vd.departure_ship) || isNextDayShip(vd.departure_ship)) syncShipCarryover(tx, vd.id);
   }
 }

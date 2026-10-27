@@ -1,7 +1,7 @@
 // 빈칸 탭 → 그 칸에 맞는 등록 목록 (아래에서 올라오는 시트). 모두 Promise 로 결과를 돌려준다.
 import { useState } from 'react';
 import {
-  DAY_STATUS_LABEL, MAINTENANCE_KINDS, ON_CALL_SHIFT, SHIP_TAG_PRESETS, driverGroup, addDays, composeShipTag, shipChoices, splitShipTag, isDriverWorking, newId, vehicleChoices,
+  isBulkShip, DAY_STATUS_LABEL, MAINTENANCE_KINDS, ON_CALL_SHIFT, SHIP_TAG_PRESETS, driverGroup, addDays, composeShipTag, shipChoices, splitShipTag, isDriverWorking, newId, vehicleChoices,
   type Board, type DayStatus, type MaintenanceKind, type RepairSpan, type Product, type ShipTag, type Snapshot, type Zone,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
@@ -144,7 +144,10 @@ function ShipSheet(p: { zone: Zone | null; which: 'arrival' | 'departure'; curre
             label: c.label,
             search: c.value,
             sub: c.time || '시간 미정',
-            right: c.ship.arrival_day_offset !== 1 ? <span className="badge warn">+{c.ship.arrival_day_offset}일 도착</span> : undefined,
+            right: isBulkShip([c.ship], c.ship.name) || c.ship.arrival_day_offset !== 1 ? <>
+              {isBulkShip([c.ship], c.ship.name) && <span className="badge" style={{ background: '#e0f2fe', color: '#075985' }}>📦 벌크 · 차량 안 탐</span>}
+              {c.ship.arrival_day_offset !== 1 && <span className="badge warn">+{c.ship.arrival_day_offset}일 도착</span>}
+            </> : undefined,
           })),
         }]}
         onPick={(it) => finish({ ship: choices.find((c) => c.value + c.ship.id === it.id)!.value, tag })}

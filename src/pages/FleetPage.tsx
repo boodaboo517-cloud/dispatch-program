@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
-  activeRepair, newId, planCreateFieldRecurring, planFieldRecurringChange, planFieldRecurringEnd,
+  isBulkShip, activeRepair, newId, planCreateFieldRecurring, planFieldRecurringChange, planFieldRecurringEnd,
   versionOn, weekdaysLabel, fixedOffDays, planStaffFixedOff, LEAVE_REASONS, cancelLeave, leaveRanges, setLeave,
   ON_CALL_SHIFT, SHIFT_PRESETS, driverGroup, guessDriverZone, type Driver, type Ship, type Vehicle, type VehicleType, type Weekday, type Zone,
 } from '../domain/index.ts';
@@ -317,6 +317,7 @@ function ShipsPanel() {
         <div key={s.id} className="card" onClick={() => open(s)} style={{ cursor: staff ? 'pointer' : 'default' }}>
           <div className="row">
             <b className="grow" style={{ fontSize: 19 }}>{s.name}</b>
+            {isBulkShip([s], s.name) && <span className="badge" style={{ background: '#e0f2fe', color: '#075985' }}>📦 벌크</span>}
             {s.route !== 'both' && <span className="badge">{s.route === 'up' ? '제주 출발만' : '육지 출발만'}</span>}
             {s.arrival_day_offset !== 1 && <span className="badge warn">+{s.arrival_day_offset}일 도착</span>}
             {staff && <span className="muted">수정 ›</span>}

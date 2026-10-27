@@ -193,6 +193,8 @@ export interface Ship extends Base {
   sort_order: number;
   /** departs_at = 제주 출발(상행) 시간, port_times = 기항지별 하행(육지 → 제주) 출발 시간 */
   port_times?: { port: string; time: string }[];
+  /** 벌크 선박: 차량은 안 타고 화물만 (성우벌크·영진벌크·세주벌크 등) */
+  bulk?: boolean;
 }
 
 export interface OrderSnapshot {

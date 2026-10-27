@@ -53,6 +53,14 @@ export function ShipEditSheet({ ship, close }: { ship: Ship; close: () => void }
         </div>
         <span className="muted small">육지 항구 버튼을 누르면 줄이 생깁니다. 시간을 넣으세요. 배차에서 하행 선박을 고를 때 "선박 · 목포 01:00"처럼 항구별로 나옵니다.</span>
       </div>
+      <div className="field">
+        <span>운송 방식</span>
+        <div className="seg" style={{ display: 'flex', gap: 6 }}>
+          <button className={`chip ${!x.bulk ? 'on' : ''}`} style={{ flex: 1, minHeight: 44 }} onClick={() => set({ bulk: false })}>🚚 차량 선적</button>
+          <button className={`chip ${x.bulk ? 'on' : ''}`} style={{ flex: 1, minHeight: 44 }} onClick={() => set({ bulk: true })}>📦 벌크 (화물만)</button>
+        </div>
+        <span className="muted small">{x.bulk ? '이 배로 상차하면 차량은 안 타고 화물만 갑니다. 도착지 하차는 차량번호 없이 배차 대기(미배차)로 들어갑니다.' : '차량이 화물을 싣고 배를 탑니다. 도착지 하차에 같은 차량이 들어갑니다.'}</span>
+      </div>
       <label className="field"><span>항로</span>
         <select value={x.route} onChange={(e) => set({ route: e.target.value as Ship['route'] })}>
           <option value="both">양방향</option><option value="up">제주 출발만 (제주 → 육지)</option><option value="down">육지 출발만 (육지 → 제주)</option>

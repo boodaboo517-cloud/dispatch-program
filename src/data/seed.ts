@@ -16,10 +16,10 @@ export function seedSnapshot(): Snapshot {
   const ships: [string, string][] = [
     ['완도', '08:40'], ['제누', '13:40'], ['완도', '16:00'], ['제이엘', '16:10'], ['대양', '16:30'],
     ['마린', '16:40'], ['성우', '16:40'], ['제누2', '17:00'], ['완도', '19:30'],
-    ['세주', ''], ['퀸메리', ''], ['목포', ''],
+    ['세주', ''], ['퀸메리', ''], ['목포', ''], ['성우벌크', '16:40'], ['영진벌크', ''], ['세주벌크', ''],
   ];
   s.ships = ships.map(([name, t], i) => ({
-    id: sid(1, i + 1), name, departs_at: t, route: 'both', arrival_day_offset: 1, sort_order: i, port_times: [],
+    id: sid(1, i + 1), name, departs_at: t, route: 'both', arrival_day_offset: 1, sort_order: i, port_times: [], bulk: name.includes('벌크'),
   }));
 
   const drivers: [string, string, Weekday[], string, '기사' | '현장' | '사무'][] = [

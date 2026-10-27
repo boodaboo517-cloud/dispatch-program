@@ -676,3 +676,33 @@ describe('야간 작업 · 야간 기사', () => {
     expect(missingNightDriver(r)).toBe(false);
   });
 });
+
+describe('벌크 선박 (화물만 선적)', () => {
+  it('벌크 선박을 고르면 상차는 벌크, 다음 날 하차는 차량번호 없이 미배차, 차량은 그 지역에 그대로', () => {
+    const snap = baseSnapshot();
+    snap.ships.push({ id: 'sb', name: '성우벌크', departs_at: '16:40', route: 'both', arrival_day_offset: 1, sort_order: 9 });
+    const tx = new Tx(snap);
+    const l = createOrder(tx, blankOrder({ date: D, zone: 'jeju', kind: 'load', vehicle_id: 'v9915', client_id: 'c-dm', departure_ship: '성우벌크' }));
+    expect(tx.get('daily_orders', l.id)!.shipment).toBe('bulk');
+    const u = tx.list('daily_orders').find((o) => o.linked_from_id === l.id)!;
+    expect([u.date, u.zone, u.vehicle_id]).toEqual([addDays(D, 1), 'land', null]);
+    expect(tx.list('vehicle_days').some((v) => v.date === addDays(D, 1) && v.vehicle_id === 'v9915' && v.zone === 'land')).toBe(false);
+    const next = buildBoard(tx.result(), addDays(D, 1));
+    expect(next.waiting.land.map((o) => o.id)).toEqual([u.id]);
+    // 일반 선박으로 바꾸면 다시 차량 선적 → 하차에 차량
+    saveOrder(tx, { ...tx.get('daily_orders', l.id)!, departure_ship: '제이엘' });
+    expect(tx.get('daily_orders', l.id)!.shipment).toBe('vehicle');
+    expect(tx.list('daily_orders').find((o) => o.linked_from_id === l.id)!.vehicle_id).toBe('v9915');
+  });
+  it('배차 줄 출발 선박을 벌크로 정하면 차량은 안 넘어가고 상차만 벌크 · 선박 등록에서 벌크 선택', () => {
+    const snap = baseSnapshot();
+    snap.ships.push({ id: 'sy', name: '영진', departs_at: '17:00', route: 'both', arrival_day_offset: 1, sort_order: 9, bulk: true });
+    const tx = new Tx(snap);
+    const l = createOrder(tx, blankOrder({ date: D, zone: 'jeju', kind: 'load', vehicle_id: 'v9914', client_id: 'c-dm' }));
+    setRowShip(tx, { date: D, vehicle_id: 'v9914', zone: 'jeju', which: 'departure', ship: '영진', tag: '' });
+    expect(tx.get('daily_orders', l.id)!.shipment).toBe('bulk');
+    expect(tx.list('vehicle_days').find((v) => v.date === D && v.vehicle_id === 'v9914')!.departure_ship).toBeNull();
+    expect(tx.list('daily_orders').find((o) => o.linked_from_id === l.id)!.vehicle_id).toBeNull();
+    expect(tx.list('vehicle_days').some((v) => v.date === addDays(D, 1) && v.vehicle_id === 'v9914')).toBe(false);
+  });
+});

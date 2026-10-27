@@ -23,6 +23,12 @@ export function findShip(ships: Ship[], value: string | null | undefined): Ship 
   return ships.find((s) => s.name === name);
 }
 
+/** 벌크 선박(차량은 안 타고 화물만): 선박 등록에서 벌크로 정했거나 이름에 "벌크"가 들어간 배 */
+export function isBulkShip(ships: Ship[], value: string | null | undefined): boolean {
+  if (!value || isWaitShip(value)) return false;
+  return !!findShip(ships, value)?.bulk || parseShip(value).name.includes('벌크');
+}
+
 /** 선박 칸 값의 출발 시간: 기항지가 있으면 그 기항지 하행 시간, 없으면 제주 출발 시간 */
 export function shipTimeOf(ships: Ship[], value: string | null | undefined): string {
   const { name, port } = parseShip(value);
