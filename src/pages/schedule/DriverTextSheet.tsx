@@ -5,7 +5,7 @@ import { store } from '../../data/store.ts';
 import { fmtDate } from '../../lib/time.ts';
 import { useSnap } from '../../ui/hooks.ts';
 import { Sheet, useSheet } from '../../ui/Sheet.tsx';
-import { driverDayText, peopleOn } from './driverText.ts';
+import { PERSON_GROUPS, driverDayText, peopleOn } from './driverText.ts';
 
 async function copy(text: string) {
   try {
@@ -53,12 +53,20 @@ export function DriverTextButton({ board, date }: { board: Board; date: string }
     return (
       <Sheet title={`${fmtDate(date)} 기사별 일정 문자`} onClose={close}>
         {!people.length && <p className="muted">이날 배차·휴무인 사람이 없습니다.</p>}
-        {people.map((p) => (
-          <div key={p.id} className="list-item" onClick={() => { close(); openPerson(p.id, p.name); }}>
-            <div className="grow"><div style={{ fontWeight: 700, fontSize: 17 }}>{p.name}</div><div className="muted small">{p.what}</div></div>
-            <span className="muted">›</span>
-          </div>
-        ))}
+        {PERSON_GROUPS.map((g) => {
+          const list = people.filter((p) => p.group === g);
+          return list.length ? (
+            <div key={g}>
+              <div className="section-label">{g === '현장' ? '현장 근무자' : g === '휴무' ? '휴무자' : `${g} 기사`} {list.length}</div>
+              {list.map((p) => (
+                <div key={p.id} className="list-item" onClick={() => { close(); openPerson(p.id, p.name); }}>
+                  <div className="grow"><div style={{ fontWeight: 700, fontSize: 17 }}>{p.name}</div><div className="muted small">{p.what}</div></div>
+                  <span className="muted">›</span>
+                </div>
+              ))}
+            </div>
+          ) : null;
+        })}
       </Sheet>
     );
   });

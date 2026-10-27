@@ -12,24 +12,33 @@ const offIds = (snap: Snapshot, date: string) => {
   return new Set([...off.land, ...off.jeju].filter((d) => !d.unlisted).map((d) => d.id));
 };
 
-/** 그날 일이 있는 사람 (배차 기사 · 야간 · 동승 · 현장근무) 다음에 휴무자, 이름순 */
-export function peopleOn(snap: Snapshot, board: Board): { id: string; name: string; what: string }[] {
+export type PersonGroup = '육지' | '제주' | '현장' | '휴무';
+export const PERSON_GROUPS: PersonGroup[] = ['육지', '제주', '현장', '휴무'];
+
+/** 그날 일이 있는 사람 · 휴무자: 육지 기사 → 제주 기사 → 현장 근무자 → 휴무자, 묶음 안에서는 이름순 */
+export function peopleOn(snap: Snapshot, board: Board): { id: string; name: string; what: string; group: PersonGroup }[] {
   const what = new Map<string, Set<string>>();
-  const add = (id: string | null, w: string) => { if (id) what.set(id, (what.get(id) ?? new Set()).add(w)); };
+  const group = new Map<string, PersonGroup>();
+  const add = (id: string | null, w: string, g: PersonGroup) => {
+    if (!id) return;
+    what.set(id, (what.get(id) ?? new Set()).add(w));
+    // 육지·제주 둘 다 있으면(당일 왕복 등) 먼저 나온 쪽 = 육지
+    const cur = group.get(id);
+    if (!cur || PERSON_GROUPS.indexOf(g) < PERSON_GROUPS.indexOf(cur)) group.set(id, g);
+  };
   for (const r of board.rows) {
-    add(r.driverId, r.vehicle.short_no);
-    add(r.loadDriverId, r.vehicle.short_no);
-    add(r.nightDriverId, `${r.vehicle.short_no} 야간`);
-    add(r.helperId, `${r.vehicle.short_no} 동승`);
+    const g: PersonGroup = r.zone === 'jeju' ? '제주' : '육지';
+    add(r.driverId, r.vehicle.short_no, g);
+    add(r.loadDriverId, r.vehicle.short_no, g);
+    add(r.nightDriverId, `${r.vehicle.short_no} 야간`, g);
+    add(r.helperId, `${r.vehicle.short_no} 동승`, g);
   }
-  for (const f of board.field) if (!f.is_off) add(f.staff_id, '현장');
-  for (const id of offIds(snap, board.date)) if (!what.has(id)) add(id, '휴무');
-  const rank = (w: string) => (w === '휴무' ? 2 : w === '현장' ? 1 : 0);
+  for (const f of board.field) if (!f.is_off) add(f.staff_id, '현장', '현장');
+  for (const id of offIds(snap, board.date)) if (!what.has(id)) add(id, '휴무', '휴무');
   return [...what.entries()]
-    .map(([id, w]) => ({ id, name: driverName(snap, id), what: [...w].join(' · ') }))
+    .map(([id, w]) => ({ id, name: driverName(snap, id), what: [...w].join(' · '), group: group.get(id)! }))
     .filter((x) => x.name)
-    // 배차 기사 먼저, 현장근무만 있는 사람, 휴무자 순
-    .sort((a, b) => rank(a.what) - rank(b.what) || a.name.localeCompare(b.name, 'ko'));
+    .sort((a, b) => PERSON_GROUPS.indexOf(a.group) - PERSON_GROUPS.indexOf(b.group) || a.name.localeCompare(b.name, 'ko'));
 }
 
 function orderLine(snap: Snapshot, o: DailyOrder, i: number): string[] {

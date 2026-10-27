@@ -68,7 +68,7 @@ describe('기사별 일정 문자', () => {
     s.drivers = [{ id: 'dA', name: '김재표', work_days: [], shift: '', staff_type: '기사' } as never];
     s.field_assignments = [{ id: 'f1', date: D, staff_id: 'dA', is_off: true, site_id: null, task: '휴무', vehicle_id: null, sort_order: 0 } as never];
     const board = buildBoard(s, D);
-    expect(peopleOn(s, board)).toEqual([{ id: 'dA', name: '김재표', what: '휴무' }]);
+    expect(peopleOn(s, board)).toEqual([{ id: 'dA', name: '김재표', what: '휴무', group: '휴무' }]);
     expect(driverDayText(s, board, D, 'dA')).toBe('10/20(화) 김재표\n\n휴무');
   });
 });
