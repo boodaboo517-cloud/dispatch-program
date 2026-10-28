@@ -72,11 +72,7 @@ export function blankVehicleDay(p: { date: string; vehicle_id: string } & Partia
     fare_kind: '',
     boarding: false,
     night_driver_id: null,
-    turn: false,
-    turn_driver_id: null,
-    turn_load_driver_id: null,
-    turn_departure_ship: null,
-    turn_departure_ship_tag: '',
+    // 연속운행 칸(turn·turn_*)은 넣지 않는다: 쓸 때만 저장 (서버에 칸이 아직 없어도 다른 저장이 실패하지 않게)
     arrival_ship: null,
     arrival_ship_tag: '',
     departure_ship: null,
