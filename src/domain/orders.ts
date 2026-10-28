@@ -72,6 +72,9 @@ export function blankVehicleDay(p: { date: string; vehicle_id: string } & Partia
     fare_kind: '',
     boarding: false,
     night_driver_id: null,
+    turn: false,
+    turn_driver_id: null,
+    turn_load_driver_id: null,
     arrival_ship: null,
     arrival_ship_tag: '',
     departure_ship: null,
@@ -246,7 +249,7 @@ export function ensureVehicleDay(tx: Tx, date: string, vehicleId: string, zone: 
 
 /** 줄 자체에 적은 내용 (오더 제외) */
 function vehicleDayOwnContent(vd: VehicleDay): boolean {
-  return !!(vd.departure_ship || vd.status || vd.status_memo || vd.driver_id || vd.load_driver_id || vd.helper_driver_id || vd.start_time || vd.start_place || vd.unload_note || vd.load_note || vd.am_label || vd.fare_kind || vd.boarding || vd.night_driver_id);
+  return !!(vd.departure_ship || vd.status || vd.status_memo || vd.driver_id || vd.load_driver_id || vd.helper_driver_id || vd.start_time || vd.start_place || vd.unload_note || vd.load_note || vd.am_label || vd.fare_kind || vd.boarding || vd.night_driver_id || vd.turn || vd.turn_driver_id || vd.turn_load_driver_id);
 }
 
 function vehicleDayHasContent(tx: Tx, vd: VehicleDay): boolean {
@@ -464,6 +467,8 @@ function isSameDayTrip(tx: Tx, o: DailyOrder): boolean {
  */
 function placeVehicleDay(tx: Tx, o: DailyOrder): VehicleDay | undefined {
   const cur = findVehicleDay(tx, o.date, o.vehicle_id!);
+  // 왕복으로 정한 차량: 원래 지역은 그대로, 건너간 쪽 오더는 보조 줄에
+  if (cur?.turn && cur.zone) return cur.zone === o.zone ? cur : undefined;
   if (isSameDayTrip(tx, o)) {
     // 당일 왕복: 차량은 출발한 쪽(상차 반대편)에서 하루를 시작하고 끝낸다
     const home = o.kind === 'load' ? opposite(o.zone) : o.zone;

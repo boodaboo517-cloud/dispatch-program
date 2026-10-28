@@ -2,7 +2,7 @@
 import { addDays, weekdayOf } from './dates.ts';
 import { newId } from './ids.ts';
 import { activeRepair, repairMemo, saveMaintenance } from './maintenance.ts';
-import { carriedLoads, ensureVehicleDay, heldLoads, opposite, waitsForShip } from './orders.ts';
+import { carriedLoads, ensureVehicleDay, findVehicleDay, heldLoads, opposite, waitsForShip } from './orders.ts';
 import { departDelay, isWaitShip, shipTimeOf } from './ships.ts';
 import type { Tx } from './tx.ts';
 import { DEFAULT_START, ON_CALL_SHIFT } from './types.ts';
@@ -227,7 +227,8 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
     // 제주 기사는 따로 적지 않으면 기본 출근(07:00 부두)
     const startDefault = zone === 'jeju' && !!driverId && !vd?.start_time && !vd?.start_place && status !== 'rest' && status !== 'repair';
     // 야간 기사: 야간 작업이 있는 쪽 줄에. 야간 작업이 아직 없으면 당일 왕복으로 건너간 쪽(저녁에 차량이 있는 곳) 줄에
-    const nightsElsewhere = !nights.length && elsewhere.length > 0;
+    const turn = !!vd?.turn && !!zone;
+    const nightsElsewhere = !nights.length && (elsewhere.length > 0 || turn);
     const main: BoardRow = {
       vehicle: v,
       zone,
@@ -264,7 +265,8 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
       secondary: false,
     };
     rows.push(main);
-    if (elsewhere.length) {
+    // 다른 구역에도 오더가 있거나 왕복으로 정한 차량: 그 구역에 보조 줄 (따로 배차)
+    if (elsewhere.length || turn) {
       const u = elsewhere.filter((o) => o.kind === 'unload' && !o.night);
       const l = elsewhere.filter((o) => o.kind === 'load' && !o.night);
       const nt = elsewhere.filter((o) => o.night);
@@ -286,8 +288,8 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
         held: [],
         nights: nt,
         nightDriverId: night,
-        driverId: u.length || nt.some((o) => o.kind === 'unload') ? ordDrv(u) ?? night : null,
-        loadDriverId: l.length || nt.some((o) => o.kind === 'load') ? ordDrv(l) ?? night : null,
+        driverId: vd?.turn_driver_id ?? (u.length || nt.some((o) => o.kind === 'unload') ? ordDrv(u) ?? night : null),
+        loadDriverId: vd?.turn_load_driver_id ?? (l.length || nt.some((o) => o.kind === 'load') ? ordDrv(l) ?? night : null),
         unloadSeq: null,
         loadSeq: null,
         helperId: vd?.helper_driver_id ?? null,
@@ -498,6 +500,8 @@ export function setRowDriver(tx: Tx, p: { date: string; vehicle_id: string; zone
   const side = p.side ?? 'unload';
   // 당일 왕복으로 건너간 쪽 줄(보조 줄): 그 구역 오더의 기사만 바꾸고 차량 위치·원래 기사는 그대로
   if (p.secondary) {
+    const vd = findVehicleDay(tx, p.date, p.vehicle_id);
+    if (vd) tx.update('vehicle_days', vd.id, side === 'unload' ? { turn_driver_id: p.driver_id } : { turn_load_driver_id: p.driver_id });
     for (const o of tx.list('daily_orders').filter((o) => o.date === p.date && o.vehicle_id === p.vehicle_id && o.zone === p.zone && !o.night && o.kind === side)) {
       if (o.driver_id !== p.driver_id) tx.update('daily_orders', o.id, { driver_id: p.driver_id });
     }
@@ -541,6 +545,15 @@ export function setRowAmLabel(tx: Tx, p: { date: string; vehicle_id: string; zon
     const drv = pm;
     if (o.driver_id !== drv) tx.update('daily_orders', o.id, { driver_id: drv });
   }
+}
+
+/**
+ * 왕복 켜기/끄기: 차량은 원래 지역(zone) 줄에 그대로 있고, 그날 다른 지역에 줄이 하나 더 생겨 따로 배차한다.
+ * 끄면 건너간 쪽 기사도 비운다 (그쪽 오더가 남아 있으면 줄은 오더 때문에 계속 보임).
+ */
+export function setTurn(tx: Tx, p: { date: string; vehicle_id: string; zone: Zone; on: boolean }) {
+  const vd = ensureVehicleDay(tx, p.date, p.vehicle_id, p.zone);
+  tx.update('vehicle_days', vd.id, p.on ? { turn: true } : { turn: false, turn_driver_id: null, turn_load_driver_id: null });
 }
 
 /** 야간 기사 지정 (null = 비우기). 그 차량 그날 야간 작업 오더의 기사도 같이 */

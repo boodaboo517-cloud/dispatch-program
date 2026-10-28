@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { buildBoard, lastStart, missingNightDriver, orderDriver, setRowAmLabel, setRowNightDriver, setVehicleDayStatus, missingDriver, needsDriver, setRowNote, setDriverSeq, setRowDriver, setRowHelper, setRowStart, startText } from '../board.ts';
+import { buildBoard, lastStart, missingNightDriver, orderDriver, setTurn, setRowAmLabel, setRowNightDriver, setVehicleDayStatus, missingDriver, needsDriver, setRowNote, setDriverSeq, setRowDriver, setRowHelper, setRowStart, startText } from '../board.ts';
 import { blankOrder, deleteOrder, postponeUnload, repairShipLinks, saveOrder, setRowShip, workText } from '../orders.ts';
 import { Tx, applyMutations } from '../tx.ts';
 import { addDays } from '../dates.ts';
@@ -709,5 +709,32 @@ describe('벌크 선박 (화물만 선적)', () => {
     expect(tx.list('vehicle_days').find((v) => v.date === D && v.vehicle_id === 'v9914')!.departure_ship).toBeNull();
     expect(tx.list('daily_orders').find((o) => o.linked_from_id === l.id)!.vehicle_id).toBeNull();
     expect(tx.list('vehicle_days').some((v) => v.date === addDays(D, 1) && v.vehicle_id === 'v9914')).toBe(false);
+  });
+});
+
+describe('왕복 차량 (당일 다른 지역에 추가 배차)', () => {
+  it('왕복으로 정하면 원래 지역 줄은 그대로, 다른 지역에 줄이 생기고 그쪽 상차·기사를 따로 배차', () => {
+    const tx = new Tx(baseSnapshot());
+    // 제주 9914: 오전 하차만 있고 기사 dA
+    saveOrder(tx, blankOrder({ date: D, zone: 'jeju', kind: 'unload', vehicle_id: 'v9914', client_id: 'c-sin' }));
+    setRowDriver(tx, { date: D, vehicle_id: 'v9914', zone: 'jeju', driver_id: 'dA' });
+    setTurn(tx, { date: D, vehicle_id: 'v9914', zone: 'jeju', on: true });
+    let b = buildBoard(tx.result(), D);
+    const land0 = b.rows.find((r) => r.vehicle.id === 'v9914' && r.secondary)!;
+    expect([land0.zone, land0.driverId, land0.loadDriverId, land0.loads.length]).toEqual(['land', null, null, 0]);
+    // 육지 상차를 이 차량에 배차 → 차량은 제주에 그대로
+    const l = createOrder(tx, blankOrder({ date: D, zone: 'land', kind: 'load', vehicle_id: 'v9914', client_id: 'c-dm', departure_ship: '완도' }));
+    // 육지 쪽 상차 기사 따로
+    setRowDriver(tx, { date: D, vehicle_id: 'v9914', zone: 'land', driver_id: 'dB', side: 'load', secondary: true });
+    b = buildBoard(tx.result(), D);
+    const jeju = b.rows.find((r) => r.vehicle.id === 'v9914' && !r.secondary)!;
+    const land = b.rows.find((r) => r.vehicle.id === 'v9914' && r.secondary)!;
+    expect([jeju.zone, jeju.driverId, jeju.unloads.length]).toEqual(['jeju', 'dA', 1]);
+    expect([land.zone, land.loads.map((o) => o.id), land.loadDriverId]).toEqual(['land', [l.id], 'dB']);
+    expect(tx.get('daily_orders', l.id)!.driver_id).toBe('dB');
+    // 왕복 취소: 오더가 남아 있으면 줄은 남고, 따로 정한 기사는 비움
+    setTurn(tx, { date: D, vehicle_id: 'v9914', zone: 'jeju', on: false });
+    const vd = tx.list('vehicle_days').find((v) => v.date === D && v.vehicle_id === 'v9914')!;
+    expect([vd.zone, vd.turn, vd.turn_load_driver_id]).toEqual(['jeju', false, null]);
   });
 });

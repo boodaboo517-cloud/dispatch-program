@@ -312,6 +312,11 @@ export interface VehicleDay extends Base {
   am_label?: string;
   /** 야간 기사 (야간 작업 오더를 맡음) */
   night_driver_id?: string | null;
+  /** 왕복: 그날 차량이 다른 지역에 건너가 일을 하고 돌아옴 (원래 지역 줄은 그대로, 다른 지역에 줄 하나 더) */
+  turn?: boolean;
+  /** 왕복으로 건너간 쪽 하차·상차 기사 (원래 지역 기사와 따로) */
+  turn_driver_id?: string | null;
+  turn_load_driver_id?: string | null;
   /** 출발 선박 요금 구분 (빈 글자 = 자동) */
   fare_kind?: FareKind;
   /** 기사 승선 (선박비에 승선 금액 추가) */

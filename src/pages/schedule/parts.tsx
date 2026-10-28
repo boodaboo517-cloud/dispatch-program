@@ -1,4 +1,4 @@
-import { CARRIER_LABEL, DAY_STATUS_LABEL, REPAIR_SPAN_LABEL, HELPER_ROLE_LABEL, workText, WORK_TYPE_SHORT, abbrev, parseShip, seqMark, workLogOf, type BoardRow, type DailyOrder, type Snapshot } from '../../domain/index.ts';
+import { CARRIER_LABEL, DAY_STATUS_LABEL, missingDriver, REPAIR_SPAN_LABEL, HELPER_ROLE_LABEL, workText, WORK_TYPE_SHORT, abbrev, parseShip, seqMark, workLogOf, type BoardRow, type DailyOrder, type Snapshot } from '../../domain/index.ts';
 import { clientName, driverName, productName, productOf, qtyText, shipTimeOf } from '../../ui/labels.ts';
 
 export function hasMoney(snap: Snapshot, o: DailyOrder) {
@@ -60,7 +60,8 @@ export function ShipCellText({ snap, ship, tag }: { snap: Snapshot; ship: string
 }
 
 export function VehicleCellText({ snap, row, date }: { snap: Snapshot; row: BoardRow; date: string }) {
-  const hasWork = row.unloads.length + row.loads.length > 0;
+  // 미배치: 하차가 있는데 하차 기사가 없거나, 상차가 있는데 상차 기사가 없을 때만 (왕복 줄처럼 상차만 있고 상차 기사가 있으면 아님)
+  const hasWork = missingDriver(row, 'unload') || missingDriver(row, 'load');
   const name = driverName(snap, row.driverId);
   const log = row.driverId ? workLogOf(snap, row.driverId, date) : undefined;
   return (
