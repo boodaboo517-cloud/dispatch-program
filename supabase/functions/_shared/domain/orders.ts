@@ -418,7 +418,8 @@ export function saveOrder(tx: Tx, order: DailyOrder, opts: { userEdit?: boolean 
   const isEdit = !!existing && opts.userEdit !== false;
   const row: DailyOrder = {
     ...withShipShipment(tx, order, existing),
-    edited_manually: order.edited_manually || (isEdit && order.source !== 'manual'),
+    // 반복 발주 오더(나눈 건 포함)를 사람이 고치면 "직접 수정" → 반복 변경 때 남겨 둠
+    edited_manually: order.edited_manually || (isEdit && (order.source !== 'manual' || !!order.recurring_order_id)),
   };
   const saved = existing
     ? tx.update('daily_orders', row.id, row)

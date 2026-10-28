@@ -295,7 +295,12 @@ describe('반복 오더도 대당 자동 나누기', () => {
   it('생성할 때 날짜마다 1대씩 2건 (첫 건만 차량), 반대편 하차도 2건', () => {
     const snap = applyMutations(baseSnapshot(), make().mutations);
     const mon = snap.daily_orders.filter((o) => o.date === today && o.kind === 'load');
-    expect(mon.map((o) => [o.quantity, o.vehicle_id, o.source])).toEqual([[1, 'v9915', 'recurring'], [1, null, 'recurring']]);
+    // 나눈 건은 source manual (서버 "같은 날 반복 오더는 하나" 규칙), 반복 발주 id 로 묶임
+    expect(mon.map((o) => [o.quantity, o.vehicle_id, o.source])).toEqual([[1, 'v9915', 'recurring'], [1, null, 'manual']]);
+    expect(new Set(mon.map((o) => o.recurring_order_id)).size).toBe(1);
+    // 날짜마다 source recurring 은 하나뿐 (daily_orders_recurring_once)
+    const keys = snap.daily_orders.filter((o) => o.source === 'recurring').map((o) => `${o.recurring_order_id}|${o.date}`);
+    expect(new Set(keys).size).toBe(keys.length);
     expect(snap.daily_orders.filter((o) => o.date === '2026-10-20' && o.kind === 'unload')).toHaveLength(2);
   });
   it('반복 변경하면 나눈 건까지 함께 다시 만들어진다 (중복 없음)', () => {

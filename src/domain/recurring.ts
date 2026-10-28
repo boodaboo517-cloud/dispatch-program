@@ -119,7 +119,8 @@ function removeAutoOrders(tx: Tx, recId: string, fromDate: string, includeEdited
       removed++;
       continue;
     }
-    if (o.edited_manually || o.source !== 'recurring') {
+    // 나눈 건(source manual + 반복 발주 id)도 자동 오더로 본다
+    if (o.edited_manually || (o.source !== 'recurring' && o.source !== 'manual')) {
       keptManual++;
       continue;
     }

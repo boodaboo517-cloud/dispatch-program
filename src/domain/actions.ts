@@ -34,8 +34,9 @@ export function splitPerVehicle(tx: Tx, orderId: string): string[] {
     const copy = createOrder(tx, {
       ...tx.get('daily_orders', o.id)!,
       id: newId(), quantity: 1, vehicle_id: null, driver_id: null,
-      // 반복 발주에서 나온 건은 나눈 것도 반복 발주 소속으로 (변경·종료 때 함께 다시 만들어짐)
-      source: o.source, recurring_order_id: o.recurring_order_id, recurring_version_id: o.recurring_version_id, edited_manually: o.edited_manually,
+      // 반복 발주에서 나온 건은 나눈 것도 반복 발주 소속으로 (변경·종료 때 함께 다시 만들어짐).
+      // 서버의 "같은 날 반복 오더는 하나" 규칙에 걸리지 않게 나눈 건은 source 를 manual 로 (반복 발주 id 로 묶임)
+      source: o.source === 'recurring' ? 'manual' : o.source, recurring_order_id: o.recurring_order_id, recurring_version_id: o.recurring_version_id, edited_manually: o.edited_manually,
       linked_from_id: null, link_status: 'none', link_pending: null, sort_order: o.sort_order + i,
     });
     ids.push(copy.id);

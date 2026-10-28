@@ -223,18 +223,36 @@ class Store {
     this.flushing = true;
     try {
       const sending = new Map(this.outbox);
+      let dupSkipped = 0;
       for (const b of toBatches([...sending.values()])) {
         const { error } = b.op === 'upsert'
           ? await supabase.from(b.table).upsert(b.rows.map((r) => stripLocal(b.table, r)), { defaultToNull: false })
           : await supabase.from(b.table).delete().in('id', b.ids);
         if (error) {
           if (isNetworkError(error)) throw error;
-          // 권한·제약 오류: 이 묶음은 버리고 서버 상태로 되돌린다
-          this.toast(`저장 실패 (${b.table}): ${error.message}`, 'error');
+          // 중복(다른 기기·새벽 자동 연장이 같은 날 반복 오더를 먼저 만듦) · 그 때문에 빠진 오더를 가리키는 줄:
+          // 묶음 전체를 버리지 말고 한 줄씩 다시 보내서 걸리는 줄만 건너뛴다
+          if (b.op === 'upsert' && (error.code === '23505' || error.code === '23503')) {
+            for (const r of b.rows) {
+              const one = await supabase.from(b.table).upsert([stripLocal(b.table, r)], { defaultToNull: false });
+              if (!one.error) continue;
+              if (isNetworkError(one.error)) throw one.error;
+              if (one.error.code === '23505' && one.error.message.includes('recurring_once')) dupSkipped++;
+              else if (one.error.code !== '23503') this.toast(`저장 실패 (${b.table}): ${one.error.message}`, 'error');
+            }
+          } else {
+            // 권한·제약 오류: 이 묶음은 버리고 서버 상태로 되돌린다
+            this.toast(`저장 실패 (${b.table}): ${error.message}`, 'error');
+          }
           void this.refreshTable(b.table);
         }
         const done = b.op === 'upsert' ? b.rows.map((r) => `${b.table}:${r.id as string}`) : b.ids.map((id) => `${b.table}:${id}`);
         for (const k of done) if (this.outbox.get(k) === sending.get(k)) this.outbox.delete(k);
+      }
+      if (dupSkipped) {
+        this.toast(`다른 기기에서 이미 만든 반복 일정 ${dupSkipped}건은 건너뛰었습니다`);
+        void this.refreshTable('daily_orders');
+        void this.refreshTable('order_revenue');
       }
     } catch {
       // 오프라인 — 연결되면 다시 보낸다
