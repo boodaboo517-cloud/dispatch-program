@@ -2,7 +2,7 @@
 import { addDays, weekdayOf } from './dates.ts';
 import { newId } from './ids.ts';
 import { activeRepair, repairMemo, saveMaintenance } from './maintenance.ts';
-import { carriedLoads, ensureVehicleDay, findVehicleDay, heldLoads, opposite, waitsForShip } from './orders.ts';
+import { carriedLoads, ensureVehicleDay, findVehicleDay, heldLoads, opposite, saveOrder, waitsForShip } from './orders.ts';
 import { departDelay, isWaitShip, shipTimeOf } from './ships.ts';
 import type { Tx } from './tx.ts';
 import { DEFAULT_START, ON_CALL_SHIFT } from './types.ts';
@@ -288,8 +288,9 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
         held: [],
         nights: nt,
         nightDriverId: night,
-        driverId: vd?.turn_driver_id ?? (u.length || nt.some((o) => o.kind === 'unload') ? ordDrv(u) ?? night : null),
-        loadDriverId: vd?.turn_load_driver_id ?? (l.length || nt.some((o) => o.kind === 'load') ? ordDrv(l) ?? night : null),
+        // 왕복으로 정한 차량은 그쪽에서 따로 정한 기사만 (원래 지역 기사는 안 올라감 → 정하기 전까지 미배치)
+        driverId: turn ? vd?.turn_driver_id ?? null : u.length || nt.some((o) => o.kind === 'unload') ? ordDrv(u) ?? night : null,
+        loadDriverId: turn ? vd?.turn_load_driver_id ?? null : l.length || nt.some((o) => o.kind === 'load') ? ordDrv(l) ?? night : null,
         unloadSeq: null,
         loadSeq: null,
         helperId: vd?.helper_driver_id ?? null,
@@ -551,9 +552,20 @@ export function setRowAmLabel(tx: Tx, p: { date: string; vehicle_id: string; zon
  * 왕복 켜기/끄기: 차량은 원래 지역(zone) 줄에 그대로 있고, 그날 다른 지역에 줄이 하나 더 생겨 따로 배차한다.
  * 끄면 건너간 쪽 기사도 비운다 (그쪽 오더가 남아 있으면 줄은 오더 때문에 계속 보임).
  */
-export function setTurn(tx: Tx, p: { date: string; vehicle_id: string; zone: Zone; on: boolean }) {
+export function setTurn(tx: Tx, p: { date: string; vehicle_id: string; zone: Zone; on: boolean }): number {
   const vd = ensureVehicleDay(tx, p.date, p.vehicle_id, p.zone);
-  tx.update('vehicle_days', vd.id, p.on ? { turn: true } : { turn: false, turn_driver_id: null, turn_load_driver_id: null });
+  const away = tx.list('daily_orders').filter((o) => o.date === p.date && o.vehicle_id === p.vehicle_id && o.zone !== p.zone);
+  if (p.on) {
+    tx.update('vehicle_days', vd.id, { turn: true });
+    // 원래 지역 기사는 올라가지 않으므로 건너간 쪽 오더에 들어 있던 원래 지역 기사는 비운다 (따로 배차할 때까지 미배치)
+    const home = new Set([vd.driver_id, vd.load_driver_id].filter(Boolean));
+    for (const o of away) if (!o.night && o.driver_id && home.has(o.driver_id)) tx.update('daily_orders', o.id, { driver_id: null });
+    return 0;
+  }
+  // 왕복 취소: 차량은 원래 지역에만, 건너간 쪽에 배차했던 오더는 배차 대기로
+  tx.update('vehicle_days', vd.id, { turn: false, turn_driver_id: null, turn_load_driver_id: null, zone: p.zone });
+  for (const o of away) saveOrder(tx, { ...tx.get('daily_orders', o.id)!, vehicle_id: null, driver_id: null });
+  return away.length;
 }
 
 /** 야간 기사 지정 (null = 비우기). 그 차량 그날 야간 작업 오더의 기사도 같이 */

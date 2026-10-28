@@ -140,8 +140,13 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
   const toggleTurn = (row: BoardRow, on: boolean) => {
     const home = row.secondary ? (row.zone ? opposite(row.zone) : null) : row.zone;
     if (!home) return;
+    const away = board.rows.find((r) => r.vehicle.id === row.vehicle.id && r.secondary);
+    const n = away ? away.unloads.length + away.loads.length + away.nights.length : 0;
+    if (!on && n && !confirm(`${row.vehicle.short_no} 왕복을 취소하면 차량은 ${ZONE_LABEL[home]}에만 남고, ${ZONE_LABEL[opposite(home)]}에 배차한 ${n}건은 배차 대기(미배차)로 돌아갑니다. 취소할까요?`)) return;
     store.run((tx) => setTurn(tx, { date, vehicle_id: row.vehicle.id, zone: home, on }));
-    store.toast(on ? `${row.vehicle.short_no} 왕복 · 오늘 ${ZONE_LABEL[opposite(home)]}에도 나옵니다` : `${row.vehicle.short_no} 왕복 취소`);
+    store.toast(on
+      ? `${row.vehicle.short_no} 왕복 · 오늘 ${ZONE_LABEL[opposite(home)]}에도 나옵니다 (기사는 그 줄에서 따로)`
+      : `${row.vehicle.short_no} 왕복 취소 · ${ZONE_LABEL[home]}에만${n ? ` · ${n}건 배차 대기로` : ''}`);
     if (on) onFocusVehicle?.(row.vehicle.id);
   };
 

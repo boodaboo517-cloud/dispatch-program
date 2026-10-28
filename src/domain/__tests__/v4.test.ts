@@ -732,9 +732,24 @@ describe('왕복 차량 (당일 다른 지역에 추가 배차)', () => {
     expect([jeju.zone, jeju.driverId, jeju.unloads.length]).toEqual(['jeju', 'dA', 1]);
     expect([land.zone, land.loads.map((o) => o.id), land.loadDriverId]).toEqual(['land', [l.id], 'dB']);
     expect(tx.get('daily_orders', l.id)!.driver_id).toBe('dB');
-    // 왕복 취소: 오더가 남아 있으면 줄은 남고, 따로 정한 기사는 비움
+    // 왕복 취소: 차량은 제주에만, 육지 줄은 없어지고 육지에 배차했던 상차는 배차 대기로
     setTurn(tx, { date: D, vehicle_id: 'v9914', zone: 'jeju', on: false });
     const vd = tx.list('vehicle_days').find((v) => v.date === D && v.vehicle_id === 'v9914')!;
     expect([vd.zone, vd.turn, vd.turn_load_driver_id]).toEqual(['jeju', false, null]);
+    expect([tx.get('daily_orders', l.id)!.vehicle_id, tx.get('daily_orders', l.id)!.driver_id]).toEqual([null, null]);
+    b = buildBoard(tx.result(), D);
+    expect(b.rows.filter((r) => r.vehicle.id === 'v9914').map((r) => r.zone)).toEqual(['jeju']);
+    expect(b.waiting.land.map((o) => o.id)).toEqual([l.id]);
+  });
+  it('왕복 줄 기사는 원래 지역 기사가 아니라 미배치 (따로 정할 때까지)', () => {
+    const tx = new Tx(baseSnapshot());
+    saveOrder(tx, blankOrder({ date: D, zone: 'jeju', kind: 'unload', vehicle_id: 'v9914', client_id: 'c-sin' }));
+    setRowDriver(tx, { date: D, vehicle_id: 'v9914', zone: 'jeju', driver_id: 'dA' });
+    // 예전처럼 육지 오더에 제주 기사가 들어가 있던 경우
+    const l = createOrder(tx, blankOrder({ date: D, zone: 'land', kind: 'load', vehicle_id: 'v9914', client_id: 'c-dm', driver_id: 'dA' }));
+    setTurn(tx, { date: D, vehicle_id: 'v9914', zone: 'jeju', on: true });
+    const land = buildBoard(tx.result(), D).rows.find((r) => r.vehicle.id === 'v9914' && r.secondary)!;
+    expect([land.driverId, land.loadDriverId, missingDriver(land, 'load')]).toEqual([null, null, true]);
+    expect(tx.get('daily_orders', l.id)!.driver_id).toBeNull();
   });
 });
