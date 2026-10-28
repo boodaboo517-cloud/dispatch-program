@@ -460,3 +460,7 @@ button.primary .night-red, button.danger .night-red { background: #fff; border-r
 .driver-text-btn { width: 100%; min-height: 48px; margin: 4px 0 8px; font-size: 16px; font-weight: 700; border-radius: 10px; }
 .driver-text { width: 100%; font-size: 15px; line-height: 1.45; font-family: inherit; white-space: pre-wrap; }
 button.kakao-btn { background: #fee500; border-color: #fee500; color: #191919; }
+.queue-btn { width: 100%; min-height: 48px; font-size: 16px; font-weight: 700; margin: 4px 0 8px; border-radius: 10px; }
+.queue-bar { height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden; margin-bottom: 8px; }
+.queue-bar > div { height: 100%; background: #fee500; }
+.room-field input { font-weight: 700; }
