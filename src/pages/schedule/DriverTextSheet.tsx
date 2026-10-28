@@ -32,6 +32,22 @@ async function share(text: string): Promise<boolean> {
   return true;
 }
 
+/** 카톡으로 보내기: 공유 창을 열기 전에 방 이름을 복사해 둔다 (카톡 검색칸에 붙여넣으면 그 방이 바로 나옴) */
+async function shareToRoom(text: string, room: string): Promise<boolean> {
+  if (room) {
+    try { await navigator.clipboard.writeText(room); } catch { /* 복사가 안 되면 검색칸에 직접 입력 */ }
+  }
+  return share(text);
+}
+
+/** 문자(SMS)로 보내기: 받는 사람 번호와 내용이 채워진 문자 앱을 연다 (전송만 누르면 됨) */
+export function smsUrl(phone: string, text: string): string {
+  const to = phone.replace(/[^\d+]/g, '');
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  return `sms:${to}${ios ? '&' : '?'}body=${encodeURIComponent(text)}`;
+}
+const phoneOf = (id: string) => store.getState().snap.drivers.find((d) => d.id === id)?.phone?.trim() ?? '';
+
 /** 사람별 카톡방 이름 (이 기기에만 저장: 카톡방은 보내는 사람 휴대폰에 있으므로) */
 const ROOM_KEY = 'kakao-rooms';
 function loadRooms(): Record<string, string> {
@@ -61,17 +77,27 @@ function RoomField({ id, name, room, setRoom }: { id: string; name: string; room
   );
 }
 
+function RoomTip({ room, phone }: { room: string; phone: string }) {
+  return (
+    <p className="muted small">
+      {room ? <>카톡 보내기를 누르면 <b>"{room}"</b> 이름이 복사됩니다. 카톡에서 맨 위 검색칸을 길게 눌러 <b>붙여넣기</b> 하면 그 방이 바로 나옵니다.</> : '보낼 카톡방 이름을 적어 두면 다음부터 자동으로 복사됩니다.'}
+      {phone ? <> 📱 문자는 {phone}로 바로 보낼 수 있습니다.</> : ''}
+    </p>
+  );
+}
+
 function TextSheet({ id, name, initial, title, close }: { id: string; name: string; initial: string; title: string; close: () => void }) {
   const [text, setText] = useState(initial);
   const [room, setRoom] = useState(loadRooms()[id] ?? '');
   return (
     <Sheet title={title} onClose={close} footer={<>
       <button onClick={() => void copy(text)}>📋 복사</button>
-      <button className="primary kakao-btn" onClick={() => { saveRoom(id, room); void share(text); }}>💬 {room ? `${room}에 보내기` : '카톡 공유'}</button>
+      {phoneOf(id) && <a className="btn sms-btn" href={smsUrl(phoneOf(id), text)}>📱 문자</a>}
+      <button className="primary kakao-btn" onClick={() => { saveRoom(id, room); void shareToRoom(text, room); }}>💬 {room ? `${room}에 보내기` : '카톡 공유'}</button>
     </>}>
       <RoomField id={id} name={name} room={room} setRoom={setRoom} />
       <textarea className="driver-text" value={text} onChange={(e) => setText(e.target.value)} rows={Math.min(24, text.split('\n').length + 1)} />
-      <p className="muted small">보내기 전에 글을 고칠 수 있습니다 (앱 일정은 바뀌지 않음).</p>
+      <RoomTip room={room} phone={phoneOf(id)} />
     </Sheet>
   );
 }
@@ -101,20 +127,27 @@ function QueueSheet({ people, board, date, close }: { people: Person[]; board: B
   }
   const send = async () => {
     saveRoom(p.id, room);
-    if (await share(text)) {
+    if (await shareToRoom(text, room)) {
       setSent(new Set(sent).add(p.id));
       go(i + 1);
     }
   };
+  // 문자 앱으로 넘어가면 돌아왔을 때 다음 사람으로
+  const sms = () => {
+    saveRoom(p.id, room);
+    setSent(new Set(sent).add(p.id));
+    setTimeout(() => go(i + 1), 800);
+  };
   return (
     <Sheet title={`${i + 1}/${people.length} · ${p.name}`} onClose={close} footer={<>
       <button onClick={() => go(i + 1)}>건너뛰기</button>
+      {phoneOf(p.id) && <a className="btn sms-btn" href={smsUrl(phoneOf(p.id), text)} onClick={sms}>📱 문자</a>}
       <button className="primary kakao-btn" onClick={() => void send()}>💬 {room ? `${room}에 보내기` : '카톡 공유'}</button>
     </>}>
       <div className="queue-bar"><div style={{ width: `${(i / people.length) * 100}%` }} /></div>
       <RoomField id={p.id} name={p.name} room={room} setRoom={setRoom} />
       <textarea className="driver-text" value={text} onChange={(e) => setText(e.target.value)} rows={Math.min(18, text.split('\n').length + 1)} />
-      <p className="muted small">보내기를 누르면 카톡이 열립니다. <b>{room || '보낼 방'}</b>을 고르고 보내면 다음 사람으로 넘어갑니다.</p>
+      <RoomTip room={room} phone={phoneOf(p.id)} />
       {i > 0 && <button className="ghost" onClick={() => go(i - 1)}>◀ 이전 사람</button>}
     </Sheet>
   );

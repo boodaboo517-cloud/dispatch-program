@@ -464,3 +464,4 @@ button.kakao-btn { background: #fee500; border-color: #fee500; color: #191919; }
 .queue-bar { height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden; margin-bottom: 8px; }
 .queue-bar > div { height: 100%; background: #fee500; }
 .room-field input { font-weight: 700; }
+a.btn.sms-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: #fff; color: var(--text); font-weight: 700; text-decoration: none; }
