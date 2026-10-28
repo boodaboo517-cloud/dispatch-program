@@ -1540,3 +1540,8 @@ drop trigger if exists driver_notice on vehicle_days;
 create trigger driver_notice after insert or update on vehicle_days for each row execute function notify_driver_change();
 drop trigger if exists driver_notice on daily_orders;
 create trigger driver_notice after insert or update or delete on daily_orders for each row execute function notify_driver_change();
+
+-- ===== 20261029000031_ship_depart_port.sql =====
+-- 선박 출발: 제주 쪽 출발 항구(비우면 제주) · 출발 시간이 다음 날(익일)인지. 육지 항구별 익일은 port_times 안 next_day
+alter table ships add column if not exists depart_port text not null default '';
+alter table ships add column if not exists depart_next_day boolean not null default false;

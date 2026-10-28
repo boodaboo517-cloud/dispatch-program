@@ -192,7 +192,10 @@ export interface Ship extends Base {
   arrival_day_offset: number; // 도착일 차이 (기본 1)
   sort_order: number;
   /** departs_at = 제주 출발(상행) 시간, port_times = 기항지별 하행(육지 → 제주) 출발 시간 */
-  port_times?: { port: string; time: string }[];
+  port_times?: { port: string; time: string; next_day?: boolean }[];
+  /** 제주 쪽 출발 항구 (비우면 제주) · 제주 출발 시간이 다음 날(익일)인지 */
+  depart_port?: string;
+  depart_next_day?: boolean;
   /** 벌크 선박: 차량은 안 타고 화물만 (성우벌크·영진벌크·세주벌크 등) */
   bulk?: boolean;
 }

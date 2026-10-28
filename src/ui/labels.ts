@@ -1,4 +1,4 @@
-import { shipTimeOf as shipTimeOfShips } from '../domain/ships.ts';
+import { shipTimeLabel } from '../domain/ships.ts';
 import type { DailyOrder, ShipTag, Snapshot, Storage, Zone, Kind } from '../domain/index.ts';
 
 export const ZONE_LABEL: Record<Zone, string> = { land: '육지', jeju: '제주' };
@@ -16,7 +16,8 @@ export const productOf = (s: Snapshot, o: Pick<DailyOrder, 'product_id'>) => s.p
 export const vehicleNo = (s: Snapshot, id: string | null) => s.vehicles.find((v) => v.id === id)?.short_no ?? '';
 export const driverName = (s: Snapshot, id: string | null) => s.drivers.find((d) => d.id === id)?.name ?? '';
 export const shipText = (ship: string | null, tag: ShipTag | '') => (ship ? `${tag ? tag + ' ' : ''}${ship}` : '');
-export const shipTimeOf = (s: Snapshot, value: string | null) => shipTimeOfShips(s.ships, value);
+/** 화면용 출발 시간 (익일이면 "익일 01:00") */
+export const shipTimeOf = (s: Snapshot, value: string | null) => shipTimeLabel(s.ships, value);
 export const qtyText = (o: Pick<DailyOrder, 'quantity' | 'unit'>) => (o.quantity == null ? '' : `${o.quantity}${o.unit === '파렛트' ? 'p' : o.unit}`);
 
 export function orderText(s: Snapshot, o: DailyOrder) {

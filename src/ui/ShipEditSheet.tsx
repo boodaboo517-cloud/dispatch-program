@@ -8,6 +8,18 @@ import { ShipFaresCard } from './ShipFares.tsx';
 
 /** 육지 출발 항구 바로 넣기 버튼 */
 const LAND_PORTS = ['목포', '부산', '완도', '삼천포', '녹동', '여수', '진도', '인천', '고흥'];
+/** 제주 쪽 출발 항구 */
+const JEJU_PORTS = ['제주', '서귀포', '애월', '한림', '성산'];
+
+/** 당일 / 익일 (출발 시간이 다음 날 새벽 등) */
+function DayToggle({ next, onChange, label }: { next: boolean; onChange: (next: boolean) => void; label: string }) {
+  return (
+    <div className="seg day-toggle" role="group" aria-label={`${label} 출발일`}>
+      <button type="button" className={!next ? 'on' : ''} onClick={() => onChange(false)}>당일</button>
+      <button type="button" className={next ? 'on' : ''} onClick={() => onChange(true)}>익일</button>
+    </div>
+  );
+}
 
 export const blankShip = (sortOrder: number): Ship =>
   ({ id: newId(), name: '', departs_at: '', route: 'both', arrival_day_offset: 1, sort_order: sortOrder, port_times: [] });
@@ -18,10 +30,16 @@ export function ShipEditSheet({ ship, close }: { ship: Ship; close: () => void }
   const [x, setX] = useState<Ship>({ ...ship, port_times: ship.port_times ?? [] });
   const set = (p: Partial<Ship>) => setX({ ...x, ...p });
   const ports = x.port_times ?? [];
-  const setPort = (i: number, p: Partial<{ port: string; time: string }>) => set({ port_times: ports.map((y, j) => (j === i ? { ...y, ...p } : y)) });
+  const setPort = (i: number, p: Partial<{ port: string; time: string; next_day: boolean }>) => set({ port_times: ports.map((y, j) => (j === i ? { ...y, ...p } : y)) });
   const save = () => {
     if (!x.name.trim()) return store.toast('선박명을 입력하세요', 'warn');
-    const row = { ...x, name: x.name.trim(), port_times: ports.filter((p) => p.port.trim()).map((p) => ({ port: p.port.trim(), time: p.time })) };
+    const row: Ship = { ...x, name: x.name.trim(), port_times: ports.filter((p) => p.port.trim()).map((p) => ({ port: p.port.trim(), time: p.time, ...(p.next_day ? { next_day: true } : {}) })) };
+    // 출발 항구·익일은 쓴 때만 저장 (서버에 칸이 아직 없어도 다른 선박 저장이 실패하지 않게)
+    const port = x.depart_port?.trim() ?? '';
+    if (port && port !== '제주') row.depart_port = port;
+    else if (ship.depart_port !== undefined) row.depart_port = '';
+    else delete row.depart_port;
+    if (!x.depart_next_day && ship.depart_next_day === undefined) delete row.depart_next_day;
     store.run((tx) => (isNew ? tx.insert('ships', row) : tx.update('ships', row.id, row)));
     close();
   };
@@ -32,16 +50,22 @@ export function ShipEditSheet({ ship, close }: { ship: Ship; close: () => void }
     </>}>
       <label className="field"><span>선박명</span><input value={x.name} onChange={(e) => set({ name: e.target.value })} /></label>
       <div className="field">
-        <span>출발 시간 (출발 항구별)</span>
+        <span>출발 지역 · 시간 (당일/익일)</span>
         <div className="port-row">
-          <b className="port-name">제주</b>
-          <input type="time" aria-label="제주 출발 시간" value={x.departs_at} onChange={(e) => set({ departs_at: e.target.value })} />
+          <input className="port-name" list="jeju-ports" aria-label="제주 쪽 출발 항구" value={x.depart_port ?? ''} placeholder="제주" onChange={(e) => set({ depart_port: e.target.value })} />
+          <input type="time" aria-label="제주 쪽 출발 시간" value={x.departs_at} onChange={(e) => set({ departs_at: e.target.value })} />
+          <DayToggle label="제주 쪽" next={!!x.depart_next_day} onChange={(v) => set({ depart_next_day: v })} />
           <span className="port-x" />
+        </div>
+        <datalist id="jeju-ports">{JEJU_PORTS.map((n) => <option key={n} value={n} />)}</datalist>
+        <div className="chips" style={{ flexWrap: 'wrap', overflow: 'visible', margin: '2px 0 6px' }}>
+          {JEJU_PORTS.map((n) => <button key={n} type="button" className={`chip ${(x.depart_port?.trim() || '제주') === n ? 'on' : ''}`} onClick={() => set({ depart_port: n === '제주' ? '' : n })}>{n}</button>)}
         </div>
         {ports.map((p, i) => (
           <div className="port-row" key={i}>
             <input className="port-name" placeholder="항구" aria-label="출발 항구" value={p.port} onChange={(e) => setPort(i, { port: e.target.value })} />
-              <input type="time" aria-label={`${p.port || '항구'} 출발 시간`} value={p.time} onChange={(e) => setPort(i, { time: e.target.value })} />
+            <input type="time" aria-label={`${p.port || '항구'} 출발 시간`} value={p.time} onChange={(e) => setPort(i, { time: e.target.value })} />
+            <DayToggle label={p.port || '항구'} next={!!p.next_day} onChange={(v) => setPort(i, { next_day: v })} />
             <button className="ghost port-x" aria-label={`${p.port || '항구'} 삭제`} onClick={() => set({ port_times: ports.filter((_, j) => j !== i) })}>✕</button>
           </div>
         ))}
@@ -51,7 +75,7 @@ export function ShipEditSheet({ ship, close }: { ship: Ship; close: () => void }
           ))}
           <button className="chip" onClick={() => set({ port_times: [...ports, { port: '', time: '' }] })}>＋ 직접 입력</button>
         </div>
-        <span className="muted small">육지 항구 버튼을 누르면 줄이 생깁니다. 시간을 넣으세요. 배차에서 하행 선박을 고를 때 "선박 · 목포 01:00"처럼 항구별로 나옵니다.</span>
+        <span className="muted small">첫 줄은 제주 쪽 출발(항구를 고르거나 직접 입력), 아래는 육지 항구 버튼을 눌러 추가합니다. 자정이 지나 다음 날 출발하면 <b>익일</b>을 고르세요. 배차·일정표에 "익일 01:00"처럼 나옵니다.</span>
       </div>
       <div className="field">
         <span>운송 방식</span>

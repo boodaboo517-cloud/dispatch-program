@@ -33,6 +33,39 @@ export function isBulkShip(ships: Ship[], value: string | null | undefined): boo
   return !!findShip(ships, value)?.bulk || parseShip(value).name.includes('벌크');
 }
 
+/** 선박 칸 값의 출발 정보: 시간(HH:mm) · 익일 여부 · 출발 항구 */
+export function shipDepart(ships: Ship[], value: string | null | undefined): { time: string; nextDay: boolean; port: string } {
+  const whole = value?.trim();
+  const exact = whole ? ships.find((s) => s.name === whole) : undefined;
+  const jeju = (s: Ship | undefined) => ({ time: s?.departs_at ?? '', nextDay: !!s?.depart_next_day, port: s?.depart_port?.trim() || '제주' });
+  if (exact) return jeju(exact);
+  const { name, port } = parseShip(value);
+  if (!name) return { time: '', nextDay: false, port: '' };
+  const same = ships.filter((s) => s.name === name);
+  if (port) {
+    for (const s of same) {
+      const p = s.port_times?.find((x) => x.port === port);
+      if (p?.time) return { time: p.time, nextDay: !!p.next_day, port };
+    }
+  }
+  return jeju(same[0]);
+}
+
+/** 화면에 보이는 출발 시간: 익일이면 "익일 01:00" */
+export function shipTimeLabel(ships: Ship[], value: string | null | undefined): string {
+  const d = shipDepart(ships, value);
+  return d.time ? `${d.nextDay ? '익일 ' : ''}${d.time}` : '';
+}
+
+/** 정렬용 시간: 익일 출발은 하루 뒤로 (01:00 익일 → 25:00) */
+export function shipSortTime(ships: Ship[], value: string | null | undefined): string {
+  const d = shipDepart(ships, value);
+  if (!d.time) return '';
+  if (!d.nextDay) return d.time;
+  const [h, m] = d.time.split(':');
+  return `${String(Number(h) + 24).padStart(2, '0')}:${m ?? '00'}`;
+}
+
 /** 선박 칸 값의 출발 시간: 기항지가 있으면 그 기항지 하행 시간, 없으면 제주 출발 시간 */
 export function shipTimeOf(ships: Ship[], value: string | null | undefined): string {
   const whole = value?.trim();
@@ -54,6 +87,8 @@ export interface ShipChoice {
   value: string;
   label: string;
   time: string;
+  /** 익일 출발 */
+  nextDay: boolean;
   ship: Ship;
 }
 
@@ -70,12 +105,14 @@ export function shipChoices(ships: Ship[], zone: Zone | null, which: 'arrival' |
     if (fromJeju || !ports.length) {
       if (fromJeju && s.route === 'down') continue;
       if (!fromJeju && s.route === 'up') continue;
-      out.push({ value: s.name, label: s.name, time: s.departs_at, ship: s });
+      const port = s.depart_port?.trim();
+      out.push({ value: s.name, label: port && port !== '제주' && fromJeju ? `${s.name} · ${port}` : s.name, time: s.departs_at, nextDay: !!s.depart_next_day, ship: s });
     } else {
-      for (const p of ports) out.push({ value: formatShip(s.name, p.port), label: `${s.name} · ${p.port}`, time: p.time, ship: s });
+      for (const p of ports) out.push({ value: formatShip(s.name, p.port), label: `${s.name} · ${p.port}`, time: p.time, nextDay: !!p.next_day, ship: s });
     }
   }
-  return out.sort((a, b) => (a.time || '99').localeCompare(b.time || '99') || a.label.localeCompare(b.label, 'ko'));
+  const key = (c: ShipChoice) => (c.time ? (c.nextDay ? `${Number(c.time.slice(0, 2)) + 24}${c.time.slice(2)}` : c.time) : '99');
+  return out.sort((a, b) => key(a).localeCompare(key(b)) || a.label.localeCompare(b.label, 'ko'));
 }
 
 /**

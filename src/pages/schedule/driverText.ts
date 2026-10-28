@@ -1,9 +1,9 @@
 // 기사 한 사람의 그날 일정을 카톡 문자로 (그림 없이): 도착 선박 · 차량 · 출근 · 오전(하차)/오후(상차) · 야간 · 마감 선박
 import {
-  FIELD_PART_LABEL, HELPER_ROLE_LABEL, isWaitShip, offByZone, parseShip, pmArrival, shownMemo, workText, type Board, type BoardRow, type DailyOrder, type Snapshot, type Zone,
+  FIELD_PART_LABEL, HELPER_ROLE_LABEL, isWaitShip, offByZone, parseShip, shipDepart, pmArrival, shownMemo, workText, type Board, type BoardRow, type DailyOrder, type Snapshot, type Zone,
 } from '../../domain/index.ts';
 import { dayjs } from '../../lib/time.ts';
-import { ZONE_LABEL, clientName, driverName, productName, productOf, qtyText, shipTimeOf, vehicleNo } from '../../ui/labels.ts';
+import { ZONE_LABEL, clientName, driverName, productName, productOf, qtyText, vehicleNo } from '../../ui/labels.ts';
 import { regionOf } from './parts.tsx';
 
 /** 그날 휴무인 사람 (일정표 휴무 명단과 같음) */
@@ -81,9 +81,10 @@ function arrivalText(snap: Snapshot, value: string | null, zone: Zone): string {
 function departureText(snap: Snapshot, value: string | null, zone: Zone): string {
   if (!value || isWaitShip(value)) return '';
   const { name, port } = splitShip(snap, value);
-  const time = shipTimeOf(snap, value);
-  const hm = /^(\d{1,2}):(\d{2})$/.exec(time);
-  return `${shipLabel(name, port, '출발', zone === 'jeju' ? '제주' : '육지')}${hm ? ` ${Number(hm[1])}시${hm[2]}분` : time ? ` ${time}` : ''}`;
+  const d = shipDepart(snap.ships, value);
+  const hm = /^(\d{1,2}):(\d{2})$/.exec(d.time);
+  const time = hm ? `${d.nextDay ? '익일 ' : ''}${Number(hm[1])}시${hm[2]}분` : d.time ? `${d.nextDay ? '익일 ' : ''}${d.time}` : '';
+  return `${shipLabel(name, port, '출발', zone === 'jeju' ? d.port || '제주' : '육지')}${time ? ` ${time}` : ''}`;
 }
 
 function rowText(snap: Snapshot, r: BoardRow, me: string): string[] {

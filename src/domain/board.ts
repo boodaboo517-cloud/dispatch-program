@@ -3,7 +3,7 @@ import { addDays, weekdayOf } from './dates.ts';
 import { newId } from './ids.ts';
 import { activeRepair, repairMemo, saveMaintenance } from './maintenance.ts';
 import { carriedLoads, ensureVehicleDay, findVehicleDay, heldLoads, opposite, saveOrder, syncShipCarryover, waitsForShip } from './orders.ts';
-import { departDelay, isWaitShip, shipTimeOf } from './ships.ts';
+import { departDelay, isWaitShip, shipSortTime } from './ships.ts';
 import type { Tx } from './tx.ts';
 import { DEFAULT_START, ON_CALL_SHIFT } from './types.ts';
 import type {
@@ -164,7 +164,7 @@ export const needsDriver = (r: Pick<BoardRow, 'unloads' | 'loads' | 'driverId' |
 
 export function shipTime(snap: Snapshot, name: string | null): string {
   if (!name) return '99:99';
-  return shipTimeOf(snap.ships, name) || '99:98';
+  return shipSortTime(snap.ships, name) || '99:98';
 }
 
 /** 상차 칸에 적은 비고는 그 짐을 내리는 하차 칸에도 같이 보인다 */

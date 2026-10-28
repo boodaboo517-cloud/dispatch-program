@@ -205,7 +205,7 @@ export function fillDaySheet(ws: Worksheet, s: Snapshot, date: string) {
   ws.getCell(r, 1).value = '출항시간';
   ws.getCell(r, 1).font = { bold: true };
   ws.mergeCells(r, 2, r, COLS);
-  ws.getCell(r, 2).value = [...s.ships].filter((x) => x.departs_at).sort((a, b) => a.departs_at.localeCompare(b.departs_at)).map((x) => `${x.name} ${x.departs_at}`).join('  ');
+  ws.getCell(r, 2).value = [...s.ships].filter((x) => x.departs_at).sort((a, b) => a.departs_at.localeCompare(b.departs_at)).map((x) => `${x.name} ${x.depart_next_day ? '익일 ' : ''}${x.departs_at}`).join('  ');
   r++;
   ws.getCell(r, 1).value = '휴무자';
   ws.getCell(r, 1).font = { bold: true };

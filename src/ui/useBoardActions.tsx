@@ -1,13 +1,13 @@
 // 일정표 칸 동작 (휴대폰·PC 공통)
 import {
   ON_CALL_SHIFT, abbrev, acceptShipPending, nudgeVehicle, workLogOf, assignVehicle, blankOrder, buildBoard, createOrder, ignoreShipPending, opposite, saveOrder,
-  DEFAULT_START, sails, vehicleSails, isWaitShip, orderDriver, setTurn, setTurnShip, findVehicleDay, setRowNightDriver, PM_ARRIVAL_LABEL, setRowAmLabel, HELPER_ROLE_LABEL, START_PLACES, setRowNote, lastStart, startText, setRowStart, rowDriver, seqMark, setDriverSeq, setRowDriver, setRowHelper, setRowShip, setVehicleDayStatus, setVehicleZone, shipTime,
+  DEFAULT_START, sails, vehicleSails, isWaitShip, orderDriver, setTurn, setTurnShip, findVehicleDay, setRowNightDriver, PM_ARRIVAL_LABEL, setRowAmLabel, HELPER_ROLE_LABEL, START_PLACES, setRowNote, lastStart, startText, setRowStart, rowDriver, seqMark, setDriverSeq, setRowDriver, setRowHelper, setRowShip, setVehicleDayStatus, setVehicleZone,
   type Board, type BoardRow, type DailyOrder, type DriverSide, type HelperRole, type Kind, type Zone,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
 import { useState } from 'react';
 import { useRole, useSnap } from './hooks.ts';
-import { ZONE_LABEL, clientName, driverName, kindLabel, productName, qtyText, shipText, vehicleNo } from './labels.ts';
+import { ZONE_LABEL, clientName, driverName, kindLabel, productName, qtyText, shipText, shipTimeOf, vehicleNo } from './labels.ts';
 import { fmtDate } from '../lib/time.ts';
 import { OrderSheet, QuickQtySheet } from './OrderSheet.tsx';
 import { EXTERNAL_HIRED, EXTERNAL_SHIPPER, PM_ARRIVAL, usePickers } from './pickers.tsx';
@@ -132,7 +132,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     showText(
       `${row.vehicle.short_no} ${which === 'arrival' ? (row.zone === 'jeju' ? '도착 선박' : '상행선박') : row.zone === 'jeju' ? '오후 선박' : '하행선박'}`,
       <>
-        {shipText(ship, tag) || '없음'} {ship && <span className="muted">{shipTime(snap, ship) !== '99:98' ? shipTime(snap, ship) : ''}</span>}
+        {shipText(ship, tag) || '없음'} {ship && <span className="muted">{shipTimeOf(snap, ship)}</span>}
         {pending && <div className="banner yellow">전날 선박이 바뀌었습니다 → {shipText(pending.ship, pending.tag) || '없음'}</div>}
         {which === 'arrival' && row.vd?.arrival_from_id && <div className="muted">전날 출발 선박에서 자동으로 이어짐</div>}
         {sailedIn && <div className="muted">{ZONE_LABEL[opposite(row.zone!)]}에서 오늘 타고 온 배{turnOf(row) ? ` (바꾸면 ${ZONE_LABEL[opposite(row.zone!)]} 줄 출발 선박도 같이)` : ` · 바꾸려면 ${ZONE_LABEL[opposite(row.zone!)]} 줄 출발 선박을 바꾸세요`}</div>}

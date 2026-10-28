@@ -322,8 +322,8 @@ function ShipsPanel() {
             {s.arrival_day_offset !== 1 && <span className="badge warn">+{s.arrival_day_offset}일 도착</span>}
             {staff && <span className="muted">수정 ›</span>}
           </div>
-          <div className="small">출발: 제주 <b>{s.departs_at || '-'}</b>
-            {(s.port_times ?? []).map((p) => <span key={p.port}> · {p.port} <b>{p.time || '-'}</b></span>)}
+          <div className="small">출발: {s.depart_port?.trim() || '제주'} <b>{s.departs_at ? `${s.depart_next_day ? '익일 ' : ''}${s.departs_at}` : '-'}</b>
+            {(s.port_times ?? []).map((p) => <span key={p.port}> · {p.port} <b>{p.time ? `${p.next_day ? '익일 ' : ''}${p.time}` : '-'}</b></span>)}
           </div>
         </div>
       ))}
