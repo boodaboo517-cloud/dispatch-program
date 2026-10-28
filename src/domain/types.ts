@@ -317,6 +317,9 @@ export interface VehicleDay extends Base {
   /** 왕복으로 건너간 쪽 하차·상차 기사 (원래 지역 기사와 따로) */
   turn_driver_id?: string | null;
   turn_load_driver_id?: string | null;
+  /** 연속운행으로 건너간 쪽에서 상차(오후) 뒤 타는 배 (오더가 없어도 적어 둘 수 있음) */
+  turn_departure_ship?: string | null;
+  turn_departure_ship_tag?: ShipTag | '';
   /** 출발 선박 요금 구분 (빈 글자 = 자동) */
   fare_kind?: FareKind;
   /** 기사 승선 (선박비에 승선 금액 추가) */

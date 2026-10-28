@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { buildBoard, lastStart, missingNightDriver, orderDriver, setTurn, setRowAmLabel, setRowNightDriver, setVehicleDayStatus, missingDriver, needsDriver, setRowNote, setDriverSeq, setRowDriver, setRowHelper, setRowStart, startText } from '../board.ts';
+import { buildBoard, lastStart, missingNightDriver, orderDriver, setTurn, setTurnShip, setRowAmLabel, setRowNightDriver, setVehicleDayStatus, missingDriver, needsDriver, setRowNote, setDriverSeq, setRowDriver, setRowHelper, setRowStart, startText } from '../board.ts';
 import { blankOrder, deleteOrder, postponeUnload, repairShipLinks, saveOrder, setRowShip, workText } from '../orders.ts';
 import { Tx, applyMutations } from '../tx.ts';
 import { addDays } from '../dates.ts';
@@ -751,5 +751,28 @@ describe('왕복 차량 (당일 다른 지역에 추가 배차)', () => {
     const land = buildBoard(tx.result(), D).rows.find((r) => r.vehicle.id === 'v9914' && r.secondary)!;
     expect([land.driverId, land.loadDriverId, missingDriver(land, 'load')]).toEqual([null, null, true]);
     expect(tx.get('daily_orders', l.id)!.driver_id).toBeNull();
+  });
+  it('연속운행 선박: 출발 지역에서 타고 나간 배가 도착 선박, 건너간 쪽 오후 선박은 따로 → 다음 날 원래 지역 도착', () => {
+    const tx = new Tx(baseSnapshot());
+    saveOrder(tx, blankOrder({ date: D, zone: 'jeju', kind: 'unload', vehicle_id: 'v9914', client_id: 'c-sin' }));
+    setTurn(tx, { date: D, vehicle_id: 'v9914', zone: 'jeju', on: true });
+    // 육지 줄 도착 선박을 고르면 = 제주 줄 출발 선박
+    setRowShip(tx, { date: D, vehicle_id: 'v9914', zone: 'jeju', which: 'departure', ship: '제이엘', tag: '' });
+    // 육지 줄 오후(상차) 선박: 오더 없이도
+    setTurnShip(tx, { date: D, vehicle_id: 'v9914', ship: '완도', tag: '' });
+    const b = buildBoard(tx.result(), D);
+    const jeju = b.rows.find((r) => r.vehicle.id === 'v9914' && !r.secondary)!;
+    const land = b.rows.find((r) => r.vehicle.id === 'v9914' && r.secondary)!;
+    expect([jeju.departureShip, land.arrivalShip, land.departureShip]).toEqual(['제이엘', '제이엘', '완도']);
+    // 다음 날은 완도로 제주 도착 (육지에 남지 않음)
+    const next = tx.list('vehicle_days').find((v) => v.date === addDays(D, 1) && v.vehicle_id === 'v9914')!;
+    expect([next.zone, next.arrival_ship]).toEqual(['jeju', '완도']);
+    // 나중에 넣은 육지 상차도 그 배로
+    const l = createOrder(tx, blankOrder({ date: D, zone: 'land', kind: 'load', vehicle_id: 'v9914', client_id: 'c-dm' }));
+    setTurnShip(tx, { date: D, vehicle_id: 'v9914', ship: '완도', tag: '' });
+    expect(tx.get('daily_orders', l.id)!.departure_ship).toBe('완도');
+    // 제주 줄 출발 선박을 바꿔도 육지 상차 선박은 그대로
+    setRowShip(tx, { date: D, vehicle_id: 'v9914', zone: 'jeju', which: 'departure', ship: '성우', tag: '' });
+    expect(tx.get('daily_orders', l.id)!.departure_ship).toBe('완도');
   });
 });

@@ -294,7 +294,7 @@ export function usePickers() {
             <PickerList
               sections={[
                 { label: zone ? `${ZONE_LABEL[zone]}에 있는 차량` : '차량', items: choices.filter((c) => c.sameZone).map(item) },
-                { label: '다른 지역 · 고르면 왕복(당일 건너옴) 또는 옮기기', items: choices.filter((c) => !c.sameZone).map(item) },
+                { label: '다른 지역 · 고르면 연속운행(당일 건너옴) 또는 옮기기', items: choices.filter((c) => !c.sameZone).map(item) },
               ]}
               onPick={(it) => { done(it.id); close(); }}
               top={withExternal ? (

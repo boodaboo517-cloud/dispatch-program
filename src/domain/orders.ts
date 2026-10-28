@@ -75,6 +75,8 @@ export function blankVehicleDay(p: { date: string; vehicle_id: string } & Partia
     turn: false,
     turn_driver_id: null,
     turn_load_driver_id: null,
+    turn_departure_ship: null,
+    turn_departure_ship_tag: '',
     arrival_ship: null,
     arrival_ship_tag: '',
     departure_ship: null,
@@ -249,7 +251,7 @@ export function ensureVehicleDay(tx: Tx, date: string, vehicleId: string, zone: 
 
 /** 줄 자체에 적은 내용 (오더 제외) */
 function vehicleDayOwnContent(vd: VehicleDay): boolean {
-  return !!(vd.departure_ship || vd.status || vd.status_memo || vd.driver_id || vd.load_driver_id || vd.helper_driver_id || vd.start_time || vd.start_place || vd.unload_note || vd.load_note || vd.am_label || vd.fare_kind || vd.boarding || vd.night_driver_id || vd.turn || vd.turn_driver_id || vd.turn_load_driver_id);
+  return !!(vd.departure_ship || vd.status || vd.status_memo || vd.driver_id || vd.load_driver_id || vd.helper_driver_id || vd.start_time || vd.start_place || vd.unload_note || vd.load_note || vd.am_label || vd.fare_kind || vd.boarding || vd.night_driver_id || vd.turn || vd.turn_driver_id || vd.turn_load_driver_id || vd.turn_departure_ship);
 }
 
 function vehicleDayHasContent(tx: Tx, vd: VehicleDay): boolean {
@@ -269,15 +271,28 @@ export function syncShipCarryover(tx: Tx, vehicleDayId: string) {
     for (const p of previous) clearCarried(tx, p.id);
     return;
   }
+  const ships = tx.list('ships');
+  const sails = (x: string | null | undefined): x is string => !!x && !isWaitShip(x) && !isBulkShip(ships, x);
+  let ship = vd.departure_ship;
+  let shipTag = vd.departure_ship_tag;
+  let targetZone = vd.zone ? opposite(vd.zone) : null;
+  // 연속운행: 건너간 쪽에서 상차 뒤 타는 배가 있으면 그 배로 다음 날 원래 지역에 도착
+  let continued = false;
+  if (vd.turn && vd.zone) {
+    const backLoad = tx.list('daily_orders').find((o) => o.date === vd.date && o.vehicle_id === vd.vehicle_id && o.zone !== vd.zone
+      && o.kind === 'load' && !o.night && sails(o.departure_ship) && !o.same_day && o.shipment !== 'bulk');
+    const back = sails(vd.turn_departure_ship) ? { ship: vd.turn_departure_ship, tag: vd.turn_departure_ship_tag ?? '' }
+      : backLoad ? { ship: backLoad.departure_ship, tag: backLoad.departure_ship_tag } : null;
+    if (back) { ship = back.ship; shipTag = back.tag as typeof shipTag; targetZone = vd.zone; continued = true; }
+  }
   // 출발 선박이 없거나 "대기"면 다음 날로 넘어가지 않는다 (대기 = 그 지역에 그대로). 벌크 선박은 차량이 안 탐
-  if (!vd.departure_ship || isWaitShip(vd.departure_ship) || isBulkShip(tx.list('ships'), vd.departure_ship)) {
+  if (!sails(ship)) {
     for (const p of previous) clearCarried(tx, p.id);
     return;
   }
-  const targetDate = addDays(vd.date, arrivalOffset(tx.snap, vd.departure_ship));
-  const targetZone = vd.zone ? opposite(vd.zone) : null;
+  const targetDate = addDays(vd.date, arrivalOffset(tx.snap, ship));
   // 당일 회차: 건너간 지역에서 그날 밤 다시 상차해 배를 타고 돌아오면 다음 날 그 지역 도착 줄을 만들지 않는다
-  const turnaround = !!targetZone && tx.list('daily_orders').some((o) => o.date === vd.date && o.vehicle_id === vd.vehicle_id && o.zone === targetZone
+  const turnaround = !continued && !!targetZone && tx.list('daily_orders').some((o) => o.date === vd.date && o.vehicle_id === vd.vehicle_id && o.zone === targetZone
     && o.kind === 'load' && !!o.departure_ship && !isWaitShip(o.departure_ship) && !o.same_day && o.shipment !== 'bulk');
   if (turnaround) {
     for (const p of previous) clearCarried(tx, p.id);
@@ -287,7 +302,7 @@ export function syncShipCarryover(tx: Tx, vehicleDayId: string) {
   for (const p of previous) if (p.date !== targetDate) clearCarried(tx, p.id);
 
   const target = findVehicleDay(tx, targetDate, vd.vehicle_id);
-  const want = { ship: vd.departure_ship, tag: vd.departure_ship_tag };
+  const want = { ship, tag: shipTag };
   if (!target) {
     tx.insert('vehicle_days', blankVehicleDay({
       date: targetDate,
@@ -299,8 +314,10 @@ export function syncShipCarryover(tx: Tx, vehicleDayId: string) {
     }));
     return;
   }
+  // 이 출발 줄에서 이어진 도착 줄이면 도착 지역도 다시 맞춘다 (연속운행으로 돌아오는 쪽이 바뀐 경우 등)
+  const zone = target.arrival_from_id === vd.id && targetZone ? targetZone : target.zone ?? targetZone;
   if (target.arrival_ship === want.ship && target.arrival_ship_tag === want.tag) {
-    tx.update('vehicle_days', target.id, { arrival_from_id: vd.id, arrival_pending: null });
+    tx.update('vehicle_days', target.id, { arrival_from_id: vd.id, arrival_pending: null, zone });
     return;
   }
   if (target.arrival_edited_manually) {
@@ -312,7 +329,7 @@ export function syncShipCarryover(tx: Tx, vehicleDayId: string) {
     arrival_ship_tag: want.tag,
     arrival_from_id: vd.id,
     arrival_pending: null,
-    zone: target.zone ?? targetZone,
+    zone,
   });
 }
 
@@ -364,7 +381,7 @@ export function setRowShip(
       arrival_edited_manually: vd.arrival_from_id !== null,
       arrival_pending: null,
     });
-    for (const o of rowOrders(tx, p.date, p.vehicle_id, 'unload')) {
+    for (const o of rowOrders(tx, p.date, p.vehicle_id, 'unload', p.zone)) {
       tx.update('daily_orders', o.id, { arrival_ship: p.ship, arrival_ship_tag: p.tag, edited_manually: o.linked_from_id ? true : o.edited_manually });
     }
     return;
@@ -372,7 +389,7 @@ export function setRowShip(
   // 벌크 선박: 화물만 배를 타므로 차량 줄 출발 선박(차량 이동)은 비워 두고, 상차 오더만 벌크로
   const bulkShip = isBulkShip(tx.list('ships'), p.ship);
   tx.update('vehicle_days', vd.id, bulkShip ? { departure_ship: null, departure_ship_tag: '' } : { departure_ship: p.ship, departure_ship_tag: p.tag });
-  for (const o of rowOrders(tx, p.date, p.vehicle_id, 'load')) {
+  for (const o of rowOrders(tx, p.date, p.vehicle_id, 'load', p.zone)) {
     tx.update('daily_orders', o.id, withShipShipment(tx, { ...o, departure_ship: p.ship, departure_ship_tag: p.tag }, o));
     syncLinkedUnload(tx, o.id);
   }
@@ -396,8 +413,9 @@ export function carriedLoads(orders: DailyOrder[], vehicleId: string, date: stri
     && (o.ship_date ? o.ship_date >= date : waitsForShip(o)));
 }
 
-function rowOrders(tx: Tx, date: string, vehicleId: string, kind: Kind) {
-  return tx.list('daily_orders').filter((o) => o.date === date && o.vehicle_id === vehicleId && o.kind === kind);
+/** zone 을 주면 그 지역 오더만 (연속운행으로 건너간 쪽 · 야간 작업은 그쪽 선박이 따로) */
+function rowOrders(tx: Tx, date: string, vehicleId: string, kind: Kind, zone?: Zone) {
+  return tx.list('daily_orders').filter((o) => o.date === date && o.vehicle_id === vehicleId && o.kind === kind && (!zone || (o.zone === zone && !o.night)));
 }
 
 /**

@@ -1,7 +1,7 @@
 // 일정표 칸 동작 (휴대폰·PC 공통)
 import {
   ON_CALL_SHIFT, abbrev, acceptShipPending, nudgeVehicle, workLogOf, assignVehicle, blankOrder, buildBoard, createOrder, ignoreShipPending, opposite, saveOrder,
-  DEFAULT_START, sails, vehicleSails, isWaitShip, orderDriver, setTurn, findVehicleDay, setRowNightDriver, PM_ARRIVAL_LABEL, setRowAmLabel, HELPER_ROLE_LABEL, START_PLACES, setRowNote, lastStart, startText, setRowStart, rowDriver, seqMark, setDriverSeq, setRowDriver, setRowHelper, setRowShip, setVehicleDayStatus, setVehicleZone, shipTime,
+  DEFAULT_START, sails, vehicleSails, isWaitShip, orderDriver, setTurn, setTurnShip, findVehicleDay, setRowNightDriver, PM_ARRIVAL_LABEL, setRowAmLabel, HELPER_ROLE_LABEL, START_PLACES, setRowNote, lastStart, startText, setRowStart, rowDriver, seqMark, setDriverSeq, setRowDriver, setRowHelper, setRowShip, setVehicleDayStatus, setVehicleZone, shipTime,
   type Board, type BoardRow, type DailyOrder, type DriverSide, type HelperRole, type Kind, type Zone,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
@@ -89,6 +89,14 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     const cur = which === 'arrival' ? { ship: row.arrivalShip, tag: row.arrivalTag } : { ship: row.departureShip, tag: row.departureTag };
     const r = await pick.ship(row.zone, cur, which);
     if (!r) return;
+    if (row.secondary && turnOf(row)) {
+      // 연속운행 줄: 도착 선박 = 출발 지역에서 타고 나간 배(원래 줄 출발 선박), 출발 선박 = 이쪽 상차 뒤 타는 배
+      const home = opposite(row.zone);
+      store.run((tx) => (which === 'arrival'
+        ? setRowShip(tx, { date, vehicle_id: row.vehicle.id, zone: home, which: 'departure', ship: r.ship, tag: r.tag })
+        : setTurnShip(tx, { date, vehicle_id: row.vehicle.id, ship: r.ship, tag: r.tag })));
+      return;
+    }
     if (row.secondary) {
       // 당일 왕복 보조 줄: 차량의 그날 위치를 바꾸지 않도록 오더에 직접 저장
       store.run((tx) => {
@@ -113,7 +121,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     // 당일 왕복으로 건너간 쪽 줄의 들어온 배 = 원래 줄에서 그날 타고 나간 배 (원래 줄 출발 선박에서 바꿈)
     const sailedIn = row.secondary && which === 'arrival' && !!row.zone
       && buildBoard(snap, date).rows.find((r) => r.vehicle.id === row.vehicle.id && !r.secondary)?.departureShip === ship;
-    const actions: { label: string; run: () => void; kind?: string }[] = staff && !sailedIn ? [{ label: '변경', run: () => void editShip(row, which) }] : [];
+    const actions: { label: string; run: () => void; kind?: string }[] = staff && (!sailedIn || turnOf(row)) ? [{ label: '변경', run: () => void editShip(row, which) }] : [];
     if (pending && staff && row.vd) {
       const vdId = row.vd.id;
       actions.unshift(
@@ -127,26 +135,26 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
         {shipText(ship, tag) || '없음'} {ship && <span className="muted">{shipTime(snap, ship) !== '99:98' ? shipTime(snap, ship) : ''}</span>}
         {pending && <div className="banner yellow">전날 선박이 바뀌었습니다 → {shipText(pending.ship, pending.tag) || '없음'}</div>}
         {which === 'arrival' && row.vd?.arrival_from_id && <div className="muted">전날 출발 선박에서 자동으로 이어짐</div>}
-        {sailedIn && <div className="muted">{ZONE_LABEL[opposite(row.zone!)]}에서 오늘 타고 온 배 · 바꾸려면 {ZONE_LABEL[opposite(row.zone!)]} 줄 출발 선박을 바꾸세요</div>}
+        {sailedIn && <div className="muted">{ZONE_LABEL[opposite(row.zone!)]}에서 오늘 타고 온 배{turnOf(row) ? ` (바꾸면 ${ZONE_LABEL[opposite(row.zone!)]} 줄 출발 선박도 같이)` : ` · 바꾸려면 ${ZONE_LABEL[opposite(row.zone!)]} 줄 출발 선박을 바꾸세요`}</div>}
       </>,
       actions,
     );
   };
 
-  /** 이 줄 차량이 왕복으로 정해져 있는지 (보조 줄이면 원래 줄의 표시) */
+  /** 이 줄 차량이 연속운행으로 정해져 있는지 (보조 줄이면 원래 줄의 표시) */
   const turnOf = (row: BoardRow) => !!(row.secondary ? board.rows.find((r) => r.vehicle.id === row.vehicle.id && !r.secondary)?.vd?.turn : row.vd?.turn);
 
-  /** 왕복 켜기·끄기 (원래 지역 줄 기준) */
+  /** 연속운행 켜기·끄기 (원래 지역 줄 기준) */
   const toggleTurn = (row: BoardRow, on: boolean) => {
     const home = row.secondary ? (row.zone ? opposite(row.zone) : null) : row.zone;
     if (!home) return;
     const away = board.rows.find((r) => r.vehicle.id === row.vehicle.id && r.secondary);
     const n = away ? away.unloads.length + away.loads.length + away.nights.length : 0;
-    if (!on && n && !confirm(`${row.vehicle.short_no} 왕복을 취소하면 차량은 ${ZONE_LABEL[home]}에만 남고, ${ZONE_LABEL[opposite(home)]}에 배차한 ${n}건은 배차 대기(미배차)로 돌아갑니다. 취소할까요?`)) return;
+    if (!on && n && !confirm(`${row.vehicle.short_no} 연속운행을 취소하면 차량은 ${ZONE_LABEL[home]}에만 남고, ${ZONE_LABEL[opposite(home)]}에 배차한 ${n}건은 배차 대기(미배차)로 돌아갑니다. 취소할까요?`)) return;
     store.run((tx) => setTurn(tx, { date, vehicle_id: row.vehicle.id, zone: home, on }));
     store.toast(on
-      ? `${row.vehicle.short_no} 왕복 · 오늘 ${ZONE_LABEL[opposite(home)]}에도 나옵니다 (기사는 그 줄에서 따로)`
-      : `${row.vehicle.short_no} 왕복 취소 · ${ZONE_LABEL[home]}에만${n ? ` · ${n}건 배차 대기로` : ''}`);
+      ? `${row.vehicle.short_no} 연속운행 · 오늘 ${ZONE_LABEL[opposite(home)]}에도 나옵니다 (기사는 그 줄에서 따로)`
+      : `${row.vehicle.short_no} 연속운행 취소 · ${ZONE_LABEL[home]}에만${n ? ` · ${n}건 배차 대기로` : ''}`);
     if (on) onFocusVehicle?.(row.vehicle.id);
   };
 
@@ -183,7 +191,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
         { label: `${sideLabel(row, 'load')} 기사`, value: 'load' },
         { label: <><NightTag /> 작업 추가</>, value: 'night' },
         { label: <><NightTag /> 기사</>, value: 'night-driver' },
-        ...(turnOf(row) ? [{ label: '🔁 왕복 취소', value: 'turn-off' }] : []),
+        ...(turnOf(row) ? [{ label: '🔁 연속운행 취소', value: 'turn-off' }] : []),
       ] : [
         { label: `${sideLabel(row, 'unload')}·${sideLabel(row, 'load')} 같은 기사`, value: 'unload', kind: 'primary' },
         { label: `${sideLabel(row, 'load')}만 (${sideLabel(row, 'unload')}은 비움)`, value: 'load' },
@@ -296,7 +304,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
             { label: `${sideLabel(row, 'load')} 기사`, run: () => void editDriver(row, 'load') },
             { label: <><NightTag /> 작업 추가</>, run: () => void addNight(row) },
             { label: <><NightTag /> 기사</>, run: () => void editNightDriver(row) },
-            ...(turnOf(row) ? [{ label: '🔁 왕복 취소', run: () => toggleTurn(row, false) }] : []),
+            ...(turnOf(row) ? [{ label: '🔁 연속운행 취소', run: () => toggleTurn(row, false) }] : []),
           ]
         : staff
         ? [
@@ -308,8 +316,8 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
             { label: <><NightTag /> 작업 추가</>, run: () => void addNight(row) },
             { label: <><NightTag /> 기사</>, run: () => void editNightDriver(row) },
             ...(row.zone ? [row.vd?.turn
-              ? { label: '🔁 왕복 취소', run: () => toggleTurn(row, false) }
-              : { label: `🔁 왕복 (오늘 ${ZONE_LABEL[opposite(row.zone)]}에도)`, run: () => toggleTurn(row, true) }] : []),
+              ? { label: '🔁 연속운행 취소', run: () => toggleTurn(row, false) }
+              : { label: `🔁 연속운행 (오늘 ${ZONE_LABEL[opposite(row.zone)]}에도)`, run: () => toggleTurn(row, true) }] : []),
             ...(row.driverId ? [{ label: '근무형태', run: () => void pick.workType(date, row.driverId!) }] : []),
             ...(sails(row) ? [{ label: '🚢 선박 요금 (할증·승선)', run: () => sheet.open((close) => <VoyageSheet date={date} row={row} close={close} />) }] : []),
             { label: '상태·위치', run: () => void editStatus(row) },
@@ -367,7 +375,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
         title: `${row.vehicle.short_no} · ${ZONE_LABEL[row.zone]} 차량`,
         message: `${ZONE_LABEL[o.zone]} ${kindLabel(o.zone, o.kind)}에 배차합니다.`,
         actions: [
-          { label: `🔁 왕복 (${ZONE_LABEL[row.zone]} 일정 그대로 · 오늘 ${ZONE_LABEL[o.zone]}에 추가)`, value: 'turn', kind: 'primary' },
+          { label: `🔁 연속운행 (${ZONE_LABEL[row.zone]} 일정 그대로 · 오늘 ${ZONE_LABEL[o.zone]}에 추가)`, value: 'turn', kind: 'primary' },
           { label: `🚚 차량을 ${ZONE_LABEL[o.zone]}로 옮기기`, value: 'move' },
         ],
       });
@@ -380,7 +388,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
           const drv = o.kind === 'load' ? vd?.turn_load_driver_id ?? null : vd?.turn_driver_id ?? null;
           assignVehicle(tx, o.id, vid, drv);
         });
-        store.toast(`${row.vehicle.short_no} 왕복 · ${ZONE_LABEL[o.zone]}에 배차했습니다 (기사는 ${ZONE_LABEL[o.zone]} 줄에서 따로)`);
+        store.toast(`${row.vehicle.short_no} 연속운행 · ${ZONE_LABEL[o.zone]}에 배차했습니다 (기사는 ${ZONE_LABEL[o.zone]} 줄에서 따로)`);
         onFocusVehicle?.(vid);
         return;
       }
