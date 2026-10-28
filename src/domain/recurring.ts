@@ -108,11 +108,17 @@ function generate(tx: Tx, rec: RecurringOrder, from: string, to: string): number
 }
 
 /** 자동 생성 오더 제거 (+연결 하차). 직접 수정된 것은 남기고 개수를 센다. */
-function removeAutoOrders(tx: Tx, recId: string, fromDate: string) {
+/** includeEdited: 직접 고친(배차한) 오더도 함께 지운다 (반복 발주를 아예 그만둘 때) */
+function removeAutoOrders(tx: Tx, recId: string, fromDate: string, includeEdited = false) {
   let removed = 0;
   let keptManual = 0;
   for (const o of ordersOf(tx, recId)) {
     if (o.date < fromDate) continue; // 과거 불변
+    if (includeEdited) {
+      deleteOrder(tx, o.id, 'delete');
+      removed++;
+      continue;
+    }
     if (o.edited_manually || o.source !== 'recurring') {
       keptManual++;
       continue;
@@ -209,7 +215,7 @@ export function planRecurringChange(
 /** 반복 발주 종료: 종료일까지는 유지, 종료일 다음 날부터 자동 오더만 제거 */
 export function planRecurringEnd(
   snap: Snapshot,
-  p: { recurringId: string; endDate: string; today: string; actor?: string | null },
+  p: { recurringId: string; endDate: string; today: string; actor?: string | null; includeEdited?: boolean },
 ): RecurringResult {
   // 종료일 = 마지막으로 들어가는 날. 오늘을 종료일로 고르면 내일부터 없어진다. 어제 이전 종료는 과거를 바꾸므로 금지.
   assertStartDate(addDays(p.endDate, 1), p.today);
@@ -223,10 +229,25 @@ export function planRecurringEnd(
       tx.update('recurring_order_versions', v.id, { effective_to: p.endDate });
     }
   }
-  const { removed, keptManual } = removeAutoOrders(tx, rec.id, from);
+  const { removed, keptManual } = removeAutoOrders(tx, rec.id, from, p.includeEdited);
   tx.update('recurring_orders', rec.id, { active: false });
   return finish(tx, { removed, keptManual });
 }
+
+/** 이미 끝난 반복 발주가 남긴 일정(직접 고친 것 포함)을 fromDate 부터 모두 지운다 */
+export function planRecurringCleanup(
+  snap: Snapshot,
+  p: { recurringId: string; fromDate: string; today: string; actor?: string | null },
+): RecurringResult {
+  assertStartDate(p.fromDate, p.today);
+  const tx = new Tx(snap, { actor: p.actor });
+  const { removed } = removeAutoOrders(tx, p.recurringId, p.fromDate, true);
+  return finish(tx, { removed });
+}
+
+/** fromDate 이후 그 반복 발주로 남아 있는 일정 수 */
+export const recurringOrdersLeft = (snap: Snapshot, recurringId: string, fromDate: string) =>
+  snap.daily_orders.filter((o) => o.recurring_order_id === recurringId && o.date >= fromDate).length;
 
 /** 매일 새벽 스케줄러: 모든 활성 반복 발주를 오늘+8주까지 연장 */
 export function planRecurringExtension(snap: Snapshot, today: string, actor: string | null = null): RecurringResult {

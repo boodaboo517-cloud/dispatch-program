@@ -1,7 +1,7 @@
 // 반복 발주 등록·변경·종료 (적용 시작일 + 미리보기)
 import { useMemo, useState } from 'react';
 import {
-  RecurringRuleError, activeVersion, addDays, buildBoard, planCreateRecurring, planRecurringChange, planRecurringEnd,
+  RecurringRuleError, activeVersion, addDays, buildBoard, planCreateRecurring, planRecurringChange, planRecurringCleanup, planRecurringEnd, recurringOrdersLeft,
   previewRecurringChange, summarizeVersion, weekdaysLabel,
   type Kind, type RecurringOrder, type ShipTag, type VersionFields, type Weekday, type Zone,
 } from '../domain/index.ts';
@@ -43,16 +43,22 @@ export function RecurringSheet(p: {
   });
   const [start, setStart] = useState(p.mode === 'end' ? today : p.mode === 'change' ? addDays(today, 1) : today);
   const set = (x: Partial<VersionFields>) => setF({ ...f, ...x });
+  // 종료할 때 배차하거나 고친 오더도 함께 지우기 (기본: 함께 지움 — 짐이 끊긴 경우가 대부분)
+  const [includeEdited, setIncludeEdited] = useState(true);
 
   const preview = useMemo(() => {
     try {
       if (p.mode === 'change' && p.recurring) return { kind: 'change' as const, ...previewRecurringChange(snap, { recurringId: p.recurring.id, fields: f, startDate: start, today }) };
-      if (p.mode === 'end' && p.recurring) return { kind: 'end' as const, ...planRecurringEnd(snap, { recurringId: p.recurring.id, endDate: start, today }) };
+      if (p.mode === 'end' && p.recurring) return {
+        kind: 'end' as const,
+        ...planRecurringEnd(snap, { recurringId: p.recurring.id, endDate: start, today, includeEdited }),
+        edited: planRecurringEnd(snap, { recurringId: p.recurring.id, endDate: start, today }).keptManual,
+      };
       return null;
     } catch (e) {
       return { kind: 'error' as const, message: e instanceof RecurringRuleError ? e.message : String(e) };
     }
-  }, [snap, f, start, today, p.mode, p.recurring]);
+  }, [snap, f, start, today, p.mode, p.recurring, includeEdited]);
 
   const save = () => {
     try {
@@ -67,7 +73,7 @@ export function RecurringSheet(p: {
         store.commit(res.mutations);
         store.toast(`${fmtDate(start)}부터 변경 · ${res.removed}건 삭제 · ${res.created}건 생성${res.keptManual ? ` · 직접 수정 ${res.keptManual}건은 유지됨` : ''}`);
       } else if (p.mode === 'end' && p.recurring) {
-        res = planRecurringEnd(snap, { recurringId: p.recurring.id, endDate: start, today });
+        res = planRecurringEnd(snap, { recurringId: p.recurring.id, endDate: start, today, includeEdited });
         store.commit(res.mutations);
         store.toast(`${fmtDate(start)}까지 하고 종료 · ${res.removed}건 삭제${res.keptManual ? ` · 직접 수정 ${res.keptManual}건 유지됨` : ''}`);
       }
@@ -134,11 +140,33 @@ export function RecurringSheet(p: {
       )}
       {preview?.kind === 'end' && (
         <div className="card" style={{ background: '#f9fafb' }}>
-          {fmtDate(start)}까지 유지 · 이후 자동 오더 {preview.removed}건 삭제
+          {preview.edited > 0 && (
+            <label className="row" style={{ alignItems: 'center', gap: 8, minHeight: 44 }}>
+              <input type="checkbox" checked={includeEdited} onChange={(e) => setIncludeEdited(e.target.checked)} style={{ width: 22, height: 22 }} />
+              <span>배차했거나 고친 오더 {preview.edited}건도 함께 지우기</span>
+            </label>
+          )}
+          {fmtDate(start)}까지 유지 · 이후 일정 <b>{preview.removed}건 삭제</b> (반대편 연결 하차 포함)
           {preview.keptManual > 0 && <> · <b>직접 수정 {preview.keptManual}건은 유지됨</b></>}
         </div>
       )}
     </Sheet>
+  );
+}
+
+/** 이미 끝난 반복 발주가 남긴 오늘 이후 일정 일괄 삭제 */
+function LeftoverButton({ recId }: { recId: string }) {
+  const snap = useSnap();
+  const today = seoulToday();
+  const left = recurringOrdersLeft(snap, recId, today);
+  if (!left) return null;
+  return (
+    <button className="grow danger" onClick={() => {
+      if (!confirm(`이 반복 발주로 남아 있는 오늘(${fmtDate(today)}) 이후 일정 ${left}건을 모두 지울까요? (배차한 것·반대편 연결 하차 포함)`)) return;
+      const res = planRecurringCleanup(store.getState().snap, { recurringId: recId, fromDate: today, today });
+      store.commit(res.mutations);
+      store.toast(`남은 일정 ${res.removed}건 삭제`);
+    }}>남은 일정 {left}건 지우기</button>
   );
 }
 
@@ -172,6 +200,7 @@ export function RecurringList({ clientId, productId, open }: { clientId: string;
             <div className="row" style={{ marginTop: 6 }}>
               <button className="grow" onClick={() => open('change', r)}>변경</button>
               {r.active && <button className="grow danger" onClick={() => open('end', r)}>종료</button>}
+              {!r.active && <LeftoverButton recId={r.id} />}
             </div>
           </div>
         );

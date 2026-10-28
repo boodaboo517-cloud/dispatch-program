@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { addDays, weekdayOf } from '../dates.ts';
 import { saveOrder } from '../orders.ts';
 import {
-  HORIZON_DAYS, RecurringRuleError, planCreateRecurring, planRecurringChange, planRecurringEnd,
+  HORIZON_DAYS, RecurringRuleError, planCreateRecurring, planRecurringChange, planRecurringCleanup, planRecurringEnd, recurringOrdersLeft,
   planRecurringExtension, previewRecurringChange, type VersionFields,
 } from '../recurring.ts';
 import { Tx } from '../tx.ts';
@@ -211,5 +211,37 @@ describe('반복 상차 → 연결 하차 연쇄', () => {
     const newUnload = r.snapshot.daily_orders.find((o) => o.linked_from_id === newLoad.id)!;
     expect(newUnload.quantity).toBe(20);
     expect(newUnload.arrival_ship).toBe('완도');
+  });
+});
+
+describe('반복 발주 중지 → 이후 일정 일괄 삭제', () => {
+  it('종료할 때 배차한(고친) 오더와 반대편 연결 하차까지 함께 지운다', () => {
+    const { snap, recId } = setup('load');
+    const today = '2026-10-20';
+    // 앞으로의 상차 하나에 차량 배차 (직접 수정 → 예전에는 남았음)
+    const tx = new Tx(snap);
+    const future = ordersOf(snap, recId).find((o) => o.date > today)!;
+    saveOrder(tx, { ...future, vehicle_id: 'v9915' });
+    const s1 = tx.result();
+    const keep = planRecurringEnd(s1, { recurringId: recId, endDate: today, today });
+    expect(keep.keptManual).toBeGreaterThan(0);
+    const all = planRecurringEnd(s1, { recurringId: recId, endDate: today, today, includeEdited: true });
+    expect(all.keptManual).toBe(0);
+    expect(ordersOf(all.snapshot, recId).filter((o) => o.date > today)).toEqual([]);
+    expect(all.snapshot.daily_orders.some((o) => o.linked_from_id === future.id)).toBe(false);
+    // 지난 일정은 그대로
+    expect(ordersOf(all.snapshot, recId).some((o) => o.date <= today)).toBe(true);
+  });
+  it('이미 종료했는데 남은 일정은 "남은 일정 지우기"로 오늘부터 모두 삭제', () => {
+    const { snap, recId } = setup('load');
+    const today = '2026-10-20';
+    const tx = new Tx(snap);
+    const future = ordersOf(snap, recId).find((o) => o.date > today)!;
+    saveOrder(tx, { ...future, vehicle_id: 'v9915' });
+    const ended = planRecurringEnd(tx.result(), { recurringId: recId, endDate: today, today }).snapshot;
+    expect(recurringOrdersLeft(ended, recId, addDays(today, 1))).toBe(1);
+    const cleaned = planRecurringCleanup(ended, { recurringId: recId, fromDate: addDays(today, 1), today });
+    expect(cleaned.removed).toBe(1);
+    expect(recurringOrdersLeft(cleaned.snapshot, recId, addDays(today, 1))).toBe(0);
   });
 });
