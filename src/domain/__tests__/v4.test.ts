@@ -827,3 +827,21 @@ describe('현장근무 기사 일정처럼 입력 (근무지 · 지급차량 · 
     expect([d.rows.length, d.am?.part, d.pm]).toEqual([1, 'am', null]);
   });
 });
+
+describe('선박 운송 방식 대기 (선박 미정)', () => {
+  it('대기로 등록한 배를 고르면 배를 안 탐: 반대편 하차 없음, 다음 날 같은 지역 [[ 상차짐 ]] · 기사 미배치', () => {
+    const snap = baseSnapshot();
+    snap.ships.push({ id: 'sw', name: '미정', departs_at: '', route: 'both', arrival_day_offset: 1, sort_order: 9, wait: true });
+    const tx = new Tx(snap);
+    const l = createOrder(tx, blankOrder({ date: D, zone: 'jeju', kind: 'load', vehicle_id: 'v9914', client_id: 'c-dm', departure_ship: '미정' }));
+    setRowDriver(tx, { date: D, vehicle_id: 'v9914', zone: 'jeju', driver_id: 'dA' });
+    expect(tx.get('daily_orders', l.id)!.departure_ship).toBe('미정 대기');
+    expect(tx.list('daily_orders').some((o) => o.linked_from_id === l.id)).toBe(false);
+    const next = buildBoard(tx.result(), addDays(D, 1)).rows.find((r) => r.vehicle.id === 'v9914' && !r.secondary)!;
+    expect([next.zone, next.carried.map((o) => o.id), next.loadDriverId, missingDriver(next, 'load')]).toEqual(['jeju', [l.id], null, true]);
+    // 차량 줄 출발 선박에서 골라도 같음
+    setRowShip(tx, { date: D, vehicle_id: 'v9914', zone: 'jeju', which: 'departure', ship: '미정', tag: '' });
+    expect(tx.list('vehicle_days').find((v) => v.date === D && v.vehicle_id === 'v9914')!.departure_ship).toBe('미정 대기');
+    expect(tx.list('vehicle_days').some((v) => v.date === addDays(D, 1) && v.vehicle_id === 'v9914' && v.zone === 'land')).toBe(false);
+  });
+});

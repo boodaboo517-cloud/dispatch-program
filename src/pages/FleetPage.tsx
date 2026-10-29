@@ -318,6 +318,7 @@ function ShipsPanel() {
           <div className="row">
             <b className="grow" style={{ fontSize: 19 }}>{s.name}</b>
             {isBulkShip([s], s.name) && <span className="badge" style={{ background: '#e0f2fe', color: '#075985' }}>📦 벌크</span>}
+            {s.wait && <span className="badge warn">⏸ 대기</span>}
             {s.route !== 'both' && <span className="badge">{s.route === 'up' ? '제주 출발만' : '육지 출발만'}</span>}
             {s.arrival_day_offset !== 1 && <span className="badge warn">+{s.arrival_day_offset}일 도착</span>}
             {staff && <span className="muted">수정 ›</span>}

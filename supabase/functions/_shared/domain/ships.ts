@@ -33,6 +33,13 @@ export function isBulkShip(ships: Ship[], value: string | null | undefined): boo
   return !!findShip(ships, value)?.bulk || parseShip(value).name.includes('벌크');
 }
 
+/** 선박 등록에서 "대기"로 정한 배 → 선박 칸 값 (항상 "대기"가 들어가게: 대기 처리 규칙이 그대로 적용) */
+export const waitShipValue = (name: string) => (name.includes('대기') ? name : `${name} 대기`);
+export function waitTypeShip(ships: Ship[], value: string | null | undefined): Ship | undefined {
+  const v = value?.trim();
+  return v ? ships.find((s) => s.wait && s.name === v) : undefined;
+}
+
 /** 선박 칸 값의 출발 정보: 시간(HH:mm) · 익일 여부 · 출발 항구 */
 export function shipDepart(ships: Ship[], value: string | null | undefined): { time: string; nextDay: boolean; port: string } {
   const whole = value?.trim();
@@ -106,6 +113,7 @@ export function shipChoices(ships: Ship[], zone: Zone | null, which: 'arrival' |
       if (fromJeju && s.route === 'down') continue;
       if (!fromJeju && s.route === 'up') continue;
       const port = s.depart_port?.trim();
+      if (s.wait) { out.push({ value: waitShipValue(s.name), label: s.name, time: '', nextDay: false, ship: s }); continue; }
       out.push({ value: s.name, label: port && port !== '제주' && fromJeju ? `${s.name} · ${port}` : s.name, time: s.departs_at, nextDay: !!s.depart_next_day, ship: s });
     } else {
       for (const p of ports) out.push({ value: formatShip(s.name, p.port), label: `${s.name} · ${p.port}`, time: p.time, nextDay: !!p.next_day, ship: s });

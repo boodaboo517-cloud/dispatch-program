@@ -143,8 +143,8 @@ function ShipSheet(p: { zone: Zone | null; which: 'arrival' | 'departure'; curre
             id: c.value + c.ship.id,
             label: c.label,
             search: c.value,
-            sub: c.time ? `${c.nextDay ? '익일 ' : ''}${c.time}` : '시간 미정',
-            right: isBulkShip([c.ship], c.ship.name) || c.ship.arrival_day_offset !== 1 ? <>
+            sub: c.ship.wait ? '선박 미정 · 차량·짐 그대로' : c.time ? `${c.nextDay ? '익일 ' : ''}${c.time}` : '시간 미정',
+            right: c.ship.wait ? <span className="badge warn">⏸ 대기 · 배 안 탐</span> : isBulkShip([c.ship], c.ship.name) || c.ship.arrival_day_offset !== 1 ? <>
               {isBulkShip([c.ship], c.ship.name) && <span className="badge" style={{ background: '#e0f2fe', color: '#075985' }}>📦 벌크 · 차량 안 탐</span>}
               {c.ship.arrival_day_offset !== 1 && <span className="badge warn">+{c.ship.arrival_day_offset}일 도착</span>}
             </> : undefined,

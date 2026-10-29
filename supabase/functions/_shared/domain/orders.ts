@@ -1,7 +1,7 @@
 // 오더 저장·삭제와 "상차 → 다음 날 반대 지역 하차", "선박 자동 이어짐" 연결 로직.
 import { addDays, diffDays } from './dates.ts';
 import { newId } from './ids.ts';
-import { findShip, isBulkShip, isNextDayShip, isWaitShip } from './ships.ts';
+import { findShip, isBulkShip, isNextDayShip, isWaitShip, waitShipValue, waitTypeShip } from './ships.ts';
 import { CARRIER_LABEL } from './types.ts';
 import type { Tx } from './tx.ts';
 import type {
@@ -382,6 +382,9 @@ export function setRowShip(
     }
     return;
   }
+  // 선박 등록에서 "대기"로 정한 배 → 대기 (배 안 탐, 차량·짐 그대로)
+  const w = waitTypeShip(tx.list('ships'), p.ship);
+  if (w) p = { ...p, ship: waitShipValue(w.name) };
   // 벌크 선박: 화물만 배를 타므로 차량 줄 출발 선박(차량 이동)은 비워 두고, 상차 오더만 벌크로
   const bulkShip = isBulkShip(tx.list('ships'), p.ship);
   tx.update('vehicle_days', vd.id, bulkShip ? { departure_ship: null, departure_ship_tag: '' } : { departure_ship: p.ship, departure_ship_tag: p.tag });
@@ -425,6 +428,9 @@ function rowOrders(tx: Tx, date: string, vehicleId: string, kind: Kind, zone?: Z
 function withShipShipment(tx: Tx, o: DailyOrder, before?: DailyOrder): DailyOrder {
   if (o.kind !== 'load') return o;
   const ships = tx.list('ships');
+  // 선박 등록에서 "대기"로 정한 배를 고르면 대기(배 안 탐)로
+  const w = waitTypeShip(ships, o.departure_ship);
+  if (w) o = { ...o, departure_ship: waitShipValue(w.name) };
   if (isBulkShip(ships, o.departure_ship)) return o.shipment === 'bulk' ? o : { ...o, shipment: 'bulk', same_day: false };
   const wasBulkShip = isBulkShip(ships, before?.departure_ship);
   return wasBulkShip && o.shipment === 'bulk' && before?.departure_ship !== o.departure_ship ? { ...o, shipment: 'vehicle' } : o;

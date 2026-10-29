@@ -40,6 +40,7 @@ export function ShipEditSheet({ ship, close }: { ship: Ship; close: () => void }
     else if (ship.depart_port !== undefined) row.depart_port = '';
     else delete row.depart_port;
     if (!x.depart_next_day && ship.depart_next_day === undefined) delete row.depart_next_day;
+    if (!x.wait && ship.wait === undefined) delete row.wait;
     store.run((tx) => (isNew ? tx.insert('ships', row) : tx.update('ships', row.id, row)));
     close();
   };
@@ -80,10 +81,14 @@ export function ShipEditSheet({ ship, close }: { ship: Ship; close: () => void }
       <div className="field">
         <span>운송 방식</span>
         <div className="seg" style={{ display: 'flex', gap: 6 }}>
-          <button className={`chip ${!x.bulk ? 'on' : ''}`} style={{ flex: 1, minHeight: 44 }} onClick={() => set({ bulk: false })}>🚚 차량 선적</button>
-          <button className={`chip ${x.bulk ? 'on' : ''}`} style={{ flex: 1, minHeight: 44 }} onClick={() => set({ bulk: true })}>📦 벌크 (화물만)</button>
+          <button className={`chip ${!x.bulk && !x.wait ? 'on' : ''}`} style={{ flex: 1, minHeight: 44 }} onClick={() => set({ bulk: false, wait: false })}>🚚 차량 선적</button>
+          <button className={`chip ${x.bulk ? 'on' : ''}`} style={{ flex: 1, minHeight: 44 }} onClick={() => set({ bulk: true, wait: false })}>📦 벌크</button>
+          <button className={`chip ${x.wait ? 'on' : ''}`} style={{ flex: 1, minHeight: 44 }} onClick={() => set({ wait: true, bulk: false })}>⏸ 대기</button>
         </div>
-        <span className="muted small">{x.bulk ? '이 배로 상차하면 차량은 안 타고 화물만 갑니다. 도착지 하차는 차량번호 없이 배차 대기(미배차)로 들어갑니다.' : '차량이 화물을 싣고 배를 탑니다. 도착지 하차에 같은 차량이 들어갑니다.'}</span>
+        <span className="muted small">{x.wait
+          ? '아직 배를 안 탄 상태(선박 미정)입니다. 차량과 짐은 그 지역에 그대로 있고, 다음 날 같은 차량에 [[ 상차짐 ]]으로 이어지며 기사는 비어 있습니다(미배치). 선박을 정하면 그날 선적됩니다.'
+          : x.bulk ? '이 배로 상차하면 차량은 안 타고 화물만 갑니다. 도착지 하차는 차량번호 없이 배차 대기(미배차)로 들어갑니다.'
+          : '차량이 화물을 싣고 배를 탑니다. 도착지 하차에 같은 차량이 들어갑니다.'}</span>
       </div>
       <label className="field"><span>항로</span>
         <select value={x.route} onChange={(e) => set({ route: e.target.value as Ship['route'] })}>

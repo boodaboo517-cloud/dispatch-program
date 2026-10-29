@@ -155,8 +155,8 @@ export interface Board {
 }
 
 /** 차량은 배정됐는데 그 쪽(하차/상차) 기사가 없음 → "미배치" */
-export const missingDriver = (r: Pick<BoardRow, 'unloads' | 'loads' | 'driverId' | 'loadDriverId'> & { amLabel?: string }, kind: Kind) =>
-  kind === 'unload' ? r.unloads.length > 0 && !r.driverId && !r.amLabel : r.loads.length > 0 && !r.loadDriverId;
+export const missingDriver = (r: Pick<BoardRow, 'unloads' | 'loads' | 'driverId' | 'loadDriverId'> & { amLabel?: string; carried?: DailyOrder[] }, kind: Kind) =>
+  kind === 'unload' ? r.unloads.length > 0 && !r.driverId && !r.amLabel : (r.loads.length > 0 || (r.carried?.length ?? 0) > 0) && !r.loadDriverId;
 /** 야간 작업이 있는데 야간 기사가 없음 */
 export const missingNightDriver = (r: Pick<BoardRow, 'nights' | 'nightDriverId'>) => r.nights.length > 0 && !r.nightDriverId;
 export const needsDriver = (r: Pick<BoardRow, 'unloads' | 'loads' | 'driverId' | 'loadDriverId'> & { amLabel?: string; nights?: DailyOrder[]; nightDriverId?: string | null }) =>

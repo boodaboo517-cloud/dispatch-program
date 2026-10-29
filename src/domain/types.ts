@@ -198,6 +198,8 @@ export interface Ship extends Base {
   depart_next_day?: boolean;
   /** 벌크 선박: 차량은 안 타고 화물만 (성우벌크·영진벌크·세주벌크 등) */
   bulk?: boolean;
+  /** 대기: 아직 배를 안 탐(선박 미정). 차량·짐은 그 지역에 그대로, 다음 날 [[ 상차짐 ]] · 기사 미배치 */
+  wait?: boolean;
 }
 
 export interface OrderSnapshot {
