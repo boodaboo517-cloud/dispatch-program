@@ -57,11 +57,11 @@ function Fit({ children }: { children: ReactNode }) {
 }
 
 /** 선박 칸: (예약업체·표시 작게 한 줄) / 선박명 / 시간(작게). 지역(기항지)은 표시하지 않음 */
-function ShipText({ snap, ship, tag, nextDay }: { snap: Snapshot; ship: string | null; tag: string; nextDay?: boolean }) {
+function ShipText({ snap, ship, tag, nextDay, arrival }: { snap: Snapshot; ship: string | null; tag: string; nextDay?: boolean; arrival?: boolean }) {
   if (!ship) return null;
   const time = shipTimeOf(snap, ship);
   return (
-    <div className="ps-ship">
+    <div className={`ps-ship${arrival ? ' arr' : ''}`}>
       {tag && <div className="ps-line"><Fit><span className="ps-tag">{tag}</span></Fit></div>}
       <div className="ps-line"><Fit><span className="ps-name">{parseShip(ship).name}</span></Fit></div>
       {(time || nextDay) && <div className="ps-time">{nextDay && <span className="ps-nextday">익일</span>}{time}</div>}
@@ -168,7 +168,7 @@ function VehicleRow({ snap, row }: { snap: Snapshot; row: BoardRow }) {
   return (
     <>
     <tr className={row.secondary ? 'secondary' : ''}>
-      <td className="ship"><ShipText snap={snap} ship={row.arrivalShip} tag={row.arrivalTag} /></td>
+      <td className="ship"><ShipText snap={snap} ship={row.arrivalShip} tag={row.arrivalTag} arrival /></td>
       {vehCell(row.arrivalShip, 'am')}
       <td className={`drv${noUnload ? ' nodrv' : ''}`}>{name}</td>
       <td className="body">
@@ -205,7 +205,7 @@ function WaitingRow({ snap, o }: { snap: Snapshot; o: DailyOrder }) {
     : <td className="veh wait"><Fit>미배차</Fit></td>;
   return (
     <tr className={ext ? 'external' : 'waiting'}>
-      <td className="ship">{!load && <ShipText snap={snap} ship={o.arrival_ship} tag={o.arrival_ship_tag} />}</td>
+      <td className="ship">{!load && <ShipText snap={snap} ship={o.arrival_ship} tag={o.arrival_ship_tag} arrival />}</td>
       {load ? <td className="veh" /> : veh}
       <td className="drv" />
       <td className="body">{!load && <Orders snap={snap} list={[o]} />}</td>
