@@ -1,7 +1,7 @@
 // 기존 "경민물류 일정표" 양식으로 내보내기 (하루 = 시트 1장). 엑셀에는 축약 없이 전체 내용.
 import type { Worksheet } from 'exceljs';
 import {
-  DAY_STATUS_LABEL, missingDriver, pmArrival, shownMemo, workText, seqMark, buildBoard, transportSummary, buildIndex, eachDay, isDriverWorking, sitesGrouped,
+  DAY_STATUS_LABEL, fieldDayOf, missingDriver, pmArrival, shownMemo, workText, seqMark, buildBoard, transportSummary, buildIndex, eachDay, isDriverWorking, sitesGrouped,
   type BoardRow, type DailyOrder, type Snapshot, type Zone,
 } from '../domain/index.ts';
 import { dayjs } from '../lib/time.ts';
@@ -181,14 +181,21 @@ export function fillDaySheet(ws: Worksheet, s: Snapshot, date: string) {
   header(ws, r, ['근무지', '이름', '업무', '', '', '지급 차량']);
   ws.mergeCells(r, 3, r, 5);
   r++;
+  // 한 사람 한 줄: 종일이면 업무 하나, 오전·오후가 다르면 "오전 … / 오후 …"
+  const seen = new Set<string>();
   for (const g of groups) {
     const startRow = r;
     for (const f of g.rows) {
+      if (!f.staff_id || seen.has(f.staff_id)) continue;
+      seen.add(f.staff_id);
+      const day = fieldDayOf(board.field, f.staff_id, date);
+      const site = (id: string | null) => s.field_sites.find((x) => x.id === id)?.name ?? '';
+      const halfText = (x: typeof day.am, label: string) => (x ? `${label} ${x.site_id !== day.site_id ? `[${site(x.site_id)}] ` : ''}${x.task}`.trim() : '');
       ws.getCell(r, 1).value = g.site.name;
       ws.getCell(r, 2).value = driverName(s, f.staff_id);
       ws.mergeCells(r, 3, r, 5);
-      ws.getCell(r, 3).value = f.task;
-      const v = s.vehicles.find((x) => x.id === f.vehicle_id);
+      ws.getCell(r, 3).value = day.am && day.am === day.pm ? day.am.task : [halfText(day.am, '오전'), halfText(day.pm, '오후')].filter(Boolean).join(' / ');
+      const v = s.vehicles.find((x) => x.id === day.vehicle_id);
       ws.getCell(r, 6).value = v ? `${v.vehicle_type} ${v.short_no}` : '';
       r++;
     }

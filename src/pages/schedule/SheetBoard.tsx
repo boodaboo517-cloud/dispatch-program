@@ -1,6 +1,6 @@
 // 종이 일정표 모양 (확인용, 누르기 없음): 차량 한 대 = 한 줄. 선박 | 차량 | 기사 | 하차 | 차량 | 기사 | 상차 | 선박 (제주는 오전·오후)
 import {
-  DAY_STATUS_LABEL, FIELD_PART_LABEL, ON_CALL_SHIFT, pmArrival, shownMemo, driverZone, isDriverWorking, isExternal, isWaitShip, missingDriver, workText, offByZone, parseShip, seqMark, sitesGrouped,
+  DAY_STATUS_LABEL, ON_CALL_SHIFT, fieldDayOf, pmArrival, shownMemo, driverZone, isDriverWorking, isExternal, isWaitShip, missingDriver, workText, offByZone, parseShip, seqMark, sitesGrouped,
   type BoardRow, type DailyOrder, type FieldAssignment, type Snapshot, type Zone,
 } from '../../domain/index.ts';
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
@@ -267,33 +267,45 @@ export function SheetBoard(p: { zone: Zone; date: string; rows: BoardRow[]; wait
   );
 }
 
-/** 현장 표 (육지·제주와 따로, 근무자가 없어도 표시): 근무지 | 차량 | 이름 | 업무, 맨 밑에 현장 휴무 */
+/** 현장 표 (육지·제주와 따로, 근무자가 없어도 표시): 근무지 | 차량 | 이름 | 오전 | 오후 (한 사람 한 줄, 종일이면 오전·오후 합침), 맨 밑에 현장 휴무 */
 export function SheetExtras({ date, field }: { date: string; field: FieldAssignment[] }) {
   const snap = useSnap();
-  const rows = sitesGrouped(snap, field).groups.flatMap((g) => g.rows);
+  const ordered = sitesGrouped(snap, field).groups.flatMap((g) => g.rows);
+  // 한 사람 한 줄 (오전·오후 줄이 따로 있어도)
+  const seen = new Set<string>();
+  const people = ordered.filter((f) => f.staff_id && !seen.has(f.staff_id) && seen.add(f.staff_id)).map((f) => ({ id: f.staff_id!, day: fieldDayOf(field, f.staff_id!, date) }));
   const offAll = offByZone(snap, date);
   const fieldOff = [...offAll.jeju, ...offAll.land].filter((d) => d.staff_type !== '기사' && !d.unlisted).sort((a, b) => a.name.localeCompare(b.name, 'ko'));
-  const siteName = (f: FieldAssignment) => snap.field_sites.find((x) => x.id === f.site_id)?.name ?? '근무지 미정';
+  const siteName = (id: string | null) => snap.field_sites.find((x) => x.id === id)?.name ?? '근무지 미정';
+  const half = (f: FieldAssignment | null, daySite: string | null) => (f
+    ? <>{f.site_id !== daySite && <span className="ps-part">{siteName(f.site_id)}</span>}{f.task}</>
+    : <span style={{ color: '#aaa' }}>-</span>);
   return (
     <table className="paper fieldwork">
-      <colgroup><col style={{ width: '20%' }} /><col style={{ width: '13%' }} /><col style={{ width: '15%' }} /><col /></colgroup>
+      <colgroup><col style={{ width: '17%' }} /><col style={{ width: '11%' }} /><col style={{ width: '13%' }} /><col /><col /></colgroup>
       <thead>
-        <tr><th colSpan={4} className="zone">현장</th></tr>
-        <tr><th>근무지</th><th>차량</th><th>이름</th><th>업무</th></tr>
+        <tr><th colSpan={5} className="zone">현장</th></tr>
+        <tr><th>근무지</th><th>차량</th><th>이름</th><th>오전</th><th>오후</th></tr>
       </thead>
       <tbody>
-        {rows.map((f, i) => (
-          <tr key={f.id} className={i > 0 && siteName(rows[i - 1]) !== siteName(f) ? 'newsite' : ''}>
-            <td className="site"><Fit>{i === 0 || siteName(rows[i - 1]) !== siteName(f) ? siteName(f) : ''}</Fit></td>
-            <td className="veh">{f.vehicle_id && <Fit><span className="ps-pill veh plain">{vehicleNo(snap, f.vehicle_id)}</span></Fit>}</td>
-            <td className="drv"><Fit>{driverName(snap, f.staff_id)}{f.part ? <span className="ps-part">{FIELD_PART_LABEL[f.part]}</span> : null}</Fit></td>
-            <td className="body"><Fit>{f.task}</Fit></td>
-          </tr>
-        ))}
-        {!rows.length && <tr><td colSpan={4} className="body" style={{ color: '#888', textAlign: 'center' }}>근무자 없음</td></tr>}
+        {people.map(({ id, day }, i) => {
+          const newSite = i === 0 || people[i - 1].day.site_id !== day.site_id;
+          const whole = day.am && day.am === day.pm;
+          return (
+            <tr key={id} className={i > 0 && newSite ? 'newsite' : ''}>
+              <td className="site"><Fit>{newSite ? siteName(day.site_id) : ''}</Fit></td>
+              <td className="veh">{day.vehicle_id && <Fit><span className="ps-pill veh plain">{vehicleNo(snap, day.vehicle_id)}</span></Fit>}</td>
+              <td className="drv"><Fit>{driverName(snap, id)}</Fit></td>
+              {whole
+                ? <td className="body" colSpan={2}><Fit>{day.am!.task}</Fit></td>
+                : <><td className="body"><Fit>{half(day.am, day.site_id)}</Fit></td><td className="body"><Fit>{half(day.pm, day.site_id)}</Fit></td></>}
+            </tr>
+          );
+        })}
+        {!people.length && <tr><td colSpan={5} className="body" style={{ color: '#888', textAlign: 'center' }}>근무자 없음</td></tr>}
         <tr className="fieldrow offrow first">
           <td className="site"><Fit>현장 휴무</Fit></td>
-          <td className="body" colSpan={3}><Fit>{fieldOff.map((d) => d.name).join(', ') || '없음'}</Fit></td>
+          <td className="body" colSpan={4}><Fit>{fieldOff.map((d) => d.name).join(', ') || '없음'}</Fit></td>
         </tr>
       </tbody>
     </table>

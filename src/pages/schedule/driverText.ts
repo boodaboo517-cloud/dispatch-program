@@ -1,6 +1,6 @@
 // 기사 한 사람의 그날 일정을 카톡 문자로 (그림 없이): 도착 선박 · 차량 · 출근 · 오전(하차)/오후(상차) · 야간 · 마감 선박
 import {
-  FIELD_PART_LABEL, HELPER_ROLE_LABEL, isWaitShip, offByZone, parseShip, shipDepart, pmArrival, shownMemo, workText, type Board, type BoardRow, type DailyOrder, type Snapshot, type Zone,
+  HELPER_ROLE_LABEL, fieldDayOf, isWaitShip, offByZone, parseShip, shipDepart, pmArrival, shownMemo, workText, type Board, type BoardRow, type DailyOrder, type Snapshot, type Zone,
 } from '../../domain/index.ts';
 import { dayjs } from '../../lib/time.ts';
 import { ZONE_LABEL, clientName, driverName, productName, productOf, qtyText, vehicleNo } from '../../ui/labels.ts';
@@ -133,9 +133,17 @@ export function driverDayText(snap: Snapshot, board: Board, date: string, me: st
   for (const r of mine) blocks.push(rowText(snap, r, me));
   // 야간 기사만 정하고 야간 작업이 아직 없는 차량
   for (const r of board.rows.filter((x) => x.nightDriverId === me && !x.nights.length && !mine.includes(x))) blocks.push([`${r.vehicle.short_no} · 야간 (작업 미정)`]);
-  for (const f of board.field.filter((x) => x.staff_id === me && !x.is_off)) {
-    const site = snap.field_sites.find((s) => s.id === f.site_id)?.name ?? '근무지 미정';
-    blocks.push([`현장근무 · ${site}${f.part ? ` (${FIELD_PART_LABEL[f.part]})` : ''}`, ...(f.task ? [f.task] : []), ...(f.vehicle_id ? [`지급 차량 ${vehicleNo(snap, f.vehicle_id)}`] : [])]);
+  // 현장근무: 한 사람 한 묶음 (오전·오후가 다르면 나눠서)
+  const fd = fieldDayOf(board.field, me, date);
+  if (fd.rows.length) {
+    const site = (id: string | null) => snap.field_sites.find((s) => s.id === id)?.name ?? '근무지 미정';
+    const whole = fd.am && fd.am === fd.pm;
+    const halfLine = (f: typeof fd.am, label: string) => (f ? `${label} ${f.site_id !== fd.site_id ? `(${site(f.site_id)}) ` : ''}${f.task}`.trim() : `${label} 현장근무 없음`);
+    blocks.push([
+      `현장근무 · ${site(fd.site_id)}`,
+      ...(whole ? (fd.am!.task ? [fd.am!.task] : []) : [halfLine(fd.am, '오전'), halfLine(fd.pm, '오후')]),
+      ...(fd.vehicle_id ? [`지급 차량 ${vehicleNo(snap, fd.vehicle_id)}`] : []),
+    ]);
   }
   if (!blocks.length) blocks.push([offIds(snap, date).has(me) ? '휴무' : '배차 없음']);
   return [`${dayjs(date).format('M/D(dd)')} ${driverName(snap, me)}`, '', blocks.map((b) => b.join('\n')).join('\n\n')].join('\n');

@@ -5,7 +5,7 @@ import { Tx, applyMutations } from '../tx.ts';
 import { addDays } from '../dates.ts';
 import { copyOrder, createOrder, splitPerVehicle } from '../actions.ts';
 import { planCreateRecurring, planRecurringChange } from '../recurring.ts';
-import { addFieldPerson, blankField, dedupeFieldRows, planCreateFieldRecurring, saveFieldAssignment, setDayOff, setDaySite, setStaffDay, setStaffRange, setStaffWorking } from '../fieldwork.ts';
+import { addFieldPerson, blankField, dedupeFieldRows, fieldDayOf, setFieldDay, setFieldHalf, planCreateFieldRecurring, saveFieldAssignment, setDayOff, setDaySite, setStaffDay, setStaffRange, setStaffWorking } from '../fieldwork.ts';
 import { ON_CALL_SHIFT, repairSnapshot, type Driver, type Weekday } from '../types.ts';
 import { assignedDriverIds, cancelLeave, fixedOffDays, leaveRanges, offByZone, planStaffFixedOff, setLeave, weeklyOffOn, workDaysFromOff } from '../workforce.ts';
 import { baseSnapshot, resetIds } from './fixtures.ts';
@@ -801,5 +801,29 @@ describe('현장근무 같은 사람 두 번 나오지 않게', () => {
     // 이미 근무 중인 사람을 다른 근무지에 추가하면 줄을 새로 만들지 않고 옮긴다
     addFieldPerson(tx2, D, 'dA', 's2');
     expect(tx2.list('field_assignments').filter((f) => f.date === D && f.staff_id === 'dA').map((f) => f.site_id)).toEqual(['s2']);
+  });
+});
+
+describe('현장근무 기사 일정처럼 입력 (근무지 · 지급차량 · 오전 · 오후)', () => {
+  it('오전만 고치면 종일 줄이 오전·오후로 나뉘고, 같아지면 다시 종일 · 근무지·차량은 둘 다', () => {
+    const s0 = baseSnapshot();
+    s0.field_sites = [{ id: 's1', name: '본사', sort_order: 0 }, { id: 's2', name: '함덕센터', sort_order: 1 }] as never;
+    const tx = new Tx(s0);
+    saveFieldAssignment(tx, blankField({ date: D, staff_id: 'dA', site_id: 's1', task: '경리업무' }));
+    setFieldHalf(tx, D, 'dA', 'am', { task: '배송지원' });
+    let d = fieldDayOf(tx.list('field_assignments'), 'dA', D);
+    expect([d.rows.length, d.am?.task, d.pm?.task, d.am?.part, d.pm?.part]).toEqual([2, '배송지원', '경리업무', 'am', 'pm']);
+    // 근무지 · 지급차량은 오전·오후 모두
+    setFieldDay(tx, D, 'dA', { site_id: 's2', vehicle_id: 'v9914' });
+    d = fieldDayOf(tx.list('field_assignments'), 'dA', D);
+    expect([d.am?.site_id, d.pm?.site_id, d.pm?.vehicle_id]).toEqual(['s2', 's2', 'v9914']);
+    // 오전을 다시 같게 → 종일 한 줄
+    setFieldHalf(tx, D, 'dA', 'am', { task: '경리업무' });
+    d = fieldDayOf(tx.list('field_assignments'), 'dA', D);
+    expect([d.rows.length, d.am?.part, d.am === d.pm]).toEqual([1, '', true]);
+    // 오후 근무 없음 (예: 오후 기사 배차) → 오전만
+    setFieldHalf(tx, D, 'dA', 'pm', { none: true });
+    d = fieldDayOf(tx.list('field_assignments'), 'dA', D);
+    expect([d.rows.length, d.am?.part, d.pm]).toEqual([1, 'am', null]);
   });
 });

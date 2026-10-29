@@ -470,3 +470,21 @@ a.btn.sms-btn { display: inline-flex; align-items: center; justify-content: cent
 .day-toggle { display: flex; flex: none; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .day-toggle button { border: none; border-radius: 0; min-height: 40px; padding: 0 8px; font-size: 14px; background: #fff; }
 .day-toggle button.on { background: #111827; color: #fff; font-weight: 700; }
+/* 현장근무 입력: 기사 일정처럼 한 사람 한 줄 */
+.field-grid { display: flex; flex-direction: column; gap: 4px; }
+.fg-row { display: grid; grid-template-columns: 66px 70px 52px minmax(0, 1fr) minmax(0, 1fr); gap: 3px; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+.fg-row.off { background: #fef2f2; grid-template-columns: 66px minmax(0, 1fr); }
+.fg-head { background: transparent; border: none; padding: 0 3px; font-size: 12px; color: var(--gray); text-align: center; }
+.fg-zone { font-weight: 800; margin: 10px 4px 2px; }
+.fg-cell { min-height: 52px; border: 1px solid #eef0f3; border-radius: 8px; background: #fff; padding: 2px 4px; font-size: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; word-break: keep-all; line-height: 1.2; color: var(--text); }
+.fg-cell.empty { color: #9ca3af; background: #fafafa; }
+.fg-name { align-items: flex-start; text-align: left; }
+.fg-half { align-items: flex-start; text-align: left; }
+.fg-off { color: var(--red); font-weight: 800; flex-direction: row; gap: 6px; }
+.fg-site2 { font-size: 11px; color: #1d4ed8; font-weight: 700; }
+.fg-car { font-size: 12px; color: #0369a1; font-weight: 700; }
+.fg-task { font-size: 14px; }
+.fg-cell { min-width: 0; overflow: hidden; overflow-wrap: anywhere; }
+.fg-whole { grid-column: span 2; }
+.fg-cell { white-space: normal; }
+.fg-task { word-break: break-all; font-size: 13px; }

@@ -236,3 +236,73 @@ export function addFieldPerson(tx: Tx, date: string, staffId: string, siteId: st
   const n = tx.list('field_assignments').filter((f) => f.date === date).length;
   saveFieldAssignment(tx, blankField({ date, site_id: siteId, staff_id: staffId, sort_order: n }));
 }
+
+/** 그날 한 사람의 현장근무를 기사 일정처럼 한 줄로: 근무지 · 지급차량 · 오전 · 오후 (종일 줄이면 오전·오후 같음) */
+export interface FieldDay {
+  rows: FieldAssignment[];
+  am: FieldAssignment | null;
+  pm: FieldAssignment | null;
+  site_id: string | null;
+  vehicle_id: string | null;
+}
+export function fieldDayOf(rows: FieldAssignment[], staffId: string, date: string): FieldDay {
+  const mine = rows.filter((f) => f.date === date && f.staff_id === staffId && !f.is_off && f.source !== 'maintenance')
+    .sort((a, b) => a.sort_order - b.sort_order);
+  const whole = mine.find((f) => !f.part) ?? null;
+  const am = mine.find((f) => f.part === 'am') ?? whole;
+  const pm = mine.find((f) => f.part === 'pm') ?? whole;
+  const first = am ?? pm;
+  return { rows: mine, am, pm, site_id: first?.site_id ?? null, vehicle_id: first?.vehicle_id ?? null };
+}
+
+const sameWork = (a: FieldAssignment, b: FieldAssignment) => a.site_id === b.site_id && a.vehicle_id === b.vehicle_id && a.task.trim() === b.task.trim();
+
+/** 오전·오후 내용이 같아지면 다시 종일 한 줄로 */
+function mergeHalves(tx: Tx, date: string, staffId: string) {
+  const d = fieldDayOf(tx.list('field_assignments'), staffId, date);
+  const am = d.rows.find((f) => f.part === 'am');
+  const pm = d.rows.find((f) => f.part === 'pm');
+  if (am && pm && sameWork(am, pm)) {
+    saveFieldAssignment(tx, { ...am, part: '' });
+    tx.remove('field_assignments', pm.id);
+  }
+}
+
+/**
+ * 오전 또는 오후만 고치기 (업무 · 근무지). 종일 한 줄이면 오전·오후 두 줄로 나눠 그 시간만 바꾼다.
+ * none = 이 시간은 현장근무 없음 (예: 오후에 기사로 배차).
+ */
+export function setFieldHalf(tx: Tx, date: string, staffId: string, half: 'am' | 'pm', p: { task?: string; site_id?: string | null; none?: boolean }) {
+  const other: 'am' | 'pm' = half === 'am' ? 'pm' : 'am';
+  if (!p.none) setStaffWorking(tx, date, staffId);
+  const d = fieldDayOf(tx.list('field_assignments'), staffId, date);
+  const whole = d.rows.find((f) => !f.part);
+  const patch = { ...(p.task !== undefined ? { task: p.task } : {}), ...(p.site_id !== undefined ? { site_id: p.site_id } : {}) };
+  if (whole) {
+    if (p.none) return saveFieldAssignment(tx, { ...whole, part: other });
+    const next = { ...whole, ...patch };
+    if (sameWork(next, whole)) return;
+    // 종일 줄을 나눠: 원래 줄은 다른 시간, 새 줄은 이 시간
+    saveFieldAssignment(tx, { ...whole, part: other });
+    saveFieldAssignment(tx, blankField({ date, staff_id: staffId, site_id: whole.site_id, vehicle_id: whole.vehicle_id, task: whole.task, sort_order: whole.sort_order, ...patch, part: half }));
+    return mergeHalves(tx, date, staffId);
+  }
+  const cur = d.rows.find((f) => f.part === half);
+  if (p.none) {
+    if (cur) tx.remove('field_assignments', cur.id);
+    return;
+  }
+  if (cur) saveFieldAssignment(tx, { ...cur, ...patch });
+  else {
+    const base = d.rows.find((f) => f.part === other);
+    saveFieldAssignment(tx, blankField({ date, staff_id: staffId, site_id: base?.site_id ?? null, vehicle_id: base?.vehicle_id ?? null, task: base?.task ?? '', sort_order: base?.sort_order ?? 0, ...patch, part: half }));
+  }
+  mergeHalves(tx, date, staffId);
+}
+
+/** 그날 근무지 · 지급차량 (· 종일 업무)를 오전·오후 모두 바꾸기 */
+export function setFieldDay(tx: Tx, date: string, staffId: string, p: { site_id?: string | null; vehicle_id?: string | null; task?: string }) {
+  setStaffWorking(tx, date, staffId);
+  for (const f of fieldDayOf(tx.list('field_assignments'), staffId, date).rows) saveFieldAssignment(tx, { ...f, ...p });
+  mergeHalves(tx, date, staffId);
+}
