@@ -121,7 +121,7 @@ function VehicleRow({ snap, row }: { snap: Snapshot; row: BoardRow }) {
   // 야간 기사는 상차(오후) 기사 칸에도 빨간 "야간"과 함께 (상차 기사가 미배치면 미배치 대신 야간 기사만)
   const nightDrv = row.nightDriverId ? <div className="ps-oline center"><Fit><span className="ps-nightdrv"><span className="ps-nightlbl">야간</span> {driverName(snap, row.nightDriverId)}</span></Fit></div> : null;
   // 오후도착: 하차는 오후 칸에서 오후 기사가 / 당일 왕복으로 건너간 쪽 줄: 야간 작업을 하차·상차 칸 안에 바로
-  const pm = !row.secondary && pmArrival(row);
+  const pm = pmArrival(row);
   const inline = row.secondary;
   const nightOf = (k: 'load' | 'unload') => (inline ? row.nights.filter((o) => o.kind === k) : []);
   const NIGHT = <span className="ps-nightlbl">야간</span>;

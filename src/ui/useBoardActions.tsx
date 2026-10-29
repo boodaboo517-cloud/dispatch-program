@@ -165,6 +165,11 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     if (!staff) return;
     const d = await pick.driver(date, side === 'unload' ? row.driverId : row.loadDriverId, side === 'unload');
     if (d === undefined) return;
+    if (d === PM_ARRIVAL && row.secondary) {
+      // 연속운행 줄: 오전 기사를 비우면 오후도착 (원래 지역 줄은 그대로)
+      store.run((tx) => setRowDriver(tx, { date, vehicle_id: row.vehicle.id, zone: row.zone, driver_id: null, side: 'unload', secondary: true }));
+      return;
+    }
     if (d === PM_ARRIVAL) {
       store.run((tx) => setRowAmLabel(tx, { date, vehicle_id: row.vehicle.id, zone: row.zone, label: PM_ARRIVAL_LABEL }));
       // 오후 기사가 아직 없으면 바로 고르기
@@ -179,6 +184,13 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     if (drv?.shift === ON_CALL_SHIFT && !workLogOf(snap, drv.id, date)) await pick.workType(date, drv.id);
   };
 
+  /** 오후도착으로: 오전 기사를 비우고(그 기사는 오후로), 오후 기사가 없으면 바로 고르기 */
+  const setPmArrival = async (row: BoardRow) => {
+    store.run((tx) => setRowAmLabel(tx, { date, vehicle_id: row.vehicle.id, zone: row.zone, label: PM_ARRIVAL_LABEL }));
+    const now = buildBoard(store.getState().snap, date).rows.find((r) => r.vehicle.id === row.vehicle.id && !r.secondary);
+    if (now && !now.loadDriverId) await editDriver(now, 'load');
+  };
+
   /** 기사 없는 차량: 오전·오후 같은 기사로 할지, 오후만 정할지 */
   const assignDriver = async (row: BoardRow) => {
     if (!staff) return;
@@ -187,8 +199,8 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
       message: '',
       // 당일 왕복으로 건너간 쪽 줄: 이쪽 하차·상차 기사를 따로 (오후도착은 원래 줄에서만)
       actions: row.secondary ? [
-        { label: `${sideLabel(row, 'unload')} 기사`, value: 'unload', kind: 'primary' },
-        { label: `${sideLabel(row, 'load')} 기사`, value: 'load' },
+        { label: `${sideLabel(row, 'load')} 기사 (오후도착 · 하차도 같이)`, value: 'load', kind: 'primary' },
+        { label: `${sideLabel(row, 'unload')} 기사 따로`, value: 'unload' },
         { label: <><NightTag /> 작업 추가</>, value: 'night' },
         { label: <><NightTag /> 기사</>, value: 'night-driver' },
         ...(turnOf(row) ? [{ label: '🔁 연속운행 취소', value: 'turn-off' }] : []),
@@ -302,6 +314,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
             // 당일 왕복으로 건너간 쪽 줄: 이쪽 기사·야간만 (차량 위치·순서 등은 원래 줄에서)
             { label: `${sideLabel(row, 'unload')} 기사`, run: () => void editDriver(row, 'unload') },
             { label: `${sideLabel(row, 'load')} 기사`, run: () => void editDriver(row, 'load') },
+            ...(row.driverId ? [{ label: '🚢 오후도착 (오전 기사 없음)', run: () => store.run((tx) => setRowDriver(tx, { date, vehicle_id: row.vehicle.id, zone: row.zone, driver_id: null, side: 'unload', secondary: true })) }] : []),
             { label: <><NightTag /> 작업 추가</>, run: () => void addNight(row) },
             { label: <><NightTag /> 기사</>, run: () => void editNightDriver(row) },
             ...(turnOf(row) ? [{ label: '🔁 연속운행 취소', run: () => toggleTurn(row, false) }] : []),
@@ -310,6 +323,9 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
         ? [
             { label: `${sideLabel(row, 'unload')} 기사`, run: () => void editDriver(row, 'unload') },
             { label: `${sideLabel(row, 'load')} 기사`, run: () => void editDriver(row, 'load') },
+            row.amLabel && !row.driverId
+              ? { label: '🚢 오후도착 해제', run: () => store.run((tx) => setRowAmLabel(tx, { date, vehicle_id: row.vehicle.id, zone: row.zone, label: '' })) }
+              : { label: '🚢 오후도착 (오전 기사 없음)', run: () => void setPmArrival(row) },
             { label: '순서 ①②', run: () => editSeq(row) },
             { label: '출근 시간·장소', run: () => editStart(row) },
             { label: '동승 (선탑·지원)', run: () => void editHelper(row) },

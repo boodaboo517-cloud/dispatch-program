@@ -845,3 +845,20 @@ describe('선박 운송 방식 대기 (선박 미정)', () => {
     expect(tx.list('vehicle_days').some((v) => v.date === addDays(D, 1) && v.vehicle_id === 'v9914' && v.zone === 'land')).toBe(false);
   });
 });
+
+describe('연속운행 줄 오후도착', () => {
+  it('건너간 쪽 줄은 기본 오후도착: 하차도 오후(상차) 기사가, 오전 기사를 따로 정하면 해제', () => {
+    const tx = new Tx(baseSnapshot());
+    saveOrder(tx, blankOrder({ date: D, zone: 'land', kind: 'unload', vehicle_id: 'v9915', client_id: 'c-sin' }));
+    setTurn(tx, { date: D, vehicle_id: 'v9915', zone: 'land', on: true });
+    const u = createOrder(tx, blankOrder({ date: D, zone: 'jeju', kind: 'unload', vehicle_id: 'v9915', client_id: 'c-dm' }));
+    const l = createOrder(tx, blankOrder({ date: D, zone: 'jeju', kind: 'load', vehicle_id: 'v9915', client_id: 'c-jr' }));
+    let jeju = buildBoard(tx.result(), D).rows.find((r) => r.vehicle.id === 'v9915' && r.secondary)!;
+    expect([jeju.zone, jeju.amLabel, missingDriver(jeju, 'unload'), missingDriver(jeju, 'load')]).toEqual(['jeju', '오후도착', false, true]);
+    setRowDriver(tx, { date: D, vehicle_id: 'v9915', zone: 'jeju', driver_id: 'dB', side: 'load', secondary: true });
+    expect([tx.get('daily_orders', u.id)!.driver_id, tx.get('daily_orders', l.id)!.driver_id]).toEqual(['dB', 'dB']);
+    setRowDriver(tx, { date: D, vehicle_id: 'v9915', zone: 'jeju', driver_id: 'dC', side: 'unload', secondary: true });
+    jeju = buildBoard(tx.result(), D).rows.find((r) => r.vehicle.id === 'v9915' && r.secondary)!;
+    expect([jeju.amLabel, jeju.driverId, tx.get('daily_orders', u.id)!.driver_id]).toEqual(['', 'dC', 'dC']);
+  });
+});

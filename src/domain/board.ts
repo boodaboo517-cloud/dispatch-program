@@ -5,7 +5,7 @@ import { activeRepair, repairMemo, saveMaintenance } from './maintenance.ts';
 import { carriedLoads, ensureVehicleDay, findVehicleDay, heldLoads, opposite, saveOrder, syncShipCarryover, waitsForShip } from './orders.ts';
 import { departDelay, isWaitShip, shipSortTime } from './ships.ts';
 import type { Tx } from './tx.ts';
-import { DEFAULT_START, ON_CALL_SHIFT } from './types.ts';
+import { DEFAULT_START, ON_CALL_SHIFT, PM_ARRIVAL_LABEL } from './types.ts';
 import type {
   DailyOrder, DayStatus, Driver, FieldAssignment, HelperRole, Kind, MaintenanceKind, RepairSpan, ShipTag, Snapshot, Vehicle, VehicleDay, Zone,
 } from './types.ts';
@@ -297,7 +297,8 @@ export function buildBoard(snap: Snapshot, date: string, idx: Index = buildIndex
         helperRole: vd?.helper_role ?? '',
         unloadNote: '',
         loadNote: '',
-        amLabel: '',
+        // 연속운행으로 건너간 쪽은 배를 타고 오후에 들어오므로 기본 오후도착 (오전 기사를 따로 정하면 해제)
+        amLabel: turn && !vd?.turn_driver_id ? PM_ARRIVAL_LABEL : '',
         startTime: '',
         startPlace: '',
         startDefault: false,
@@ -503,8 +504,12 @@ export function setRowDriver(tx: Tx, p: { date: string; vehicle_id: string; zone
   if (p.secondary) {
     const vd = findVehicleDay(tx, p.date, p.vehicle_id);
     if (vd) tx.update('vehicle_days', vd.id, side === 'unload' ? { turn_driver_id: p.driver_id } : { turn_load_driver_id: p.driver_id });
-    for (const o of tx.list('daily_orders').filter((o) => o.date === p.date && o.vehicle_id === p.vehicle_id && o.zone === p.zone && !o.night && o.kind === side)) {
-      if (o.driver_id !== p.driver_id) tx.update('daily_orders', o.id, { driver_id: p.driver_id });
+    const now = vd ? tx.get('vehicle_days', vd.id)! : undefined;
+    // 연속운행 줄이 오후도착(오전 기사 없음)이면 하차도 오후(상차) 기사가
+    const pm = !!now?.turn && !now.turn_driver_id;
+    for (const o of tx.list('daily_orders').filter((o) => o.date === p.date && o.vehicle_id === p.vehicle_id && o.zone === p.zone && !o.night)) {
+      const drv = o.kind === 'load' ? (side === 'load' ? p.driver_id : o.driver_id) : side === 'unload' ? p.driver_id : pm ? now?.turn_load_driver_id ?? null : o.driver_id;
+      if (o.driver_id !== drv) tx.update('daily_orders', o.id, { driver_id: drv });
     }
     return;
   }

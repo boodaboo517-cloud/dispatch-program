@@ -43,7 +43,7 @@ function zoneTable(ws: Worksheet, s: Snapshot, start: number, zone: Zone, rows: 
     // 전날 대기 짐 [[ ]] 과 칸 비고(오더 없이)도 줄로 넣는다
     // 야간 작업은 상차 칸 아래에 "(야간)"으로
     // 오후도착: 하차는 오후(상차) 칸에 "(하차)"로, 오후 기사가
-    const pm = !row.secondary && pmArrival(row);
+    const pm = pmArrival(row);
     const unloads = pm ? [] : row.unloads;
     const loadList = [...(pm ? row.unloads : []), ...row.carried, ...row.loads, ...row.nights];
     const uLines = unloads.length + (row.unloadNote ? 1 : 0);
