@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { buildBoard, buildIndex, type Board, type Role } from '../domain/index.ts';
 import { store, type StoreState } from '../data/store.ts';
+import { seoulToday } from '../lib/time.ts';
 
 export function useStore<T>(sel: (s: StoreState) => T): T {
   return useSyncExternalStore(store.subscribe, () => sel(store.getState()));
@@ -86,4 +87,13 @@ export function useWatch(id: string | null | undefined) {
       store.watched.delete(id);
     };
   }, [id]);
+}
+
+/** 보고 있는 날짜가 오늘이면 화면 바탕(표 바깥)을 아주 연한 노란색으로 — 오늘 일정인지 바로 알아보게 */
+export function useTodayTint(date: string, on = true) {
+  useEffect(() => {
+    const today = on && date === seoulToday();
+    document.body.classList.toggle('today-view', today);
+    return () => document.body.classList.remove('today-view');
+  }, [date, on]);
 }

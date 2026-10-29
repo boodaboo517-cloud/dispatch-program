@@ -5,7 +5,7 @@ import { exportSchedule } from '../excel/exportSchedule.ts';
 import { dayjs, seoulToday } from '../lib/time.ts';
 import { makeImages, shareImage, type SavedImage } from '../lib/shareImage.ts';
 import { boardView, rememberBoardDate } from '../lib/boardDate.ts';
-import { useBoard, useIsWide, useRole, useSnap } from '../ui/hooks.ts';
+import { useBoard, useIsWide, useRole, useSnap, useTodayTint } from '../ui/hooks.ts';
 import { useSwipe } from '../ui/useSwipe.ts';
 import { addDays } from '../domain/index.ts';
 import { setting } from '../ui/labels.ts';
@@ -21,6 +21,7 @@ export function OverviewPage({ embedded }: { embedded?: boolean } = {}) {
   const setDate = (d: string) => (embedded ? setLocalDate(d) : setParams({ date: d }, { replace: true }));
   // 오더 입력을 열면 이 날짜가 기본으로 (기사 화면 안 전체 일정은 제외)
   useEffect(() => { if (!embedded) rememberBoardDate(date); }, [date, embedded]);
+  useTodayTint(date, !embedded);
   const snap = useSnap();
   const board = useBoard(date);
   const wide = useIsWide();

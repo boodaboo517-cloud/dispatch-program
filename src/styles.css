@@ -488,3 +488,6 @@ a.btn.sms-btn { display: inline-flex; align-items: center; justify-content: cent
 .fg-whole { grid-column: span 2; }
 .fg-cell { white-space: normal; }
 .fg-task { word-break: break-all; font-size: 13px; }
+/* 오늘 날짜를 볼 때: 표 바깥 바탕을 아주 연한 노란색으로 */
+body.today-view { background: #fffbe6; }
+body.today-view .datebar, body.today-view .board-head { background: #fffbe6; }

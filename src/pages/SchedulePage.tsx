@@ -5,7 +5,7 @@ import { exportSchedule } from '../excel/exportSchedule.ts';
 import { fmtLong, fmtStamp, seoulToday } from '../lib/time.ts';
 import { useSwipe } from '../ui/useSwipe.ts';
 import { boardView, rememberBoardView } from '../lib/boardDate.ts';
-import { useBoard, useIsWide, useRole, useSnap, useStore } from '../ui/hooks.ts';
+import { useBoard, useIsWide, useRole, useSnap, useStore, useTodayTint } from '../ui/hooks.ts';
 import { setting } from '../ui/labels.ts';
 import { useBoardActions } from '../ui/useBoardActions.tsx';
 import { FieldTab } from './schedule/FieldTab.tsx';
@@ -38,6 +38,7 @@ export function SchedulePage() {
   const [params, setParams] = useSearchParams();
   // 날짜: 주소 → 배차·일정표에서 마지막으로 본 날짜 → 오늘 (두 화면이 같은 날짜를 씀)
   const date = params.get('date') ?? boardView()?.date ?? seoulToday();
+  useTodayTint(date);
   const tab = (params.get('zone') as Tab) ?? 'land';
   // 오더 입력을 열면 이 날짜·구역이 기본으로
   useEffect(() => rememberBoardView(date, tab), [date, tab]);
