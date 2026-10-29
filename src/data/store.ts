@@ -3,7 +3,7 @@
 import { del, get, set } from 'idb-keyval';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import {
-  TABLES, Tx, addDays, applyMutations, emptySnapshot, planFieldExtension, repairShipLinks, repairSnapshot, planRecurringExtension, toBatches,
+  TABLES, Tx, addDays, applyMutations, emptySnapshot, planFieldExtension, dedupeFieldRows, repairShipLinks, repairSnapshot, planRecurringExtension, toBatches,
   type Mutation, type Role, type Snapshot, type TableName,
 } from '../domain/index.ts';
 import { seoulToday } from '../lib/time.ts';
@@ -155,6 +155,8 @@ class Store {
     // 예전에 저장된 "대기"·"익일선적" 짐의 반대편 하차·도착 선박 바로잡기
     const fix = new Tx(b.snapshot, { actor: this.actor() });
     repairShipLinks(fix, addDays(today, -14));
+    // 같은 날 같은 사람 현장근무 줄이 겹친 것 정리 (일정표에 두 번 나오던 문제)
+    dedupeFieldRows(fix, addDays(today, -14));
     const muts = [...a.mutations, ...b.mutations, ...fix.mutations()];
     if (muts.length) this.commit(muts);
   }

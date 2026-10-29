@@ -1,5 +1,5 @@
 // 현장근무 탭: 근무지별 · 이름 · 업무 · 지급 차량 / 휴무자
-import { FIELD_PART_LABEL, blankField, offByZone, saveFieldAssignment, setDayOff, sitesGrouped, type FieldAssignment } from '../../domain/index.ts';
+import { FIELD_PART_LABEL, addFieldPerson, offByZone, saveFieldAssignment, setDayOff, sitesGrouped, type FieldAssignment } from '../../domain/index.ts';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FieldPeople } from './FieldPeople.tsx';
@@ -66,7 +66,10 @@ function FieldSites({ date }: { date: string }) {
     if (!site) return;
     const id = await pick.staff(date);
     if (!id) return;
-    store.run((tx) => saveFieldAssignment(tx, blankField({ date, site_id: site, staff_id: id, sort_order: rows.length })));
+    // 이미 이 날 근무 줄이 있는 사람이면 새 줄을 만들지 않고 근무지만 옮긴다 (같은 사람이 두 번 나오지 않게)
+    const had = rows.some((f) => f.staff_id === id && !f.is_off && f.source !== 'maintenance');
+    store.run((tx) => addFieldPerson(tx, date, id, site));
+    if (had) store.toast(`${driverName(store.getState().snap, id)}은(는) 이미 근무 중이라 근무지를 옮겼습니다`);
   };
   const addOff = async () => {
     const id = await pick.staff(date);

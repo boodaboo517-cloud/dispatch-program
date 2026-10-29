@@ -5,7 +5,7 @@ import { Tx, applyMutations } from '../tx.ts';
 import { addDays } from '../dates.ts';
 import { copyOrder, createOrder, splitPerVehicle } from '../actions.ts';
 import { planCreateRecurring, planRecurringChange } from '../recurring.ts';
-import { blankField, planCreateFieldRecurring, saveFieldAssignment, setDayOff, setDaySite, setStaffDay, setStaffRange, setStaffWorking } from '../fieldwork.ts';
+import { addFieldPerson, blankField, dedupeFieldRows, planCreateFieldRecurring, saveFieldAssignment, setDayOff, setDaySite, setStaffDay, setStaffRange, setStaffWorking } from '../fieldwork.ts';
 import { ON_CALL_SHIFT, repairSnapshot, type Driver, type Weekday } from '../types.ts';
 import { assignedDriverIds, cancelLeave, fixedOffDays, leaveRanges, offByZone, planStaffFixedOff, setLeave, weeklyOffOn, workDaysFromOff } from '../workforce.ts';
 import { baseSnapshot, resetIds } from './fixtures.ts';
@@ -774,5 +774,32 @@ describe('왕복 차량 (당일 다른 지역에 추가 배차)', () => {
     // 제주 줄 출발 선박을 바꿔도 육지 상차 선박은 그대로
     setRowShip(tx, { date: D, vehicle_id: 'v9914', zone: 'jeju', which: 'departure', ship: '성우', tag: '' });
     expect(tx.get('daily_orders', l.id)!.departure_ship).toBe('완도');
+  });
+});
+
+describe('현장근무 같은 사람 두 번 나오지 않게', () => {
+  it('직접 넣은 줄이 있는 날은 고정 근무가 또 만들지 않고, 겹친 줄은 정리, 추가는 근무지만 옮김', () => {
+    const s0 = baseSnapshot();
+    s0.field_sites = [{ id: 's1', name: '본사', sort_order: 0 }, { id: 's2', name: '함덕센터', sort_order: 1 }] as never;
+    const tx = new Tx(s0);
+    // 10/20 직접 넣음 → 그 뒤 고정 근무 등록
+    saveFieldAssignment(tx, blankField({ date: D, staff_id: 'dA', site_id: 's1' }));
+    const rec = planCreateFieldRecurring(tx.result(), { staff_id: 'dA', startDate: D, today: D, fields: { weekdays: [0, 1, 2, 3, 4, 5, 6], site_id: 's2', task: '', vehicle_id: null } });
+    const s1 = rec.snapshot;
+    expect(s1.field_assignments.filter((f) => f.date === D && f.staff_id === 'dA')).toHaveLength(1);
+    // 예전에 겹쳐 생긴 줄 정리
+    const tx2 = new Tx(s1);
+    saveFieldAssignment(tx2, blankField({ date: addDays(D, 1), staff_id: 'dA', site_id: 's1' }));
+    expect(tx2.list('field_assignments').filter((f) => f.date === addDays(D, 1) && f.staff_id === 'dA')).toHaveLength(2);
+    expect(dedupeFieldRows(tx2, D)).toBe(1);
+    const left = tx2.list('field_assignments').filter((f) => f.date === addDays(D, 1) && f.staff_id === 'dA');
+    expect(left.map((f) => [f.source, f.site_id])).toEqual([['manual', 's1']]);
+    // 오전·오후 다른 줄은 그대로
+    saveFieldAssignment(tx2, blankField({ date: addDays(D, 2), staff_id: 'dB', site_id: 's1', part: 'am' }));
+    saveFieldAssignment(tx2, blankField({ date: addDays(D, 2), staff_id: 'dB', site_id: 's2', part: 'pm' }));
+    expect(dedupeFieldRows(tx2, D)).toBe(0);
+    // 이미 근무 중인 사람을 다른 근무지에 추가하면 줄을 새로 만들지 않고 옮긴다
+    addFieldPerson(tx2, D, 'dA', 's2');
+    expect(tx2.list('field_assignments').filter((f) => f.date === D && f.staff_id === 'dA').map((f) => f.site_id)).toEqual(['s2']);
   });
 });

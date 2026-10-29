@@ -29,8 +29,8 @@ function generate(tx: Tx, recId: string, from: string, to: string) {
     if (taken.has(d)) continue;
     const v = versionOn(versions, d);
     if (!v || !v.weekdays.includes(weekdayOf(d))) continue;
-    // 휴무 지정된 날은 만들지 않는다
-    if (tx.list('field_assignments').some((f) => f.date === d && f.staff_id === rec.staff_id && f.is_off)) continue;
+    // 휴무 지정된 날 · 이미 그날 근무 줄이 있는 날(직접 넣은 줄 등)은 만들지 않는다 → 같은 사람이 두 번 나오지 않게
+    if (tx.list('field_assignments').some((f) => f.date === d && f.staff_id === rec.staff_id && (f.is_off || f.source !== 'maintenance'))) continue;
     tx.insert('field_assignments', blankField({
       date: d, site_id: v.site_id, staff_id: rec.staff_id, task: v.task, vehicle_id: v.vehicle_id,
       source: 'recurring', recurring_field_id: recId, recurring_field_version_id: v.id,
@@ -197,4 +197,42 @@ export function setStaffRange(tx: Tx, p: { staffId: string; from: string; to: st
     n++;
   }
   return n;
+}
+
+/**
+ * 같은 날 같은 사람 근무 줄이 겹치면 하나만 남긴다 (오전·오후처럼 시간이 다른 줄, 정비실 입고 줄은 그대로).
+ * 남기는 순서: 직접 고친 줄 → 직접 넣은 줄 → 고정 근무 줄. 지운 줄 수를 돌려준다.
+ */
+export function dedupeFieldRows(tx: Tx, fromDate: string): number {
+  const rank = (f: FieldAssignment) => (f.edited_manually ? 0 : f.source === 'manual' ? 1 : 2);
+  const groups = new Map<string, FieldAssignment[]>();
+  for (const f of tx.list('field_assignments')) {
+    if (f.date < fromDate || !f.staff_id || f.is_off || f.source === 'maintenance') continue;
+    const k = `${f.date}|${f.staff_id}|${f.part ?? ''}`;
+    groups.set(k, [...(groups.get(k) ?? []), f]);
+  }
+  let removed = 0;
+  for (const rows of groups.values()) {
+    if (rows.length < 2) continue;
+    const [, ...extra] = [...rows].sort((a, b) => rank(a) - rank(b) || a.sort_order - b.sort_order);
+    for (const f of extra) { tx.remove('field_assignments', f.id); removed++; }
+  }
+  // 휴무 줄도 하루 하나만
+  const offs = new Map<string, FieldAssignment[]>();
+  for (const f of tx.list('field_assignments')) {
+    if (f.date < fromDate || !f.staff_id || !f.is_off) continue;
+    const k = `${f.date}|${f.staff_id}`;
+    offs.set(k, [...(offs.get(k) ?? []), f]);
+  }
+  for (const rows of offs.values()) for (const f of rows.slice(1)) { tx.remove('field_assignments', f.id); removed++; }
+  return removed;
+}
+
+/** 현장근무 추가: 그 사람이 이 날 이미 근무 줄이 있으면 새로 만들지 않고 그 줄의 근무지를 바꾼다 */
+export function addFieldPerson(tx: Tx, date: string, staffId: string, siteId: string | null) {
+  setDayOff(tx, date, staffId, false);
+  const cur = tx.list('field_assignments').find((f) => f.date === date && f.staff_id === staffId && !f.is_off && f.source !== 'maintenance');
+  if (cur) return saveFieldAssignment(tx, { ...cur, site_id: siteId ?? cur.site_id });
+  const n = tx.list('field_assignments').filter((f) => f.date === date).length;
+  saveFieldAssignment(tx, blankField({ date, site_id: siteId, staff_id: staffId, sort_order: n }));
 }
