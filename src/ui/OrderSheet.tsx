@@ -6,7 +6,7 @@ import {
   CALC_LABEL, CARRIER_LABEL, EXTRA_PRESETS, Tx, acceptLinkPending, arrivalOffset, buildBoard, transportSummary,
   type CarrierType, type Shipment, computeRevenue, deleteOrder, findLinkedUnload, ignoreLinkPending, newId,
   copyOrder, createOrder, isPerVehicleSplittable, addDays, saveOrder, saveRevenue, splitPerVehicle, workText, setProductDefaultPrice, won,
-  type BillingStatus, type CalcMethod, type DailyOrder, type OrderRevenue, type Unit, postponeUnload, type UnloadHold,
+  type BillingStatus, type CalcMethod, type DailyOrder, type OrderRevenue, type Unit, postponeUnload, type UnloadHold, unassignOrder,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
 import { QtyInput } from './QtyInput.tsx';
@@ -123,6 +123,22 @@ export function OrderSheet({ orderId, close, startEditing = false }: { orderId: 
     close();
   };
 
+  /** 배차 취소 → 미배차(배차 대기)로 */
+  const assigned = !!order.vehicle_id || (order.carrier_type ?? 'own') !== 'own';
+  const cancelAssign = async () => {
+    const linked = order.kind === 'load' ? findLinkedUnload(new Tx(snap), order.id) : undefined;
+    const who = order.vehicle_id ? `${vehicleNo(snap, order.vehicle_id)} 차량` : '용차·화주배차';
+    const a = await sheet.confirm({
+      title: '배차 취소',
+      message: `${who} 배차를 취소하고 미배차(배차 대기)로 돌립니다.${linked && linked.vehicle_id === order.vehicle_id ? ` 연결된 ${fmtDate(linked.date)} ${ZONE_LABEL[linked.zone]} 하차도 미배차가 됩니다.` : ''}`,
+      actions: [{ label: '배차 취소 (미배차로)', value: 'y', kind: 'danger' }],
+    });
+    if (!a) return;
+    store.run((tx) => unassignOrder(tx, order.id));
+    store.toast(`${who} 배차를 취소했습니다 → 미배차`);
+    close();
+  };
+
   const goto = (x: DailyOrder) => {
     close();
     nav(`/?date=${x.date}&zone=${x.zone}&focus=${x.id}`);
@@ -142,6 +158,7 @@ export function OrderSheet({ orderId, close, startEditing = false }: { orderId: 
           ) : (
             <>
               <button className="danger" onClick={remove}>삭제</button>
+              {assigned && <button onClick={() => void cancelAssign()}>🚫 배차 취소</button>}
               {order.client_id && order.source !== 'linked' && <button onClick={() => void addSameClient()}>＋ 같은 거래처 품목</button>}
               <button onClick={() => sheet.open((c) => <CopySheet order={order} close={c} onDone={close} />)}>📋 복사</button>
               {!order.vehicle_id && <button onClick={() => void moveDate()}>📅 날짜 변경</button>}

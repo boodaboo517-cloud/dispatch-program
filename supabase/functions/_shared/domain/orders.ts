@@ -541,6 +541,19 @@ export function assignVehicle(tx: Tx, orderId: string, vehicleId: string | null,
   saveOrder(tx, { ...o, vehicle_id: vehicleId, driver_id: driverId ?? o.driver_id });
 }
 
+/**
+ * 배차 취소 → 미배차(배차 대기)로. 차량·기사를 비우고 용차·화주배차 정보도 지운다.
+ * 상차면 연결된 반대편 하차도 따라서 미배차가 되고, 그 차량 줄에 남은 상차가 없으면 출발 선박도 정리된다.
+ */
+export function unassignOrder(tx: Tx, orderId: string) {
+  const o = tx.get('daily_orders', orderId);
+  if (!o) return;
+  saveOrder(tx, {
+    ...o, vehicle_id: null, driver_id: null,
+    carrier_type: 'own', carrier_name: '', carrier_vehicle: '', carrier_phone: '',
+  });
+}
+
 /** 운송 방법 요약 (보기 화면·엑셀) */
 export function transportSummary(s: Pick<Snapshot, 'ships'>, o: DailyOrder): string {
   const parts: string[] = [];

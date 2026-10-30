@@ -1,7 +1,7 @@
 // 일정표 칸 동작 (휴대폰·PC 공통)
 import {
   ON_CALL_SHIFT, abbrev, acceptShipPending, nudgeVehicle, workLogOf, assignVehicle, blankOrder, buildBoard, createOrder, ignoreShipPending, opposite, saveOrder,
-  DEFAULT_START, sails, vehicleSails, isWaitShip, orderDriver, setTurn, setTurnShip, findVehicleDay, setRowNightDriver, PM_ARRIVAL_LABEL, setRowAmLabel, HELPER_ROLE_LABEL, START_PLACES, setRowNote, lastStart, startText, setRowStart, rowDriver, seqMark, setDriverSeq, setRowDriver, setRowHelper, setRowShip, setVehicleDayStatus, setVehicleZone,
+  DEFAULT_START, sails, vehicleSails, isWaitShip, orderDriver, setTurn, setTurnShip, findVehicleDay, setRowNightDriver, PM_ARRIVAL_LABEL, setRowAmLabel, HELPER_ROLE_LABEL, START_PLACES, setRowNote, lastStart, startText, setRowStart, rowDriver, seqMark, setDriverSeq, setRowDriver, setRowHelper, setRowShip, setVehicleDayStatus, setVehicleZone, unassignOrder,
   type Board, type BoardRow, type DailyOrder, type DriverSide, type HelperRole, type Kind, type Zone,
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
@@ -194,6 +194,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
   /** 기사 없는 차량: 오전·오후 같은 기사로 할지, 오후만 정할지 */
   const assignDriver = async (row: BoardRow) => {
     if (!staff) return;
+    const cancelOpt = row.loads.length || row.unloads.length ? [{ label: '🚫 배차 취소 (짐 → 미배차)', value: 'cancel' }] : [];
     const side = await sheet.confirm({
       title: `${row.vehicle.short_no} 기사 배정`,
       message: '',
@@ -204,14 +205,17 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
         { label: <><NightTag /> 작업 추가</>, value: 'night' },
         { label: <><NightTag /> 기사</>, value: 'night-driver' },
         ...(turnOf(row) ? [{ label: '🔁 연속운행 취소', value: 'turn-off' }] : []),
+        ...cancelOpt,
       ] : [
         { label: `${sideLabel(row, 'unload')}·${sideLabel(row, 'load')} 같은 기사`, value: 'unload', kind: 'primary' },
         { label: `${sideLabel(row, 'load')}만 (${sideLabel(row, 'unload')}은 비움)`, value: 'load' },
         { label: '🚢 오후도착 (오전 기사 없음)', value: 'pm' },
         { label: <><NightTag /> 작업 추가</>, value: 'night' },
         { label: <><NightTag /> 기사</>, value: 'night-driver' },
+        ...cancelOpt,
       ],
     });
+    if (side === 'cancel') return cancelVehicleOrders(row);
     if (side === 'turn-off') return toggleTurn(row, false);
     if (side === 'night') return addNight(row);
     if (side === 'night-driver') return editNightDriver(row);
@@ -294,6 +298,26 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
   /** 같은 구역 화면에 보이는 차량 순서 (위로/아래로는 화면에 보이는 이웃 기준) */
   const zoneRowIds = (row: BoardRow) => board.rows.filter((r) => r.zone === row.zone && !r.secondary).map((r) => r.vehicle.id);
 
+  /** 차량 배차 취소: 이 차량에 잡힌 상차(·하차)를 미배차로 — 한 건이면 바로, 여러 건이면 고르기 */
+  const cancelVehicleOrders = async (row: BoardRow) => {
+    const snap = store.getState().snap;
+    const list = [...row.loads, ...row.unloads];
+    if (!list.length) return;
+    const label = (o: DailyOrder) => `${kindLabel(o.zone, o.kind)} · ${clientName(snap, o)} ${productName(snap, o)} ${qtyText(o)}`.trim();
+    const c = await sheet.confirm({
+      title: `${row.vehicle.short_no} 배차 취소 → 미배차`,
+      message: '취소한 짐은 배차 대기(노란 칸)로 돌아가고, 연결된 반대편 하차도 미배차가 됩니다.',
+      actions: [
+        ...(list.length > 1 ? [{ label: `전체 ${list.length}건 취소`, value: '*', kind: 'danger' as const }] : []),
+        ...list.map((o) => ({ label: list.length === 1 ? `🚫 취소: ${label(o)}` : label(o), value: o.id, kind: list.length === 1 ? 'danger' as const : undefined })),
+      ],
+    });
+    if (!c) return;
+    const ids = c === '*' ? list.map((o) => o.id) : [c];
+    store.run((tx) => { for (const id of ids) unassignOrder(tx, id); });
+    store.toast(`${row.vehicle.short_no} 배차 ${ids.length}건을 취소했습니다 → 미배차`);
+  };
+
   const tapVehicle = (row: BoardRow) => {
     const snap = store.getState().snap;
     showText(
@@ -318,6 +342,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
             { label: <><NightTag /> 작업 추가</>, run: () => void addNight(row) },
             { label: <><NightTag /> 기사</>, run: () => void editNightDriver(row) },
             ...(turnOf(row) ? [{ label: '🔁 연속운행 취소', run: () => toggleTurn(row, false) }] : []),
+            ...(row.loads.length || row.unloads.length ? [{ label: '🚫 배차 취소 (짐 → 미배차)', run: () => void cancelVehicleOrders(row) }] : []),
           ]
         : staff
         ? [
@@ -336,6 +361,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
               : { label: `🔁 연속운행 (오늘 ${ZONE_LABEL[opposite(row.zone)]}에도)`, run: () => toggleTurn(row, true) }] : []),
             ...(row.driverId ? [{ label: '근무형태', run: () => void pick.workType(date, row.driverId!) }] : []),
             ...(sails(row) ? [{ label: '🚢 선박 요금 (할증·승선)', run: () => sheet.open((close) => <VoyageSheet date={date} row={row} close={close} />) }] : []),
+            ...(row.loads.length || row.unloads.length ? [{ label: '🚫 배차 취소 (짐 → 미배차)', run: () => void cancelVehicleOrders(row) }] : []),
             { label: '상태·위치', run: () => void editStatus(row) },
             { label: '▲ 위로', run: () => store.run((tx) => nudgeVehicle(tx, row.vehicle.id, -1, zoneRowIds(row))) },
             { label: '▼ 아래로', run: () => store.run((tx) => nudgeVehicle(tx, row.vehicle.id, 1, zoneRowIds(row))) },
