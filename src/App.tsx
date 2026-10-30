@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { BrowserRouter, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { addDays, type Role } from './domain/index.ts';
+import { LOCK_DAYS, addDays, lockCutoff, type Role } from './domain/index.ts';
 import { backupOverdue } from './data/backup.ts';
 import { autoWeeklyEmail } from './data/emailBackup.ts';
 import { store } from './data/store.ts';
@@ -25,6 +25,33 @@ import { SettingsPage } from './pages/SettingsPage.tsx';
 function Toasts() {
   const toasts = useStore((s) => s.toasts);
   return <div className="toasts">{toasts.map((t) => <div key={t.id} className={`toast ${t.kind}`}>{t.text}</div>)}</div>;
+}
+
+/** 마지막 작업 되돌리기 (화면 왼쪽 아래 · PC 는 Ctrl+Z) */
+function UndoButton() {
+  const n = useStore((s) => s.undoCount);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.key.toLowerCase() !== 'z') return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      if (document.querySelector('.sheet-backdrop, .modal-back')) return;
+      e.preventDefault();
+      store.undo();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  if (!n) return null;
+  return <button className="undo-fab" onClick={() => store.undo()} title="마지막 작업 되돌리기 (Ctrl+Z)">↩ 되돌리기{n > 1 ? ` ${n}` : ''}</button>;
+}
+
+/** 배차 담당자가 일주일 지난 날짜를 볼 때: 보기만 가능 */
+function LockBanner({ role }: { role: Role }) {
+  const [params] = useSearchParams();
+  const date = params.get('date');
+  if (role !== 'dispatcher' || !date || date >= lockCutoff(seoulToday())) return null;
+  return <div className="banner yellow" style={{ margin: 0, borderRadius: 0, textAlign: 'center' }}>🔒 {LOCK_DAYS}일 지난 일정입니다 — 보기만 가능 (수정은 관리자)</div>;
 }
 
 function StatusLine() {
@@ -170,7 +197,9 @@ function Shell() {
       <NavMemory />
       <TopMenu role={session.role} />
       <StatusLine />
+      <LockBanner role={session.role} />
       <InstallBanner />
+      {!viewer && <UndoButton />}
       {viewer ? (
         // 기사(조회) 계정: 내 배차만 (품목 주의사항·사진은 배차 카드에서 열림)
         <Routes>

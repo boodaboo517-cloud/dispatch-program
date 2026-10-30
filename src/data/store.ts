@@ -3,7 +3,7 @@
 import { del, get, set } from 'idb-keyval';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import {
-  TABLES, Tx, addDays, applyMutations, emptySnapshot, planFieldExtension, dedupeFieldRows, repairShipLinks, repairSnapshot, planRecurringExtension, toBatches,
+  TABLES, Tx, addDays, inverseMutations, lockedMutations, LOCK_DAYS, applyMutations, emptySnapshot, planFieldExtension, dedupeFieldRows, repairShipLinks, repairSnapshot, planRecurringExtension, toBatches,
   type Mutation, type Role, type Snapshot, type TableName,
 } from '../domain/index.ts';
 import { seoulToday } from '../lib/time.ts';
@@ -34,7 +34,16 @@ export interface StoreState {
   loadedFrom: string; // 이 날짜 이후 날짜별 데이터를 들고 있음
   /** 이 기기에 마지막으로 자동 저장된 시각 */
   savedAt: string | null;
+  /** 되돌릴 수 있는 작업 수 */
+  undoCount: number;
 }
+
+/** 되돌리기 한 번 = 작업 한 번(저장 버튼·메뉴 한 번)에 생긴 변경 전체 */
+interface UndoEntry {
+  inverse: Mutation[];
+  at: number;
+}
+const UNDO_MAX = 30;
 
 const DATED: TableName[] = ['daily_orders', 'vehicle_days', 'field_assignments', 'notices'];
 const LOOKBACK = 120;
@@ -52,7 +61,9 @@ class Store {
     toasts: [],
     loadedFrom: addDays(seoulToday(), -LOOKBACK),
     savedAt: null,
+    undoCount: 0,
   };
+  private undoStack: UndoEntry[] = [];
   private listeners = new Set<() => void>();
   private outbox = new Map<string, Mutation>();
   private flushing = false;
@@ -129,21 +140,24 @@ class Store {
   async stop() {
     if (this.channel) await supabase?.removeChannel(this.channel);
     this.channel = null;
-    this.setState({ session: null, snap: emptySnapshot(), ready: false });
+    this.undoStack = [];
+    this.setState({ session: null, snap: emptySnapshot(), ready: false, undoCount: 0 });
   }
 
   async resetDemo(kind: DemoData) {
     await del('snap:demo');
     localStorage.setItem('demo-data', kind);
     this.outbox.clear();
-    this.setState({ snap: initialSnapshot(kind, seoulToday()), pending: 0 });
+    this.undoStack = [];
+    this.setState({ snap: initialSnapshot(kind, seoulToday()), pending: 0, undoCount: 0 });
     void this.persist();
   }
 
   /** 백업 파일 복원 (데모 모드: 이 기기 데이터를 통째로 바꾼다) */
   replaceSnapshot(snap: Snapshot) {
     this.outbox.clear();
-    this.setState({ snap: repairSnapshot(snap), pending: 0 });
+    this.undoStack = [];
+    this.setState({ snap: repairSnapshot(snap), pending: 0, undoCount: 0 });
     void this.persist();
   }
 
@@ -154,11 +168,11 @@ class Store {
     const b = planFieldExtension(a.snapshot, today, this.actor());
     // 예전에 저장된 "대기"·"익일선적" 짐의 반대편 하차·도착 선박 바로잡기
     const fix = new Tx(b.snapshot, { actor: this.actor() });
-    repairShipLinks(fix, addDays(today, -14));
+    repairShipLinks(fix, addDays(today, -LOCK_DAYS));
     // 같은 날 같은 사람 현장근무 줄이 겹친 것 정리 (일정표에 두 번 나오던 문제)
-    dedupeFieldRows(fix, addDays(today, -14));
+    dedupeFieldRows(fix, addDays(today, -LOCK_DAYS));
     const muts = [...a.mutations, ...b.mutations, ...fix.mutations()];
-    if (muts.length) this.commit(muts);
+    if (muts.length) this.commit(muts, { auto: true });
   }
 
   private actor() {
@@ -174,13 +188,30 @@ class Store {
     return out;
   }
 
-  commit(muts: Mutation[]) {
-    if (!muts.length) return;
-    if (this.state.session?.role === 'viewer') {
+  /**
+   * 변경 반영. auto = 앱이 알아서 하는 정리(반복 연장 등) → 되돌리기 목록에 넣지 않음.
+   * undo = 되돌리기 자체 → 다시 목록에 넣지 않음.
+   */
+  commit(muts: Mutation[], opts: { auto?: boolean; undo?: boolean } = {}): boolean {
+    if (!muts.length) return true;
+    const role = this.state.session?.role;
+    if (role === 'viewer') {
       const allowed = muts.filter((m) => m.table === 'odometer_logs' || m.table === 'product_suggestions');
       if (allowed.length !== muts.length) {
         this.toast('조회 계정은 수정할 수 없습니다', 'warn');
-        return;
+        return false;
+      }
+    }
+    // 배차 담당자는 일주일 지난 일정을 고칠 수 없다 (서버에서도 막음)
+    if (role === 'dispatcher' && lockedMutations(this.state.snap, muts, seoulToday()).length) {
+      if (!opts.auto) this.toast(`${LOCK_DAYS}일 지난 일정은 관리자만 수정할 수 있습니다`, 'warn');
+      return false;
+    }
+    if (!opts.auto && !opts.undo && role !== 'viewer') {
+      const inverse = inverseMutations(this.state.snap, muts, { at: new Date().toISOString(), by: this.actor() });
+      if (inverse.length) {
+        this.undoStack = [...this.undoStack, { inverse, at: Date.now() }].slice(-UNDO_MAX);
+        this.setState({ undoCount: this.undoStack.length });
       }
     }
     this.setState({ snap: applyMutations(this.state.snap, muts) });
@@ -190,6 +221,17 @@ class Store {
       void this.flush();
     }
     void this.persist();
+    return true;
+  }
+
+  /** 마지막 작업을 되돌린다 */
+  undo() {
+    const last = this.undoStack[this.undoStack.length - 1];
+    if (!last) return;
+    if (!this.commit(last.inverse, { undo: true })) return;
+    this.undoStack = this.undoStack.slice(0, -1);
+    this.setState({ undoCount: this.undoStack.length });
+    this.toast('↩ 되돌렸습니다');
   }
 
   /**

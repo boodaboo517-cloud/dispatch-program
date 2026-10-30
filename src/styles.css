@@ -163,6 +163,9 @@ a { color: var(--blue); }
 
 .fab { position: fixed; right: 18px; bottom: calc(80px + env(safe-area-inset-bottom)); width: 60px; height: 60px; border-radius: 50%; background: var(--red); color: #fff; font-size: 32px; border: none; box-shadow: 0 4px 14px rgba(185,28,28,.4); z-index: 25; }
 @media (min-width: 1024px) { .fab { bottom: 24px; } }
+.undo-fab { position: fixed; left: 14px; bottom: calc(80px + env(safe-area-inset-bottom)); min-height: 44px; padding: 0 16px; border-radius: 22px; background: #1f2937; color: #fff; font-size: 15px; font-weight: 700; border: none; box-shadow: 0 4px 14px rgba(0,0,0,.25); z-index: 25; opacity: .92; }
+@media (min-width: 1024px) { .undo-fab { bottom: 24px; } }
+@media print { .undo-fab { display: none; } }
 
 .weekdays { display: flex; gap: 4px; }
 .weekdays button { min-width: 44px; padding: 0; border-radius: 50%; height: 44px; }
