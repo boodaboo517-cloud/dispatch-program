@@ -3,7 +3,7 @@
 import { del, get, set } from 'idb-keyval';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import {
-  TABLES, Tx, addDays, carryUnassigned, inverseMutations, lockedMutations, LOCK_DAYS, applyMutations, emptySnapshot, planFieldExtension, dedupeFieldRows, repairShipLinks, repairSnapshot, planRecurringExtension, toBatches,
+  TABLES, Tx, addDays, carryDriverless, inverseMutations, lockedMutations, LOCK_DAYS, applyMutations, emptySnapshot, planFieldExtension, dedupeFieldRows, repairShipLinks, repairSnapshot, planRecurringExtension, toBatches,
   type Mutation, type Role, type Snapshot, type TableName,
 } from '../domain/index.ts';
 import { seoulToday } from '../lib/time.ts';
@@ -175,11 +175,11 @@ class Store {
     dedupeFieldRows(fix, addDays(today, -LOCK_DAYS));
     const muts = [...a.mutations, ...b.mutations, ...fix.mutations()];
     if (muts.length) this.commit(muts, { auto: true });
-    // 지난 날 미배차 짐은 처리 안 된 것 → 오늘 일정으로 그대로 넘긴다 (잘못 넘어갔으면 ↩ 되돌리기)
+    // 지난 날 기사 없이 남은 차량 일정은 처리 안 된 것 → 같은 차량 그대로 오늘로 넘긴다 (잘못 넘어갔으면 ↩ 되돌리기)
     const carry = new Tx(this.state.snap, { actor: this.actor() });
-    const carried = carryUnassigned(carry, today, LOCK_DAYS);
+    const carried = carryDriverless(carry, today, LOCK_DAYS);
     if (carried && this.commit(carry.mutations())) {
-      this.toast(`지난 미배차 ${carried}건을 오늘(${today.slice(5).replace('-', '/')}) 배차 대기로 넘겼습니다`);
+      this.toast(`기사 없이 남은 지난 일정 ${carried}건을 오늘(${today.slice(5).replace('-', '/')})로 넘겼습니다`);
     }
     this.extendedOn = today;
   }

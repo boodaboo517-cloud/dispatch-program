@@ -662,3 +662,36 @@ export function nudgeVehicle(tx: Tx, vehicleId: string, dir: -1 | 1, visibleIds?
   // 화면에 보이는 이웃 차량 앞(위로) 또는 그 다음 차량 앞(아래로)으로 옮긴다
   moveVehicle(tx, vehicleId, dir < 0 ? order[j] : order[j + 1] ?? null);
 }
+
+/**
+ * 기사 없는 차량 일정 이어가기: 지난 날짜에 차량은 잡혔지만 기사가 배정되지 않은 하차·상차는
+ * 실제로 처리되지 않았으므로 같은 차량 그대로 오늘 날짜로 옮긴다 (앱 열 때 · 날짜가 바뀔 때). 최근 sinceDays 일 안의 것만.
+ * - 차량이 없는 미배차 짐은 그 날짜에 그대로 둔다
+ * - 오후도착(오전 기사 없음) 차량의 하차, 야간 작업은 옮기지 않는다
+ * - 상차를 옮기면 연결된 반대편 하차·선박도 saveOrder 가 따라 맞춘다
+ * - 반복 발주 오더는 오늘 것과 겹치지 않게 "직접 입력"으로 바꿔 둔다
+ */
+export function carryDriverless(tx: Tx, today: string, sinceDays = 7): number {
+  const snap = tx.result();
+  const idx = buildIndex(snap);
+  const ids: string[] = [];
+  for (let d = addDays(today, -sinceDays); d < today; d = addDays(d, 1)) {
+    for (const row of buildBoard(snap, d, idx).rows) {
+      if (missingDriver(row, 'unload')) ids.push(...row.unloads.map((o) => o.id));
+      if (missingDriver(row, 'load')) ids.push(...row.loads.map((o) => o.id));
+    }
+  }
+  let n = 0;
+  for (const id of ids) {
+    const cur = tx.get('daily_orders', id);
+    if (!cur || cur.date >= today || !cur.vehicle_id || cur.night) continue; // 상차를 따라 이미 옮겨진 하차 등
+    // 먼저 그날 차량에서 내려(출발 선박·다음 날 도착 정리) → 오늘 같은 차량에 다시 싣는다
+    saveOrder(tx, { ...cur, vehicle_id: null }, { userEdit: false });
+    saveOrder(tx, {
+      ...tx.get('daily_orders', id)!, date: today, vehicle_id: cur.vehicle_id,
+      ...(cur.source === 'recurring' ? { source: 'manual' as const, edited_manually: true } : {}),
+    }, { userEdit: false });
+    n++;
+  }
+  return n;
+}
