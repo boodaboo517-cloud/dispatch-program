@@ -32,8 +32,8 @@ export function RecentChanges({ ids, title = '🕘 최근 24시간 변경' }: { 
   const list = changes.filter((c) => c.row_id && want.has(c.row_id));
   if (!list.length) return null;
   return (
-    <details className="recent-changes" open={list.length <= 3}>
-      <summary>{title} <span className="badge warn">{list.length}</span></summary>
+    <details className="recent-changes">
+      <summary>{title} <span className="badge warn">{list.length}</span> <span className="muted small">(눌러서 보기)</span></summary>
       {list.slice(0, 30).map((c) => <ChangeLine key={c.id} c={c} showTarget={false} />)}
     </details>
   );
