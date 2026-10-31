@@ -47,14 +47,14 @@ function VehicleRow({ date, row, zone, a, focus }: { date: string; row: BoardRow
         </Cell>
       ))}
       {list.map((o) => (
-        <Cell key={o.id} onTap={() => a.openOrder(o)} onLong={staff ? () => a.openOrder(o, true) : undefined}>
+        <Cell changed={{ id: o.id }} key={o.id} onTap={() => a.openOrder(o)} onLong={staff ? () => a.openOrder(o, true) : undefined}>
           <OrderMarks snap={snap} o={o} staff={staff} />
           <OrderCellText snap={snap} o={o} />
         </Cell>
       ))}
       {kind === 'unload' && info.map((t) => <Cell key={t} className="rownote info" onTap={() => undefined}>{t}</Cell>)}
       {(kind === 'unload' ? row.unloadNote : row.loadNote) && (
-        <Cell className="rownote" onTap={() => (staff ? void a.editNote(row, kind) : undefined)}>📝 {kind === 'unload' ? row.unloadNote : row.loadNote}</Cell>
+        <Cell changed={{ id: row.vd?.id, fields: [kind === 'unload' ? 'unload_note' : 'load_note'] }} className="rownote" onTap={() => (staff ? void a.editNote(row, kind) : undefined)}>📝 {kind === 'unload' ? row.unloadNote : row.loadNote}</Cell>
       )}
       {staff && <Cell className="add" onTap={() => a.addOrder(zone, kind, row)}>＋</Cell>}
     </div>
@@ -62,13 +62,13 @@ function VehicleRow({ date, row, zone, a, focus }: { date: string; row: BoardRow
   return (
     <div id={`row-${row.vehicle.id}`} className={`vrow${row.secondary ? ' secondary' : ''}`} style={focused ? { boxShadow: '0 0 0 4px #93c5fd' } : undefined}>
       <div className="col">
-        <Cell className="ship" onTap={() => a.tapShip(row, 'arrival')} onLong={staff ? () => a.editShip(row, 'arrival') : undefined}>
+        <Cell changed={{ id: row.vd?.id, fields: ['arrival_ship', 'arrival_ship_tag'] }} className="ship" onTap={() => a.tapShip(row, 'arrival')} onLong={staff ? () => a.editShip(row, 'arrival') : undefined}>
           <ShipCellText snap={snap} ship={row.arrivalShip} tag={row.arrivalTag} />
           {row.shipPending && <span className="mk warn">변경?</span>}
         </Cell>
       </div>
       <div className="col">
-        <Cell className="vehicle" onTap={() => (row.driverId || row.loadDriverId || !staff ? a.tapVehicle(row) : void a.assignDriver(row))} onLong={staff ? () => a.editDriver(row) : undefined}>
+        <Cell changed={{ id: row.vd?.id }} className="vehicle" onTap={() => (row.driverId || row.loadDriverId || !staff ? a.tapVehicle(row) : void a.assignDriver(row))} onLong={staff ? () => a.editDriver(row) : undefined}>
           <VehicleCellText snap={snap} row={row} date={date} />
           {hasOrders && <StatusChip row={row} />}
         </Cell>
@@ -85,19 +85,19 @@ function VehicleRow({ date, row, zone, a, focus }: { date: string; row: BoardRow
         </div>
       )}
       <div className="col">
-        <Cell className="ship" onTap={() => a.tapShip(row, 'departure')} onLong={staff ? () => a.editShip(row, 'departure') : undefined}>
+        <Cell changed={{ id: row.vd?.id, fields: ['departure_ship', 'departure_ship_tag', 'turn_departure_ship', 'turn_departure_ship_tag'] }} className="ship" onTap={() => a.tapShip(row, 'departure')} onLong={staff ? () => a.editShip(row, 'departure') : undefined}>
           <ShipCellText snap={snap} ship={row.departureShip} tag={row.departureTag} />
         </Cell>
       </div>
       {(row.nights.length > 0 || row.nightDriverId) && (
         <div className="night-strip">
-          <Cell className="night-drv" onTap={() => void a.editNightDriver(row)}>
+          <Cell changed={{ id: row.vd?.id, fields: ['night_driver_id'] }} className="night-drv" onTap={() => void a.editNightDriver(row)}>
             <NightTag />
             {row.nightDriverId ? <span className="drv">{driverName(snap, row.nightDriverId)}</span> : row.nights.length ? <span className="nodrv-badge">미배치</span> : null}
           </Cell>
           <div className="night-orders">
             {row.nights.map((o) => (
-              <Cell key={o.id} onTap={() => a.openOrder(o)} onLong={staff ? () => a.openOrder(o, true) : undefined}>
+              <Cell changed={{ id: o.id }} key={o.id} onTap={() => a.openOrder(o)} onLong={staff ? () => a.openOrder(o, true) : undefined}>
                 <span className="mk">{o.kind === 'load' ? '상차' : '하차'}{o.zone !== row.zone ? `·${o.zone === 'land' ? '육지' : '제주'}` : ''}</span>
                 <OrderCellText snap={snap} o={o} />
               </Cell>
@@ -115,7 +115,7 @@ function WaitingRow({ o, a }: { o: DailyOrder; a: Actions }) {
   const { staff } = useRole();
   const isLoad = o.kind === 'load';
   const cell = (
-    <Cell onTap={() => a.openOrder(o)} onLong={staff ? () => a.assign(o) : undefined} draggableId={o.id}>
+    <Cell changed={{ id: o.id }} onTap={() => a.openOrder(o)} onLong={staff ? () => a.assign(o) : undefined} draggableId={o.id}>
       <OrderMarks snap={snap} o={o} staff={staff} />
       <OrderCellText snap={snap} o={o} />
     </Cell>
@@ -123,17 +123,17 @@ function WaitingRow({ o, a }: { o: DailyOrder; a: Actions }) {
   return (
     <div className={`vrow ${isExternal(o) ? 'external' : 'waiting'}`} id={`row-${o.id}`}>
       <div className="col">
-        {!isLoad && <Cell className="ship" onTap={() => a.editWaitingShip(o)}><ShipCellText snap={snap} ship={o.arrival_ship} tag={o.arrival_ship_tag} /></Cell>}
+        {!isLoad && <Cell changed={{ id: o.id }} className="ship" onTap={() => a.editWaitingShip(o)}><ShipCellText snap={snap} ship={o.arrival_ship} tag={o.arrival_ship_tag} /></Cell>}
       </div>
       <div className="col">
         {isExternal(o)
-          ? <Cell className="ext" onTap={() => a.openOrder(o, staff)}><CarrierText o={o} /></Cell>
-          : <Cell className="yellow" onTap={() => a.assign(o)}>{staff ? '배차' : ''}</Cell>}
+          ? <Cell changed={{ id: o.id }} className="ext" onTap={() => a.openOrder(o, staff)}><CarrierText o={o} /></Cell>
+          : <Cell changed={{ id: o.id }} className="yellow" onTap={() => a.assign(o)}>{staff ? '배차' : ''}</Cell>}
       </div>
       <div className="col">{!isLoad && cell}</div>
       <div className="col">{isLoad && cell}</div>
       <div className="col">
-        {isLoad && <Cell className="ship" onTap={() => a.editWaitingShip(o)}><ShipCellText snap={snap} ship={o.departure_ship} tag={o.departure_ship_tag} /></Cell>}
+        {isLoad && <Cell changed={{ id: o.id }} className="ship" onTap={() => a.editWaitingShip(o)}><ShipCellText snap={snap} ship={o.departure_ship} tag={o.departure_ship_tag} /></Cell>}
       </div>
     </div>
   );

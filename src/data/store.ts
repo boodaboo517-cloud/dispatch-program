@@ -38,7 +38,30 @@ export interface StoreState {
   undoCount: number;
   /** 저장하려는데 다른 사용자가 먼저 고친 경우 (화면에 알림) */
   conflict: EditConflict | null;
+  /** 최근 24시간 수정 이력 (최신순). 서버 SQL 전이거나 기사 계정이면 비어 있음 */
+  changes: ChangeEntry[];
+  /** 최근 24시간 안에 바뀐 줄 → 바뀐 칸들 ('' = 새로 등록) */
+  changedRows: Map<string, Set<string>>;
 }
+
+/** 수정 이력 한 줄 (서버 change_log, 최근 24시간) */
+export interface ChangeEntry {
+  id: number;
+  at: string;
+  login_id: string;
+  op: '등록' | '수정' | '삭제';
+  screen: string;
+  table_name: string;
+  row_id: string | null;
+  target: string;
+  field: string;
+  field_label: string;
+  before: string;
+  after: string;
+  cell_date: string | null;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface EditConflict {
   seq: number;
@@ -77,6 +100,8 @@ class Store {
     savedAt: null,
     undoCount: 0,
     conflict: null,
+    changes: [],
+    changedRows: new Map(),
   };
   /** 보낼 줄 → "내가 본 시점의 수정시각" (서버가 그 뒤 다른 사람이 먼저 고쳤는지 확인) */
   private bases = new Map<string, string>();
@@ -85,6 +110,7 @@ class Store {
   /** 서버에 동시 수정 SQL 을 아직 안 넣었으면 기준 시각 없이 보낸다 */
   private noEditBase = false;
   private conflictSeq = 0;
+  private pruneTimer: ReturnType<typeof setInterval> | null = null;
   private undoStack: UndoEntry[] = [];
   private listeners = new Set<() => void>();
   private outbox = new Map<string, Mutation>();
@@ -153,6 +179,9 @@ class Store {
     } else {
       await this.refresh();
       this.subscribeRealtime();
+      void this.loadChanges();
+      // 24시간 지난 표시는 저절로 사라지게
+      if (!this.pruneTimer) this.pruneTimer = setInterval(() => this.setChanges(this.state.changes), 10 * 60 * 1000);
       void this.flush();
     }
     this.setState({ ready: true });
@@ -165,7 +194,7 @@ class Store {
     if (this.channel) await supabase?.removeChannel(this.channel);
     this.channel = null;
     this.undoStack = [];
-    this.setState({ session: null, snap: emptySnapshot(), ready: false, undoCount: 0 });
+    this.setState({ session: null, snap: emptySnapshot(), ready: false, undoCount: 0, changes: [], changedRows: new Map() });
   }
 
   async resetDemo(kind: DemoData) {
@@ -457,6 +486,29 @@ class Store {
     for (const p of data ?? []) this.profiles.set(p.id as string, p.name as string);
   }
 
+  /** 수정 이력 다시 받기 (24시간 지난 것은 서버에서 먼저 정리) */
+  async loadChanges() {
+    if (!supabase || this.state.session?.role === 'viewer') return;
+    await supabase.rpc('purge_change_log');
+    const { data, error } = await supabase.from('change_log').select('*')
+      .gte('at', new Date(Date.now() - DAY_MS).toISOString()).order('at', { ascending: false }).limit(5000);
+    if (error || !data) return; // 서버에 이력 SQL 전
+    this.setChanges(data as ChangeEntry[]);
+  }
+
+  private setChanges(list: ChangeEntry[]) {
+    const since = new Date(Date.now() - DAY_MS).toISOString();
+    const changes = list.filter((c) => c.at >= since);
+    const changedRows = new Map<string, Set<string>>();
+    for (const c of changes) {
+      if (!c.row_id || c.op === '삭제') continue;
+      const f = changedRows.get(c.row_id) ?? new Set<string>();
+      f.add(c.op === '등록' ? '' : c.field);
+      changedRows.set(c.row_id, f);
+    }
+    this.setState({ changes, changedRows });
+  }
+
   /** 월별 화면 등에서 예전 날짜를 볼 때 추가로 불러온다 */
   async ensureFrom(date: string) {
     if (!supabase || date >= this.state.loadedFrom) return;
@@ -483,6 +535,10 @@ class Store {
     this.channel = supabase
       .channel('db')
       .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
+        if (payload.table === 'change_log') {
+          if (payload.eventType === 'INSERT') this.setChanges([payload.new as ChangeEntry, ...this.state.changes]);
+          return;
+        }
         const t = payload.table as TableName;
         if (!TABLES.includes(t)) return;
         const row = (payload.eventType === 'DELETE' ? payload.old : payload.new) as Row;

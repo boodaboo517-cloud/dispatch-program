@@ -10,6 +10,7 @@ import { ZONE_LABEL, kindLabel, orderText, vehicleNo } from '../ui/labels.ts';
 import { StorageBadge, tempText } from '../ui/OrderSheet.tsx';
 import { RecurringList, RecurringSheet } from '../ui/RecurringSheet.tsx';
 import { QtyInput } from '../ui/QtyInput.tsx';
+import { RecentChanges } from '../ui/RecentChanges.tsx';
 import { Sheet, useSheet } from '../ui/Sheet.tsx';
 import { History } from './ProductDetailPage.tsx';
 
@@ -105,6 +106,7 @@ export function ClientDetailPage() {
   return (
     <div className="page" style={{ maxWidth: 820 }}>
       <div className="row"><button className="ghost" onClick={() => nav('/clients')}>◀</button><h2 className="grow">{c.name}</h2></div>
+      <RecentChanges ids={[c.id]} />
       <div className="card">
         <Editable label="거래처명" value={c.name} onSave={save('name')} />
         <Editable label="담당자" value={c.manager} onSave={save('manager')} />

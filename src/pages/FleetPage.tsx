@@ -14,6 +14,7 @@ import { ManageTabs, useManageSwipe } from '../ui/ManageTabs.tsx';
 import { ZONE_LABEL, driverName, vehicleNo } from '../ui/labels.ts';
 import { WeekdayChips } from '../ui/Picker.tsx';
 import { usePickers } from '../ui/pickers.tsx';
+import { RecentChanges } from '../ui/RecentChanges.tsx';
 import { Sheet, useSheet } from '../ui/Sheet.tsx';
 import { ShipEditSheet, blankShip } from '../ui/ShipEditSheet.tsx';
 import { AttendancePanel } from './AttendancePanel.tsx';
@@ -34,6 +35,7 @@ function VehicleSheet({ v, close }: { v: Vehicle; close: () => void }) {
   const s = (k: keyof Vehicle, num = false) => (val: string) => save({ [k]: num ? (val === '' ? null : Number(val)) : val } as Partial<Vehicle>);
   return (
     <Sheet title={`차량 ${cur.short_no}`} onClose={close}>
+      <RecentChanges ids={[v.id]} />
       <Editable label="차량번호" value={cur.plate} onSave={s('plate')} />
       <Editable label="표시 4자리" value={cur.short_no} onSave={s('short_no')} />
       <Editable label="차종" value={cur.vehicle_type} options={TYPES.map((t) => ({ value: t, label: t }))} onSave={s('vehicle_type')} />
@@ -194,6 +196,7 @@ function DriverSheet({ d, close }: { d: Driver; close: () => void }) {
   };
   return (
     <Sheet title={cur.name} onClose={close}>
+      <RecentChanges ids={[d.id]} />
       <Editable label="이름" value={cur.name} onSave={(v) => save({ name: v })} />
       <Editable label="연락처" value={cur.phone} type="tel" onSave={(v) => save({ phone: v })} />
       <Editable label="구분" value={cur.staff_type} options={['기사', '현장', '사무'].map((x) => ({ value: x, label: x }))} onSave={(v) => save({ staff_type: v as Driver['staff_type'] })} />

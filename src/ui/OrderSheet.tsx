@@ -10,6 +10,7 @@ import {
 } from '../domain/index.ts';
 import { store } from '../data/store.ts';
 import { QtyInput } from './QtyInput.tsx';
+import { RecentChanges } from './RecentChanges.tsx';
 import { PhraseChips } from './Phrases.tsx';
 import { fmtDate, fmtStamp } from '../lib/time.ts';
 import { useRole, useSnap, useStore, useWatch } from './hooks.ts';
@@ -218,6 +219,7 @@ export function OrderSheet({ orderId, close, startEditing = false }: { orderId: 
       )}
       {order.source === 'recurring' && <div className="muted" style={{ margin: '6px 0' }}>🔁 반복 발주로 자동 생성{order.edited_manually ? ' · 직접 수정됨(반복 변경 시 유지)' : ''}</div>}
 
+      <RecentChanges ids={[order.id]} />
       <Field label="거래처" value={clientName(snap, o)} onEdit={editing ? async () => {
         const c = await pick.clientProduct(o.vehicle_id);
         if (c) set({

@@ -7,6 +7,7 @@ import {
 import { store } from '../data/store.ts';
 import { supabase } from '../data/supabase.ts';
 import { fmtStamp } from '../lib/time.ts';
+import { RecentChanges } from '../ui/RecentChanges.tsx';
 import { Editable } from '../ui/Editable.tsx';
 import { useRole, useSession, useSnap, useWatch } from '../ui/hooks.ts';
 import { STORAGE_LABEL, setting } from '../ui/labels.ts';
@@ -118,6 +119,7 @@ export function ProductDetailPage() {
       </div>
       {p.storage !== 'ambient' && <div className={`temp-band ${p.storage}`}>{STORAGE_LABEL[p.storage]} 화물 {tempText(p) && `· ${tempText(p)} 유지`}</div>}
       <div className="muted small">마지막 수정 {fmtStamp(p.updated_at)} {p.updated_by ? `· ${store.profileName(p.updated_by)}` : ''}</div>
+      <RecentChanges ids={[p.id]} />
 
       {p.caution && <div className="banner red" style={{ whiteSpace: 'pre-wrap' }}>⚠ 주의사항: {p.caution}</div>}
 

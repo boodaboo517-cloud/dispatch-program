@@ -3,6 +3,8 @@ import {
 } from '../domain/index.ts';
 import { clientName, kindLabel, productName, ZONE_LABEL, vehicleNo, driverName } from '../ui/labels.ts';
 import { boxBorder, download, header, newWorkbook } from './common.ts';
+import type { ChangeEntry } from '../data/store.ts';
+import { TZ, dayjs } from '../lib/time.ts';
 
 /** 거래처별 청구 내역서 (거래처마다 시트 1장) */
 export async function exportBilling(s: Snapshot, from: string, to: string, clientIds?: string[]) {
@@ -78,4 +80,17 @@ export async function exportMaintenance(s: Snapshot, from: string, to: string, v
     ws.getCell(i + 2, 7).numFmt = '#,##0';
   });
   await download(wb, `정비이력 ${from}~${to}.xlsx`);
+}
+
+/** 수정 이력 (최근 24시간) */
+export async function exportChanges(list: ChangeEntry[]) {
+  const wb = await newWorkbook();
+  const ws = wb.addWorksheet('수정 이력');
+  ws.columns = [19, 12, 7, 11, 40, 16, 24, 24].map((w) => ({ width: w }));
+  header(ws, 1, ['일시', '아이디', '구분', '화면', '대상', '항목', '변경 전', '변경 후']);
+  list.forEach((c, i) => {
+    ws.getRow(i + 2).values = [dayjs(c.at).tz(TZ).format('YYYY-MM-DD HH:mm:ss'), c.login_id, c.op, c.screen, c.target, c.field_label, c.before, c.after];
+  });
+  ws.views = [{ state: 'frozen', ySplit: 1 }];
+  await download(wb, `수정 이력 ${dayjs().tz(TZ).format('YYYY-MM-DD HHmm')}.xlsx`);
 }

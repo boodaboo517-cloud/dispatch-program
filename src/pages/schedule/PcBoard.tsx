@@ -49,7 +49,7 @@ function OrderFields({ o, a, staff, carried }: { o: DailyOrder; a: Actions; staf
     <>
       {vals.map((v, i) => (
         <td key={i}>
-          <Cell className={carried ? 'carried' : ''} onTap={carried ?? (() => a.openOrder(o))} onLong={staff && !carried ? () => a.openOrder(o, true) : undefined} title={v} draggableId={!o.vehicle_id ? o.id : undefined}>
+          <Cell changed={{ id: o.id }} className={carried ? 'carried' : ''} onTap={carried ?? (() => a.openOrder(o))} onLong={staff && !carried ? () => a.openOrder(o, true) : undefined} title={v} draggableId={!o.vehicle_id ? o.id : undefined}>
             {abbrev(v)}
             {i === 2 && <StorageTag snap={snap} o={o} />}
             {i === 0 && <OrderMarks snap={snap} o={o} staff={staff} />}
@@ -79,12 +79,12 @@ function VehicleGroup({ row, zone, a, staff, focus }: { row: BoardRow; zone: Zon
   const hasOrders = row.unloads.length + loadList.length > 0 || !!uNote || !!row.loadNote;
   const n = hasOrders ? Math.max(row.unloads.length + (uNote ? 1 : 0), loadList.length + (row.loadNote ? 1 : 0)) + (staff ? 1 : 0) : 1;
   const noteCell = (kind: 'unload' | 'load') => (
-    <td colSpan={5}><Cell className="rownote" onTap={() => (staff ? void a.editNote(row, kind) : undefined)}>{kind === 'unload' ? uNote : `📝 ${row.loadNote}`}</Cell></td>
+    <td colSpan={5}><Cell changed={{ id: row.vd?.id, fields: [kind === 'unload' ? 'unload_note' : 'load_note'] }} className="rownote" onTap={() => (staff ? void a.editNote(row, kind) : undefined)}>{kind === 'unload' ? uNote : `📝 ${row.loadNote}`}</Cell></td>
   );
   const focused = !!focus && (focus === row.vehicle.id || [...row.unloads, ...row.loads].some((o) => o.id === focus));
   const vehicleCell = (
     <td rowSpan={n}>
-      <Cell className="vehicle" onTap={() => a.tapVehicle(row)} onLong={staff ? () => a.editStatus(row) : undefined}>
+      <Cell changed={{ id: row.vd?.id }} className="vehicle" onTap={() => a.tapVehicle(row)} onLong={staff ? () => a.editStatus(row) : undefined}>
         {row.vehicle.short_no}{row.shortRepair === 'quick' && ' ⚡'}
         {row.shortRepair === 'am' && <span style={{ color: 'var(--red)', fontSize: 12, fontWeight: 700 }}>🔧오전 수리</span>}
         {hasOrders && <StatusChip row={row} />}
@@ -96,7 +96,7 @@ function VehicleGroup({ row, zone, a, staff, focus }: { row: BoardRow; zone: Zon
     const seq = side === 'unload' ? row.unloadSeq : row.loadSeq;
     return (
       <td rowSpan={n}>
-        <Cell onTap={() => (drv || !staff ? a.tapVehicle(row) : a.editDriver(row, side))} onLong={staff ? () => a.editDriver(row, side) : undefined}>
+        <Cell changed={{ id: row.vd?.id, fields: side === 'unload' ? ['driver_id', 'unload_seq'] : ['load_driver_id', 'load_seq'] }} onTap={() => (drv || !staff ? a.tapVehicle(row) : a.editDriver(row, side))} onLong={staff ? () => a.editDriver(row, side) : undefined}>
           {drv ? <span style={{ fontSize: 13 }}>{abbrev(drv)}{seqMark(seq)}</span> : side === 'unload' && row.amLabel ? <span className="pm-arrival" style={{ fontSize: 13 }}>🚢{row.amLabel}</span> : missingDriver(row, side) ? <span className="nodrv-badge">미배치</span> : null}
           {side === 'unload' && (row.startTime || row.startPlace) && <span style={{ fontSize: 12, color: '#1d4ed8' }}>{row.startTime} {row.startPlace}</span>}
           {row.helperId && <span style={{ fontSize: 12, color: '#b45309' }}>+{abbrev(driverName(snap, row.helperId), 3)} {row.helperRole}</span>}
@@ -121,7 +121,7 @@ function VehicleGroup({ row, zone, a, staff, focus }: { row: BoardRow; zone: Zon
       <tr key={i}>
         {i === 0 && (
           <td rowSpan={n}>
-            <Cell className="ship" onTap={() => a.tapShip(row, 'arrival')} onLong={staff ? () => a.editShip(row, 'arrival') : undefined}>
+            <Cell changed={{ id: row.vd?.id, fields: ['arrival_ship', 'arrival_ship_tag'] }} className="ship" onTap={() => a.tapShip(row, 'arrival')} onLong={staff ? () => a.editShip(row, 'arrival') : undefined}>
               <ShipCellText snap={snap} ship={row.arrivalShip} tag={row.arrivalTag} />
               {row.shipPending && <span className="mk warn">변경?</span>}
             </Cell>
@@ -132,7 +132,7 @@ function VehicleGroup({ row, zone, a, staff, focus }: { row: BoardRow; zone: Zon
         {hasOrders ? (
           <>
             {u ? <OrderFields o={u} a={a} staff={staff} /> : uNote && i === row.unloads.length ? noteCell('unload') : <EmptyFields onAdd={staff ? () => a.addOrder(zone, 'unload', row) : undefined} />}
-            {i === 0 && <td rowSpan={n} className="sep"><Cell className="vehicle" onTap={() => a.tapVehicle(row)}>{row.vehicle.short_no}{row.shortRepair === 'pm' && <span style={{ color: 'var(--red)', fontSize: 12, fontWeight: 700 }}>🔧오후 수리</span>}</Cell></td>}
+            {i === 0 && <td rowSpan={n} className="sep"><Cell changed={{ id: row.vd?.id }} className="vehicle" onTap={() => a.tapVehicle(row)}>{row.vehicle.short_no}{row.shortRepair === 'pm' && <span style={{ color: 'var(--red)', fontSize: 12, fontWeight: 700 }}>🔧오후 수리</span>}</Cell></td>}
             {i === 0 && driverCell('load')}
             {l ? <OrderFields o={l} a={a} staff={staff} carried={row.carried.includes(l) ? () => a.tapCarried(row, l) : undefined} /> : row.loadNote && i === loadList.length ? noteCell('load') : <EmptyFields onAdd={staff ? () => a.addOrder(zone, 'load', row) : undefined} />}
           </>
@@ -146,7 +146,7 @@ function VehicleGroup({ row, zone, a, staff, focus }: { row: BoardRow; zone: Zon
         )}
         {i === 0 && (
           <td rowSpan={n}>
-            <Cell className="ship" onTap={() => a.tapShip(row, 'departure')} onLong={staff ? () => a.editShip(row, 'departure') : undefined}>
+            <Cell changed={{ id: row.vd?.id, fields: ['departure_ship', 'departure_ship_tag', 'turn_departure_ship', 'turn_departure_ship_tag'] }} className="ship" onTap={() => a.tapShip(row, 'departure')} onLong={staff ? () => a.editShip(row, 'departure') : undefined}>
               <ShipCellText snap={snap} ship={row.departureShip} tag={row.departureTag} />
             </Cell>
           </td>
@@ -167,11 +167,11 @@ function VehicleGroup({ row, zone, a, staff, focus }: { row: BoardRow; zone: Zon
       {(row.nights.length > 0 || row.nightDriverId) && (
         <tr className="night-row">
           <td colSpan={2}><b><NightTag /></b></td>
-          <td><Cell onTap={() => void a.editNightDriver(row)}>{row.nightDriverId ? abbrev(driverName(snap, row.nightDriverId)) : row.nights.length ? <span className="nodrv-badge">미배치</span> : '＋'}</Cell></td>
+          <td><Cell changed={{ id: row.vd?.id, fields: ['night_driver_id'] }} onTap={() => void a.editNightDriver(row)}>{row.nightDriverId ? abbrev(driverName(snap, row.nightDriverId)) : row.nights.length ? <span className="nodrv-badge">미배치</span> : '＋'}</Cell></td>
           <td colSpan={13}>
             <div className="row wrap" style={{ gap: 4 }}>
               {row.nights.map((o) => (
-                <Cell key={o.id} onTap={() => a.openOrder(o)} onLong={staff ? () => a.openOrder(o, true) : undefined}>
+                <Cell changed={{ id: o.id }} key={o.id} onTap={() => a.openOrder(o)} onLong={staff ? () => a.openOrder(o, true) : undefined}>
                   <b>{o.kind === 'load' ? '상차' : '하차'}{o.zone !== row.zone ? `(${o.zone === 'land' ? '육지' : '제주'})` : ''}</b> {clientName(snap, o)} {productName(snap, o)}<StorageTag snap={snap} o={o} /> {qtyText(o)} {o.departure_ship ? `→ ${o.departure_ship}` : ''}
                 </Cell>
               ))}
@@ -190,20 +190,20 @@ function WaitingGroup({ o, a }: { o: DailyOrder; a: Actions }) {
   const isLoad = o.kind === 'load';
   const ext = isExternal(o);
   const vcell = ext
-    ? <Cell className="ext" onTap={() => a.openOrder(o, staff)}><CarrierText o={o} /></Cell>
-    : <Cell className="yellow" onTap={() => a.assign(o)}>{staff ? '배차' : ''}</Cell>;
+    ? <Cell changed={{ id: o.id }} className="ext" onTap={() => a.openOrder(o, staff)}><CarrierText o={o} /></Cell>
+    : <Cell changed={{ id: o.id }} className="yellow" onTap={() => a.assign(o)}>{staff ? '배차' : ''}</Cell>;
   const yellow = <td>{!isLoad && vcell}</td>;
   return (
     <tbody className={`vgroup ${ext ? 'external' : 'waiting'}`} id={`row-${o.id}`}>
       <tr>
-        <td>{!isLoad && <Cell className="ship" onTap={() => a.editWaitingShip(o)}><ShipCellText snap={snap} ship={o.arrival_ship} tag={o.arrival_ship_tag} /></Cell>}</td>
+        <td>{!isLoad && <Cell changed={{ id: o.id }} className="ship" onTap={() => a.editWaitingShip(o)}><ShipCellText snap={snap} ship={o.arrival_ship} tag={o.arrival_ship_tag} /></Cell>}</td>
         {yellow}
         <td />
         {isLoad ? <EmptyFields /> : <OrderFields o={o} a={a} staff={staff} />}
         <td className="sep">{isLoad && vcell}</td>
         <td />
         {isLoad ? <OrderFields o={o} a={a} staff={staff} /> : <EmptyFields />}
-        <td>{isLoad && <Cell className="ship" onTap={() => a.editWaitingShip(o)}><ShipCellText snap={snap} ship={o.departure_ship} tag={o.departure_ship_tag} /></Cell>}</td>
+        <td>{isLoad && <Cell changed={{ id: o.id }} className="ship" onTap={() => a.editWaitingShip(o)}><ShipCellText snap={snap} ship={o.departure_ship} tag={o.departure_ship_tag} /></Cell>}</td>
       </tr>
     </tbody>
   );

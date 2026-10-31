@@ -95,6 +95,8 @@ a { color: var(--blue); }
 .vrow > .col:last-child { border-right: none; }
 .cell { min-height: 48px; padding: 4px 5px; font-size: 15px; line-height: 1.25; display: flex; flex-direction: column; justify-content: center; cursor: pointer; user-select: none; -webkit-user-select: none; position: relative; border-bottom: 1px solid #f1f1f1; word-break: keep-all; }
 .cell:last-child { border-bottom: none; }
+/* 최근 24시간 안에 수정된 칸 */
+.cell.changed::after { content: ''; position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 50%; background: #f97316; box-shadow: 0 0 0 1.5px #fff; pointer-events: none; }
 .cell:active { background: #f3f4f6; }
 .cell.empty { color: #c0c4cc; align-items: center; font-size: 20px; }
 .cell.yellow { background: var(--yellow); color: #713f12; font-weight: 700; align-items: center; }
@@ -496,3 +498,17 @@ body.today-view { background: #fffbe6; }
 body.today-view .datebar, body.today-view .board-head { background: #fffbe6; }
 /* 도착 선박 시간: 마감 선박 시간보다 50% 크게 */
 .paper .ps-ship.arr .ps-time { font-size: max(.6em, 7.5px); }
+/* 수정 이력 */
+.chg-line { padding: 6px 0; border-bottom: 1px solid #f1f1f1; }
+.chg-line:last-child { border-bottom: none; }
+.chg-head { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.chg-op { font-size: 12px; padding: 1px 6px; border-radius: 6px; background: #e5e7eb; }
+.chg-op.op-등록 { background: #dcfce7; color: #166534; }
+.chg-op.op-수정 { background: #ffedd5; color: #9a3412; }
+.chg-op.op-삭제 { background: #fee2e2; color: #991b1b; }
+.chg-diff { font-size: 14px; margin-top: 2px; word-break: break-all; }
+.chg-diff .k { color: var(--gray); margin-right: 6px; }
+.chg-diff .before { color: #6b7280; text-decoration: line-through; }
+.chg-diff .after { color: #9a3412; font-weight: 700; }
+.recent-changes { margin: 8px 0; padding: 6px 10px; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; }
+.recent-changes summary { cursor: pointer; font-weight: 700; color: #9a3412; }

@@ -14,6 +14,7 @@ import { EXTERNAL_HIRED, EXTERNAL_SHIPPER, PM_ARRIVAL, usePickers } from './pick
 import { CarrierSheet } from './CarrierSheet.tsx';
 import { Sheet, useSheet } from './Sheet.tsx';
 import { NightTag } from './NightTag.tsx';
+import { RecentChanges } from './RecentChanges.tsx';
 import { VoyageSheet } from './ShipFares.tsx';
 
 export function useBoardActions(date: string, board: Board, onFocusVehicle?: (vehicleId: string) => void) {
@@ -345,6 +346,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
         <div>동승: {row.helperId ? <>{driverName(snap, row.helperId)} <span className="badge warn">{row.helperRole ? HELPER_ROLE_LABEL[row.helperRole] : '동승'}</span></> : <span className="muted">없음</span>}</div>
         {row.driverId && <div>근무형태: {workLogOf(snap, row.driverId, date)?.work_types.join(', ') || <span className="muted">미입력</span>}</div>}
         {row.inRepair && <div style={{ color: 'var(--red)' }}>수리 중 {row.statusMemo}</div>}
+        <RecentChanges ids={[row.vd?.id]} />
       </>,
       staff && row.secondary
         ? [

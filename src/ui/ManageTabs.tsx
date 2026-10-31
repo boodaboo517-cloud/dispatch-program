@@ -5,7 +5,7 @@ import { useSwipe } from './useSwipe.ts';
 
 export const MANAGE_TABS: [string, string][] = [
   ['/clients', '거래처'], ['/fleet/vehicles', '차량'], ['/fleet/drivers', '기사'], ['/fleet/attendance', '근무현황'],
-  ['/fleet/ships', '선박'], ['/fleet/field', '현장'],
+  ['/fleet/ships', '선박'], ['/fleet/field', '현장'], ['/history', '수정 이력'],
 ];
 
 const useTabs = () => MANAGE_TABS;
