@@ -75,6 +75,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
 
   /** 야간 기사 */
   const editNightDriver = async (row: BoardRow) => {
+    store.expectOnly(row.vd);
     if (!staff) return;
     const d = await pick.driver(date, row.nightDriverId);
     if (d === undefined || d === PM_ARRIVAL) return;
@@ -85,6 +86,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     sheet.open((close) => <OrderSheet orderId={o.id} close={close} startEditing={edit} />);
 
   const editShip = async (row: BoardRow, which: 'arrival' | 'departure') => {
+    store.expectOnly(row.vd);
     if (!staff || !row.zone) return;
     const cur = which === 'arrival' ? { ship: row.arrivalShip, tag: row.arrivalTag } : { ship: row.departureShip, tag: row.departureTag };
     const r = await pick.ship(row.zone, cur, which);
@@ -146,6 +148,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
 
   /** 연속운행 켜기·끄기 (원래 지역 줄 기준) */
   const toggleTurn = (row: BoardRow, on: boolean) => {
+    store.expectOnly(row.vd);
     const home = row.secondary ? (row.zone ? opposite(row.zone) : null) : row.zone;
     if (!home) return;
     const away = board.rows.find((r) => r.vehicle.id === row.vehicle.id && r.secondary);
@@ -162,6 +165,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
   const sideLabel = (row: BoardRow, side: DriverSide) => (row.zone === 'jeju' ? (side === 'unload' ? '오전' : '오후') : side === 'unload' ? '하차' : '상차');
 
   const editDriver = async (row: BoardRow, side: DriverSide = 'unload') => {
+    store.expectOnly(row.vd);
     if (!staff) return;
     const d = await pick.driver(date, side === 'unload' ? row.driverId : row.loadDriverId, side === 'unload');
     if (d === undefined) return;
@@ -186,6 +190,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
 
   /** 오후도착으로: 오전 기사를 비우고(그 기사는 오후로), 오후 기사가 없으면 바로 고르기 */
   const setPmArrival = async (row: BoardRow) => {
+    store.expectOnly(row.vd);
     store.run((tx) => setRowAmLabel(tx, { date, vehicle_id: row.vehicle.id, zone: row.zone, label: PM_ARRIVAL_LABEL }));
     const now = buildBoard(store.getState().snap, date).rows.find((r) => r.vehicle.id === row.vehicle.id && !r.secondary);
     if (now && !now.loadDriverId) await editDriver(now, 'load');
@@ -193,6 +198,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
 
   /** 기사 없는 차량: 오전·오후 같은 기사로 할지, 오후만 정할지 */
   const assignDriver = async (row: BoardRow) => {
+    store.expectOnly(row.vd);
     if (!staff) return;
     const cancelOpt = row.loads.length || row.unloads.length ? [{ label: '🚫 배차 취소 (짐 → 미배차)', value: 'cancel' }] : [];
     const side = await sheet.confirm({
@@ -227,6 +233,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
   };
 
   const editStatus = async (row: BoardRow) => {
+    store.expectOnly(row.vd);
     const r = await pick.status(date, row.zone, { status: row.status, memo: row.statusMemo }, staff);
     if (!r) return;
     if (r.action === 'add-unload' && row.zone) return addOrder(row.zone, 'unload', row);
@@ -242,6 +249,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
 
   /** 동승 기사 (선탑·교육 / 지원): 기사 고르고 → 역할 고르기 */
   const editHelper = async (row: BoardRow) => {
+    store.expectOnly(row.vd);
     if (!staff) return;
     const d = await pick.driver(date, row.helperId);
     if (d === undefined) return;
@@ -260,6 +268,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
 
   /** 오전(하차)·오후(상차) 칸 비고만 (오더 없이). 빈 글자로 저장하면 지움 */
   const editNote = async (row: BoardRow, kind: Kind) => {
+    store.expectOnly(row.vd);
     if (!staff) return;
     const cur = (kind === 'unload' ? row.vd?.unload_note : row.vd?.load_note) ?? '';
     const t = await pick.memo(cur, `${row.vehicle.short_no} ${sideLabel(row, kind === 'unload' ? 'unload' : 'load')} 비고`);
@@ -269,6 +278,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
 
   /** 출근 시간·장소: 제주는 기본 07:00 부두, 바뀔 때만 고친다 */
   const editStart = (row: BoardRow) => {
+    store.expectOnly(row.vd);
     if (!staff) return;
     const prev = row.startTime || row.startPlace ? { time: row.startTime, place: row.startPlace } : row.zone === 'jeju' ? { ...DEFAULT_START } : lastStart(store.getState().snap, row.vehicle.id, date);
     sheet.open((close) => (
@@ -279,6 +289,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
 
   /** 처리 순서 (1번차·2번차…) 직접 고치기 */
   const editSeq = (row: BoardRow) => {
+    store.expectOnly(row.vd);
     const pickSeq = (side: DriverSide, cur: number | null) => (
       <div className="field" key={side}>
         <span>{sideLabel(row, side)} 기사 {driverName(store.getState().snap, side === 'unload' ? row.driverId : row.loadDriverId) || '미지정'}</span>
@@ -303,6 +314,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
     const snap = store.getState().snap;
     const list = [...row.loads, ...row.unloads];
     if (!list.length) return;
+    store.expectOnly(...list);
     const label = (o: DailyOrder) => `${kindLabel(o.zone, o.kind)} · ${clientName(snap, o)} ${productName(snap, o)} ${qtyText(o)}`.trim();
     const c = await sheet.confirm({
       title: `${row.vehicle.short_no} 배차 취소 → 미배차`,
@@ -319,6 +331,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
   };
 
   const tapVehicle = (row: BoardRow) => {
+    store.expectOnly(row.vd);
     const snap = store.getState().snap;
     showText(
       `${row.vehicle.short_no} 차량`,
@@ -372,6 +385,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
 
   /** 배차 못 한 짐을 다른 날로 (상차면 연결된 반대편 하차도 함께 옮겨짐) */
   const moveDate = async (o: DailyOrder) => {
+    store.expectOnly(o);
     const d = await pick.date(`${kindLabel(o.zone, o.kind)} 날짜 변경`, o.date);
     if (!d || d === o.date) return;
     store.run((tx) => saveOrder(tx, { ...tx.get('daily_orders', o.id)!, date: d }));
@@ -400,6 +414,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
 
   /** 노란 차량 칸 → 그날 그 지역 차량 목록에서 배차 → 그 차량 줄로 이동 */
   const assign = async (o: DailyOrder) => {
+    store.expectOnly(o);
     if (!staff) return;
     const b = buildBoard(store.getState().snap, date);
     const vid = await pick.vehicle(b, o.zone, true);
@@ -442,6 +457,7 @@ export function useBoardActions(date: string, board: Board, onFocusVehicle?: (ve
   };
 
   const editWaitingShip = async (o: DailyOrder) => {
+    store.expectOnly(o);
     if (!staff) return;
     const isLoad = o.kind === 'load';
     const r = await pick.ship(o.zone, isLoad ? { ship: o.departure_ship, tag: o.departure_ship_tag } : { ship: o.arrival_ship, tag: o.arrival_ship_tag }, isLoad ? 'departure' : 'arrival');

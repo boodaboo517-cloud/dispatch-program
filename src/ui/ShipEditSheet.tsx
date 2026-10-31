@@ -41,6 +41,7 @@ export function ShipEditSheet({ ship, close }: { ship: Ship; close: () => void }
     else delete row.depart_port;
     if (!x.depart_next_day && ship.depart_next_day === undefined) delete row.depart_next_day;
     if (!x.wait && ship.wait === undefined) delete row.wait;
+    if (!isNew) store.expectOnly(ship);
     store.run((tx) => (isNew ? tx.insert('ships', row) : tx.update('ships', row.id, row)));
     close();
   };

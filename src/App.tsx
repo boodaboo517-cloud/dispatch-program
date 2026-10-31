@@ -47,6 +47,26 @@ function UndoButton() {
   return <button className="undo-fab" onClick={() => store.undo()} title="마지막 작업 되돌리기 (Ctrl+Z)">↩ 되돌리기{n > 1 ? ` ${n}` : ''}</button>;
 }
 
+const CONFLICT_SCREEN: Partial<Record<string, string>> = {
+  daily_orders: '오더', vehicle_days: '차량 일정', field_assignments: '현장근무', clients: '거래처', products: '품목', vehicles: '차량', drivers: '기사', ships: '선박',
+};
+
+/** 저장하려는데 다른 사용자가 먼저 고친 경우: 저장 안 함 → 최신 내용으로 바꿨으니 확인하고 다시 저장 */
+function ConflictNotice() {
+  const c = useStore((s) => s.conflict);
+  if (!c) return null;
+  return (
+    <div className="modal-back" onClick={() => store.clearConflict()}>
+      <div className="card" style={{ maxWidth: 420, margin: '20vh auto 0' }} onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ color: 'var(--red)', marginTop: 0 }}>⚠ 다른 사용자({c.by})가 먼저 수정했습니다</h3>
+        <p>방금 고친 <b>{CONFLICT_SCREEN[c.table] ?? '항목'}</b> 내용은 <b>저장되지 않았습니다.</b></p>
+        <p className="muted small">화면을 {c.by}님이 저장한 최신 내용으로 바꿨습니다. 확인한 뒤 필요하면 다시 고쳐서 저장하세요.</p>
+        <button className="primary" style={{ width: '100%' }} onClick={() => store.clearConflict()}>확인</button>
+      </div>
+    </div>
+  );
+}
+
 /** 배차 담당자가 일주일 지난 날짜를 볼 때: 보기만 가능 */
 function LockBanner({ role }: { role: Role }) {
   const [params] = useSearchParams();
@@ -292,6 +312,7 @@ export default function App() {
           }} />
         )}
         <Toasts />
+        <ConflictNotice />
       </SheetProvider>
     </BrowserRouter>
   );

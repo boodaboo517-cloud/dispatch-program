@@ -1,6 +1,6 @@
 // 오더 칸을 누르면 뜨는 시트: 내용 보기·수정 + 매출 입력 + 연결 상태
 import { NightTag } from './NightTag.tsx';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CALC_LABEL, CARRIER_LABEL, EXTRA_PRESETS, Tx, acceptLinkPending, arrivalOffset, buildBoard, transportSummary,
@@ -12,7 +12,7 @@ import { store } from '../data/store.ts';
 import { QtyInput } from './QtyInput.tsx';
 import { PhraseChips } from './Phrases.tsx';
 import { fmtDate, fmtStamp } from '../lib/time.ts';
-import { useRole, useSnap, useWatch } from './hooks.ts';
+import { useRole, useSnap, useStore, useWatch } from './hooks.ts';
 import {
   STORAGE_LABEL, ZONE_LABEL, arrivalShipLabel, clientName, departureShipLabel, driverName, kindLabel, productName,
   productOf, shipText, vehicleNo,
@@ -45,6 +45,11 @@ export function OrderSheet({ orderId, close, startEditing = false }: { orderId: 
   const [rev, setRev] = useState<OrderRevenue | null>(null);
   const linkedUnload = useMemo(() => (order?.kind === 'load' ? snap.daily_orders.find((o) => o.linked_from_id === order.id) : undefined), [snap, order]);
   const source = order?.linked_from_id ? snap.daily_orders.find((o) => o.id === order.linked_from_id) : undefined;
+  // 다른 사용자가 먼저 고쳐서 저장이 거절됨 → 고치던 내용을 접고 최신 내용을 보여 준다
+  const conflict = useStore((st) => st.conflict);
+  useEffect(() => {
+    if (conflict?.id === orderId) { setDraft(null); setRev(null); }
+  }, [conflict, orderId]);
 
   if (!order) {
     return <Sheet title="오더" onClose={close}><p>삭제된 오더입니다.</p></Sheet>;
@@ -94,6 +99,8 @@ export function OrderSheet({ orderId, close, startEditing = false }: { orderId: 
 
   const save = () => {
     let split = 0;
+    // 고치기 시작할 때 본 수정시각 — 그 사이 다른 사람이 저장했으면 서버가 거절
+    if (draft) store.expectOnly({ id: draft.id, updated_at: draft.updated_at });
     store.run((tx) => {
       if (draft) saveOrder(tx, draft);
       if (rev) saveRevenue(tx, { ...rev, quantity: rev.quantity ?? (draft ?? order).quantity });

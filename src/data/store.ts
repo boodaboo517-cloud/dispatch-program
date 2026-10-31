@@ -36,7 +36,21 @@ export interface StoreState {
   savedAt: string | null;
   /** 되돌릴 수 있는 작업 수 */
   undoCount: number;
+  /** 저장하려는데 다른 사용자가 먼저 고친 경우 (화면에 알림) */
+  conflict: EditConflict | null;
 }
+
+export interface EditConflict {
+  seq: number;
+  by: string;
+  table: TableName;
+  id: string;
+}
+
+/** 동시 수정 검사를 하는 표 (서버 트리거 a_edit_conflict 와 같게) */
+const CONFLICT_TABLES: TableName[] = ['daily_orders', 'vehicle_days', 'field_assignments', 'clients', 'products', 'vehicles', 'drivers', 'ships'];
+/** 화면을 연 뒤 이 시간이 지나면 기준 시각을 버린다 (오래 열어 둔 화면) */
+const EXPECT_TTL = 15 * 60 * 1000;
 
 /** 되돌리기 한 번 = 작업 한 번(저장 버튼·메뉴 한 번)에 생긴 변경 전체 */
 interface UndoEntry {
@@ -62,7 +76,15 @@ class Store {
     loadedFrom: addDays(seoulToday(), -LOOKBACK),
     savedAt: null,
     undoCount: 0,
+    conflict: null,
   };
+  /** 보낼 줄 → "내가 본 시점의 수정시각" (서버가 그 뒤 다른 사람이 먼저 고쳤는지 확인) */
+  private bases = new Map<string, string>();
+  /** 고치기 시작한 줄 → 그때 수정시각 (다음 저장 때 bases 로 옮김) */
+  private expected = new Map<string, { base: string; at: number }>();
+  /** 서버에 동시 수정 SQL 을 아직 안 넣었으면 기준 시각 없이 보낸다 */
+  private noEditBase = false;
+  private conflictSeq = 0;
   private undoStack: UndoEntry[] = [];
   private listeners = new Set<() => void>();
   private outbox = new Map<string, Mutation>();
@@ -198,6 +220,44 @@ class Store {
     return s && !s.demo ? s.userId : null;
   }
 
+  /**
+   * 화면에 보이는 이 줄을 고치기 시작함 — 저장할 때 그 사이 다른 사람이 먼저 저장했으면
+   * 서버가 거절하고 "다른 사용자(아이디)가 먼저 수정했습니다"를 띄운다.
+   */
+  expect(row: { id: string; updated_at?: string } | null | undefined) {
+    if (!row?.id || !row.updated_at) return;
+    this.expected.set(row.id, { base: row.updated_at, at: Date.now() });
+  }
+
+  /** 새 작업을 시작할 때: 예전 작업에서 남은 기준 시각을 비운다 (취소한 메뉴 등) */
+  expectOnly(...rows: ({ id: string; updated_at?: string } | null | undefined)[]) {
+    this.expected.clear();
+    for (const r of rows) this.expect(r);
+  }
+
+  clearConflict() {
+    this.setState({ conflict: null });
+  }
+
+  /** 이번 저장에서 기준 시각을 붙일 줄 고르기 */
+  private attachBases(muts: Mutation[], undo: boolean) {
+    const now = Date.now();
+    for (const [id, e] of this.expected) if (now - e.at > EXPECT_TTL) this.expected.delete(id);
+    for (const m of muts) {
+      if (m.op !== 'upsert' || !CONFLICT_TABLES.includes(m.table)) continue;
+      const id = m.row.id as string;
+      const cur = (this.state.snap[m.table] as unknown as Row[]).find((r) => r.id === id);
+      if (!cur) continue; // 새 줄
+      // 되돌리기: 지금 화면 값 기준 (그 사이 다른 사람이 고쳤으면 덮어쓰지 않게)
+      const base = undo ? (cur.updated_at as string | undefined) : this.expected.get(id)?.base;
+      if (!undo) this.expected.delete(id);
+      const k = `${m.table}:${id}`;
+      if (base && !this.bases.has(k)) this.bases.set(k, base);
+    }
+    // 한 번 저장하면 그 작업은 끝 — 남은 기준 시각이 나중 연쇄 변경에 잘못 붙지 않게
+    if (!undo) this.expected.clear();
+  }
+
   /** 도메인 함수를 트랜잭션으로 실행하고 결과를 반영 */
   run<T>(fn: (tx: Tx) => T): T {
     const tx = new Tx(this.state.snap, { actor: this.actor() });
@@ -232,6 +292,7 @@ class Store {
         this.setState({ undoCount: this.undoStack.length });
       }
     }
+    if (!opts.auto && !this.state.session?.demo) this.attachBases(muts, !!opts.undo);
     this.setState({ snap: applyMutations(this.state.snap, muts) });
     if (!this.state.session?.demo) {
       for (const m of muts) this.outbox.set(key(m), m);
@@ -286,20 +347,40 @@ class Store {
     try {
       const sending = new Map(this.outbox);
       let dupSkipped = 0;
+      const conflicts: EditConflict[] = [];
+      const out = (t: TableName, r: Record<string, unknown>) => {
+        const base = this.noEditBase ? undefined : this.bases.get(`${t}:${r.id as string}`);
+        return base ? { ...stripLocal(t, r), edit_base: base } : stripLocal(t, r);
+      };
+      const upsert = async (t: TableName, rows: Record<string, unknown>[]) => {
+        let res = await supabase!.from(t).upsert(rows.map((r) => out(t, r)), { defaultToNull: false });
+        // 서버에 edit_base 칸이 아직 없음(이번 업데이트 SQL 전) → 기준 시각 없이 다시
+        if (res.error && !this.noEditBase && /edit_base/.test(res.error.message)) {
+          this.noEditBase = true;
+          res = await supabase!.from(t).upsert(rows.map((r) => out(t, r)), { defaultToNull: false });
+        }
+        return res;
+      };
+      const conflictOf = (t: TableName, r: Record<string, unknown>, e: { details?: string | null; message: string }): EditConflict => {
+        let by = '';
+        try { by = (JSON.parse(e.details ?? '{}') as { by?: string }).by ?? ''; } catch { /* 메시지에서 */ }
+        return { seq: ++this.conflictSeq, by: by || e.message.replace(/\(이\)가 먼저 수정했습니다.*/, ''), table: t, id: r.id as string };
+      };
       for (const b of toBatches([...sending.values()])) {
         const { error } = b.op === 'upsert'
-          ? await supabase.from(b.table).upsert(b.rows.map((r) => stripLocal(b.table, r)), { defaultToNull: false })
+          ? await upsert(b.table, b.rows)
           : await supabase.from(b.table).delete().in('id', b.ids);
         if (error) {
           if (isNetworkError(error)) throw error;
-          // 중복(다른 기기·새벽 자동 연장이 같은 날 반복 오더를 먼저 만듦) · 그 때문에 빠진 오더를 가리키는 줄:
-          // 묶음 전체를 버리지 말고 한 줄씩 다시 보내서 걸리는 줄만 건너뛴다
-          if (b.op === 'upsert' && (error.code === '23505' || error.code === '23503')) {
+          // 중복(다른 기기·새벽 자동 연장이 같은 날 반복 오더를 먼저 만듦) · 그 때문에 빠진 오더를 가리키는 줄 ·
+          // 다른 사용자가 먼저 고친 줄(GM409): 묶음 전체를 버리지 말고 한 줄씩 다시 보내서 걸리는 줄만 건너뛴다
+          if (b.op === 'upsert' && (error.code === '23505' || error.code === '23503' || error.code === 'GM409')) {
             for (const r of b.rows) {
-              const one = await supabase.from(b.table).upsert([stripLocal(b.table, r)], { defaultToNull: false });
+              const one = await upsert(b.table, [r]);
               if (!one.error) continue;
               if (isNetworkError(one.error)) throw one.error;
-              if (one.error.code === '23505' && one.error.message.includes('recurring_once')) dupSkipped++;
+              if (one.error.code === 'GM409') conflicts.push(conflictOf(b.table, r, one.error));
+              else if (one.error.code === '23505' && one.error.message.includes('recurring_once')) dupSkipped++;
               else if (one.error.code !== '23503') this.toast(`저장 실패 (${b.table}): ${one.error.message}`, 'error');
             }
           } else {
@@ -309,7 +390,21 @@ class Store {
           void this.refreshTable(b.table);
         }
         const done = b.op === 'upsert' ? b.rows.map((r) => `${b.table}:${r.id as string}`) : b.ids.map((id) => `${b.table}:${id}`);
-        for (const k of done) if (this.outbox.get(k) === sending.get(k)) this.outbox.delete(k);
+        for (const k of done) {
+          if (this.outbox.get(k) === sending.get(k)) {
+            this.outbox.delete(k);
+            this.bases.delete(k);
+          }
+        }
+      }
+      if (conflicts.length) {
+        // 최신 값을 다시 받아 화면에 보여 주고, 다시 저장하게 한다
+        for (const t of new Set(conflicts.map((c) => c.table))) await this.refreshTable(t);
+        // 저장 안 된 작업은 되돌리기 목록에서도 뺀다 (되돌리면 남이 고친 값을 덮어씀)
+        const hit = new Set(conflicts.map((c) => `${c.table}:${c.id}`));
+        this.undoStack = this.undoStack.filter((e) => !e.inverse.some((m) => hit.has(key(m))));
+        const last = conflicts[conflicts.length - 1];
+        this.setState({ conflict: last, undoCount: this.undoStack.length });
       }
       if (dupSkipped) {
         this.toast(`다른 기기에서 이미 만든 반복 일정 ${dupSkipped}건은 건너뛰었습니다`);
@@ -395,7 +490,8 @@ class Store {
         if (this.outbox.has(`${t}:${row.id}`)) return; // 내 변경이 아직 전송 전 — 내 것이 마지막 저장
         const mine = row.updated_by === this.state.session?.userId;
         if (!mine && this.watched.has(row.id)) {
-          this.toast('다른 사용자가 방금 이 항목을 수정했습니다 (마지막 저장 우선)', 'warn');
+          const who = this.profileName(row.updated_by as string | null) || '다른 사용자';
+          this.toast(`${who}님이 방금 이 항목을 수정했습니다 — 화면을 최신 내용으로 바꿨습니다`, 'warn');
         }
         if (t === 'notices' && payload.eventType === 'INSERT') {
           const n = row as unknown as { driver_id: string | null; message: string };

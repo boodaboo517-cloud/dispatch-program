@@ -33,7 +33,10 @@ export function ProductDetailPage() {
   const bulk = (snap.product_bulk_fees ?? []).find((x) => x.product_id === p.id);
   const allowSuggest = setting(snap, 'driver_suggestions', false);
   const edit = staff;
-  const save = (patch: Partial<Product>) => store.run((tx) => tx.update('products', p.id, patch));
+  const save = (patch: Partial<Product>) => {
+    store.expectOnly(p);
+    store.run((tx) => tx.update('products', p.id, patch));
+  };
   const saver = (k: keyof Product, kind: 'text' | 'number' = 'text') =>
     edit ? (v: string) => save({ [k]: kind === 'number' ? (v === '' ? null : Number(v)) : v } as Partial<Product>) : undefined;
 

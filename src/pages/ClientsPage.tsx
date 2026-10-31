@@ -96,7 +96,7 @@ export function ClientDetailPage() {
   const [tab, setTab] = useState<'products' | 'recurring' | 'history'>('products');
   const c = snap.clients.find((x) => x.id === id);
   if (!c) return <div className="page"><p>거래처를 찾을 수 없습니다.</p></div>;
-  const save = (k: keyof Client) => (staff ? (v: string) => store.run((tx) => tx.update('clients', c.id, { [k]: v || (k === 'default_ship' ? null : '') })) : undefined);
+  const save = (k: keyof Client) => (staff ? (v: string) => { store.expectOnly(c); store.run((tx) => tx.update('clients', c.id, { [k]: v || (k === 'default_ship' ? null : '') })); } : undefined);
   const products = snap.products.filter((p) => p.client_id === c.id);
   const recent = snap.daily_orders.filter((o) => o.client_id === c.id).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 40);
 

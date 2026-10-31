@@ -27,7 +27,10 @@ const TYPES: VehicleType[] = ['5톤', '통윙', '통윙2냉', '1톤', '승용'];
 function VehicleSheet({ v, close }: { v: Vehicle; close: () => void }) {
   const snap = useSnap();
   const cur = snap.vehicles.find((x) => x.id === v.id) ?? v;
-  const save = (p: Partial<Vehicle>) => store.run((tx) => (tx.get('vehicles', v.id) ? tx.update('vehicles', v.id, p) : tx.insert('vehicles', { ...v, ...p })));
+  const save = (p: Partial<Vehicle>) => {
+    store.expectOnly(cur);
+    store.run((tx) => (tx.get('vehicles', v.id) ? tx.update('vehicles', v.id, p) : tx.insert('vehicles', { ...v, ...p })));
+  };
   const s = (k: keyof Vehicle, num = false) => (val: string) => save({ [k]: num ? (val === '' ? null : Number(val)) : val } as Partial<Vehicle>);
   return (
     <Sheet title={`차량 ${cur.short_no}`} onClose={close}>
@@ -185,7 +188,10 @@ function DriverSheet({ d, close }: { d: Driver; close: () => void }) {
   const snap = useSnap();
   const { staff } = useRole();
   const cur = snap.drivers.find((x) => x.id === d.id) ?? d;
-  const save = (p: Partial<Driver>) => store.run((tx) => (tx.get('drivers', d.id) ? tx.update('drivers', d.id, p) : tx.insert('drivers', { ...d, ...p })));
+  const save = (p: Partial<Driver>) => {
+    store.expectOnly(cur);
+    store.run((tx) => (tx.get('drivers', d.id) ? tx.update('drivers', d.id, p) : tx.insert('drivers', { ...d, ...p })));
+  };
   return (
     <Sheet title={cur.name} onClose={close}>
       <Editable label="이름" value={cur.name} onSave={(v) => save({ name: v })} />
