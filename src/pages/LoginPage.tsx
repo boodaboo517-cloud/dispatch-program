@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Role } from '../domain/index.ts';
-import { isDemo, supabase } from '../data/supabase.ts';
+import { isDemo, loginEmail, rememberLogin, supabase } from '../data/supabase.ts';
 import { seedSnapshot } from '../data/seed.ts';
 import { savedDemoData } from '../data/store.ts';
 import { Seg } from '../ui/Picker.tsx';
@@ -9,8 +9,7 @@ import { InstallBanner } from '../ui/InstallCard.tsx';
 export function LoginPage({ onDemo }: { onDemo: (role: Role, driverId: string | null) => void }) {
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
-  const [name, setName] = useState('');
-  const [mode, setMode] = useState<'login' | 'signup' | 'reset'>('login');
+  const [remember, setRemember] = useState(rememberLogin.get());
   const [msg, setMsg] = useState('');
   const [driver, setDriver] = useState('');
   const [saved, setSaved] = useState<Awaited<ReturnType<typeof savedDemoData>>>(null);
@@ -25,21 +24,12 @@ export function LoginPage({ onDemo }: { onDemo: (role: Role, driverId: string | 
     onDemo(role, driverId);
   };
 
-  const sendReset = async () => {
-    setMsg('');
-    if (!email.trim()) return setMsg('가입한 이메일을 넣어 주세요');
-    const { error } = await supabase!.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin });
-    setMsg(error ? error.message : '비밀번호를 다시 정하는 링크를 메일로 보냈습니다. 메일이 오지 않으면 관리자에게 "비밀번호 재설정"을 부탁하세요.');
-  };
-
   const submit = async () => {
     setMsg('');
-    if (mode === 'reset') return sendReset();
-    const r = mode === 'login'
-      ? await supabase!.auth.signInWithPassword({ email, password: pw })
-      : await supabase!.auth.signUp({ email, password: pw, options: { data: { name } } });
-    if (r.error) setMsg(r.error.message);
-    else if (mode === 'signup' && !r.data.session) setMsg('가입 확인 메일을 확인하세요.');
+    if (!email.trim() || !pw) return setMsg('아이디와 비밀번호를 넣어 주세요');
+    rememberLogin.set(remember);
+    const { error } = await supabase!.auth.signInWithPassword({ email: loginEmail(email), password: pw });
+    if (error) setMsg(/invalid/i.test(error.message) ? '아이디 또는 비밀번호가 맞지 않습니다' : /fetch|network/i.test(error.message) ? '서버에 연결하지 못했습니다 — 인터넷 연결을 확인하세요' : error.message);
   };
 
   return (
@@ -68,15 +58,15 @@ export function LoginPage({ onDemo }: { onDemo: (role: Role, driverId: string | 
         </div>
       ) : (
         <div className="card">
-          {mode === 'signup' && <label className="field"><span>이름</span><input value={name} onChange={(e) => setName(e.target.value)} /></label>}
-          <label className="field"><span>이메일</span><input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
-          {mode !== 'reset' && <label className="field"><span>비밀번호</span><input type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} /></label>}
-          {mode === 'reset' && <p className="muted small">가입한 이메일로 비밀번호를 다시 정하는 링크를 보냅니다.</p>}
-          {msg && <div className={`banner ${mode === 'reset' && msg.startsWith('비밀번호를') ? 'blue' : 'red'}`}>{msg}</div>}
-          <button className="primary" style={{ width: '100%' }} onClick={submit}>{mode === 'login' ? '로그인' : mode === 'signup' ? '가입' : '재설정 메일 보내기'}</button>
-          <button className="ghost" style={{ width: '100%' }} onClick={() => { setMsg(''); setMode(mode === 'login' ? 'signup' : 'login'); }}>{mode === 'login' ? '처음이세요? 가입' : '로그인으로'}</button>
-          {mode === 'login' && <button className="ghost" style={{ width: '100%' }} onClick={() => { setMsg(''); setMode('reset'); }}>비밀번호를 잊으셨나요?</button>}
-          <p className="muted small">처음 가입한 사람이 관리자가 됩니다. 이후 가입자는 조회(기사) 권한이며, 관리자가 설정에서 바꿉니다.</p>
+          <label className="field"><span>아이디</span><input autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} value={email} onChange={(e) => setEmail(e.target.value)} /></label>
+          <label className="field"><span>비밀번호</span><input type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void submit()} /></label>
+          <label className="row" style={{ gap: 8, margin: '4px 0 10px' }}>
+            <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} style={{ width: 22, height: 22 }} />
+            <span>로그인 상태 유지 <span className="muted small">(공용 PC면 끄세요)</span></span>
+          </label>
+          {msg && <div className="banner red">{msg}</div>}
+          <button className="primary" style={{ width: '100%' }} onClick={() => void submit()}>로그인</button>
+          <p className="muted small">계정은 관리자가 [사용자 관리]에서 만들어 줍니다. 비밀번호를 잊으면 관리자에게 초기화를 부탁하세요. 예전 이메일 계정은 이메일을 그대로 넣어도 됩니다.</p>
         </div>
       )}
     </div>

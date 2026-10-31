@@ -21,6 +21,7 @@ import { RevenuePage } from './pages/RevenuePage.tsx';
 import { AdminPage } from './pages/admin/AdminPage.tsx';
 import { SchedulePage } from './pages/SchedulePage.tsx';
 import { SettingsPage } from './pages/SettingsPage.tsx';
+import { UsersPage } from './pages/UsersPage.tsx';
 
 function Toasts() {
   const toasts = useStore((s) => s.toasts);
@@ -97,6 +98,7 @@ function TopMenu({ role }: { role: Role }) {
           <NavLink to={loc.pathname === '/' ? '/' : menuUrl('/')} end className={() => (loc.pathname === '/' ? 'active' : '')} onClick={(e) => { if (loc.pathname !== '/') { e.preventDefault(); nav(menuUrl('/')); } }}>배차</NavLink>
           {role === 'admin' && <NavLink to="/revenue">매출</NavLink>}
           <NavLink to={loc.pathname.startsWith('/admin') ? loc.pathname : '/admin/dispatch'} className={() => (loc.pathname.startsWith('/admin') ? 'active' : '')}>📊 관리</NavLink>
+          {role === 'admin' && <NavLink to="/users">👥 사용자 관리</NavLink>}
           {role === 'admin' ? <NavLink to="/settings">설정</NavLink> : <NavLink to="/settings">👤 내 계정</NavLink>}
         </>
       ) : (
@@ -226,6 +228,7 @@ function Shell() {
           <Route path="/admin" element={<Navigate to="/admin/dispatch" replace />} />
           <Route path="/admin/:section" element={<AdminPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/users" element={session.role === 'admin' ? <UsersPage /> : <Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       )}
