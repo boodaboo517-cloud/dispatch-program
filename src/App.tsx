@@ -12,6 +12,7 @@ import { useStore } from './ui/hooks.ts';
 import { SheetProvider } from './ui/Sheet.tsx';
 import { InstallBanner } from './ui/InstallCard.tsx';
 import { OnlineBadge, screenName } from './ui/Online.tsx';
+import { AccountChip } from './ui/AccountMenu.tsx';
 import { ClientDetailPage, ClientsPage } from './pages/ClientsPage.tsx';
 import { DriverHome } from './pages/DriverHome.tsx';
 import { FleetPage } from './pages/FleetPage.tsx';
@@ -126,11 +127,14 @@ function TopMenu({ role }: { role: Role }) {
           {role === 'admin' ? <NavLink to="/settings">설정</NavLink> : <NavLink to="/settings">👤 내 계정</NavLink>}
           <span style={{ flex: 1 }} />
           <OnlineBadge />
+          <AccountChip />
         </>
       ) : (
         <>
           <NavLink to="/driver">내 배차</NavLink>
           <NavLink to="/settings">설정</NavLink>
+          <span style={{ flex: 1 }} />
+          <AccountChip />
         </>
       )}
     </nav>
@@ -225,11 +229,15 @@ function Shell() {
     <div className="app">
       <NavMemory />
       <TopMenu role={session.role} />
+      {/* 휴대폰: 맨 위 오른쪽에 접속 중 · 내 계정(로그아웃) */}
+      <div className="mobile-topbar">
+        {!viewer && <OnlineBadge />}
+        <AccountChip />
+      </div>
       <StatusLine />
       <LockBanner role={session.role} />
       <InstallBanner />
       {!viewer && <UndoButton />}
-      {!viewer && <OnlineBadge float />}
       {viewer ? (
         // 기사(조회) 계정: 내 배차만 (품목 주의사항·사진은 배차 카드에서 열림)
         <Routes>

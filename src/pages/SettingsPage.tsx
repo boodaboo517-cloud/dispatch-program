@@ -19,6 +19,7 @@ import { alertPrefs, canVibrate, ringAlert, setAlertPref } from '../lib/alerts.t
 import { Sheet, useSheet } from '../ui/Sheet.tsx';
 import { NewPasswordSheet } from './LoginPage.tsx';
 import { ProfileSheet } from './ProfileSheet.tsx';
+import { logoutThisDevice } from '../ui/AccountMenu.tsx';
 
 
 function UploadPreview({ rows, data, close }: { rows: PreviewRow[]; data: Awaited<ReturnType<typeof parseUpload>>; close: () => void }) {
@@ -400,7 +401,7 @@ export function SettingsPage() {
         <div className="row wrap">
           {!isDemo && session?.userId && <button onClick={() => sheet.open((close) => <ProfileSheet userId={session.userId} self close={close} />)}>✏ 내 정보 수정</button>}
           {!isDemo && <button onClick={() => sheet.open((close) => <NewPasswordSheet close={close} />)}>🔑 비밀번호 바꾸기</button>}
-          <button className="danger" onClick={async () => { await store.logAccess('로그아웃').catch(() => undefined); await supabase?.auth.signOut(); await store.stop(); localStorage.removeItem('demo-role'); location.href = '/'; }}>로그아웃</button>
+          <button className="danger" onClick={() => void logoutThisDevice()}>🚪 로그아웃 (이 기기)</button>
         </div>
       </div>
     </div>

@@ -517,9 +517,9 @@ body.today-view .datebar, body.today-view .board-head { background: #fffbe6; }
 .editing-by { position: absolute; left: 2px; bottom: 1px; font-size: 10px; line-height: 1; color: #fff; background: #3b82f6; border-radius: 4px; padding: 1px 3px; max-width: calc(100% - 4px); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; pointer-events: none; }
 /* 접속 중 */
 .online-badge { display: inline-flex; align-items: center; gap: 4px; padding: 0 10px; min-height: 30px; border-radius: 15px; border: 1px solid #bbf7d0; background: #f0fdf4; color: #166534; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
-.online-float { position: fixed; top: calc(4px + env(safe-area-inset-top)); right: 6px; z-index: 40; }
-@media (min-width: 1024px) { .online-float { display: none; } }
+/* 휴대폰 맨 위 줄: 접속 중 · 내 계정 */
+.mobile-topbar { display: flex; justify-content: flex-end; align-items: center; gap: 6px; padding: calc(4px + env(safe-area-inset-top)) 8px 0; }
+@media (min-width: 1024px) { .mobile-topbar { display: none; } }
+.account-chip { display: inline-flex; align-items: center; gap: 4px; padding: 0 10px; min-height: 30px; border-radius: 15px; border: 1px solid var(--line); background: #fff; color: var(--text); font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
 .online-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; display: inline-block; }
-@media print { .online-float { display: none; } }
-/* 휴대폰: 접속 중 표시가 설치 안내 버튼을 가리지 않게 */
-@media (max-width: 1023px) { .app:has(.online-float) .install-banner { margin-top: 34px; } }
+@media print { .mobile-topbar { display: none; } }

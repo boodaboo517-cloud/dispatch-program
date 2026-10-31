@@ -29,13 +29,13 @@ export function screenName(path: string, search = ''): string {
 /** 같은 사람이 여러 창을 열어도 사람 수는 한 번만 */
 const peopleCount = (list: { user_id: string }[]) => new Set(list.map((u) => u.user_id)).size;
 
-export function OnlineBadge({ float = false }: { float?: boolean }) {
+export function OnlineBadge() {
   const list = useStore((s) => s.onlineUsers);
   const sheet = useSheet();
   if (!list.length) return null;
   return (
-    <button className={`online-badge${float ? ' online-float' : ''}`} onClick={() => sheet.open((close) => <OnlineSheet close={close} />)} title="지금 접속 중인 사람">
-      <span className="online-dot" /> {float ? '' : '접속 중 '}{peopleCount(list)}명
+    <button className="online-badge" onClick={() => sheet.open((close) => <OnlineSheet close={close} />)} title="지금 접속 중인 사람">
+      <span className="online-dot" /> 접속 중 {peopleCount(list)}명
     </button>
   );
 }
