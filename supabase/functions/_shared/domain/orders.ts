@@ -618,3 +618,32 @@ export function heldLoads(snap: Pick<Snapshot, 'ships' | 'daily_orders'>, date: 
   }
   return out;
 }
+
+/**
+ * 미배차 짐 이어가기: 지난 날짜에 차량을 못 잡은 상차·하차는 실제로 처리되지 않았으므로
+ * 오늘 날짜로 그대로 옮긴다 (앱 열 때 · 날짜가 바뀔 때). 최근 sinceDays 일 안의 것만.
+ * - 아직 차량 없는 상차에 매달린 반대편 하차는 상차를 따라 움직이므로 건드리지 않는다
+ * - 반복 발주 오더는 오늘 것과 겹치지 않게 "직접 입력"으로 바꿔 둔다 (반복 변경·종료에도 남김)
+ */
+export function carryUnassigned(tx: Tx, today: string, sinceDays = 7): number {
+  const from = addDays(today, -sinceDays);
+  const isExt = (o: DailyOrder) => !!o.carrier_type && o.carrier_type !== 'own';
+  const waiting = (o: DailyOrder) => !o.vehicle_id && !isExt(o);
+  let n = 0;
+  for (const o of tx.list('daily_orders')) {
+    if (o.date >= today || o.date < from || !waiting(o)) continue;
+    if (o.kind === 'unload' && o.linked_from_id) {
+      const src = tx.get('daily_orders', o.linked_from_id);
+      if (src && waiting(src) && src.shipment !== 'bulk') continue;
+    }
+    const cur = tx.get('daily_orders', o.id)!;
+    if (cur.date >= today) continue; // 상차를 따라 이미 옮겨진 하차
+    const recurring = cur.source === 'recurring';
+    saveOrder(tx, {
+      ...cur, date: today,
+      ...(recurring ? { source: 'manual' as const, edited_manually: true } : {}),
+    }, { userEdit: false });
+    n++;
+  }
+  return n;
+}
