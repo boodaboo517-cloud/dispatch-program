@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Role } from '../domain/index.ts';
 import { isDemo, loginEmail, rememberLogin, supabase } from '../data/supabase.ts';
+import { idleNotice, markActive } from '../lib/idleLogout.ts';
 import { seedSnapshot } from '../data/seed.ts';
 import { savedDemoData, store } from '../data/store.ts';
 import { Seg } from '../ui/Picker.tsx';
@@ -10,6 +11,7 @@ export function LoginPage({ onDemo }: { onDemo: (role: Role, driverId: string | 
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
   const [remember, setRemember] = useState(rememberLogin.get());
+  const [idleOut] = useState(() => idleNotice.take());
   const [msg, setMsg] = useState('');
   const [driver, setDriver] = useState('');
   const [saved, setSaved] = useState<Awaited<ReturnType<typeof savedDemoData>>>(null);
@@ -28,7 +30,9 @@ export function LoginPage({ onDemo }: { onDemo: (role: Role, driverId: string | 
     setMsg('');
     if (!email.trim() || !pw) return setMsg('아이디와 비밀번호를 넣어 주세요');
     rememberLogin.set(remember);
-    const { error } = await supabase!.auth.signInWithPassword({ email: loginEmail(email), password: pw });
+    // 로그인한 순간을 이 기기의 마지막 활동으로 (24시간 미사용 로그아웃 기준) — 세션 시작 전에 먼저 적어 둔다
+    const { data, error } = await supabase!.auth.signInWithPassword({ email: loginEmail(email), password: pw });
+    if (data?.user) markActive(data.user.id);
     if (!error) void store.logAccess('로그인');
     if (error) setMsg(/invalid/i.test(error.message) ? '아이디 또는 비밀번호가 맞지 않습니다' : /fetch|network/i.test(error.message) ? '서버에 연결하지 못했습니다 — 인터넷 연결을 확인하세요' : error.message);
   };
@@ -65,6 +69,7 @@ export function LoginPage({ onDemo }: { onDemo: (role: Role, driverId: string | 
             <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} style={{ width: 22, height: 22 }} />
             <span>로그인 상태 유지 <span className="muted small">(공용 PC면 끄세요)</span></span>
           </label>
+          {idleOut && !msg && <div className="banner yellow">24시간 동안 사용하지 않아 이 기기에서 로그아웃되었습니다. 다시 로그인해 주세요.</div>}
           {msg && <div className="banner red">{msg}</div>}
           <button className="primary" style={{ width: '100%' }} onClick={() => void submit()}>로그인</button>
           <p className="muted small">계정은 관리자가 [사용자 관리]에서 만들어 줍니다. 비밀번호를 잊으면 관리자에게 초기화를 부탁하세요. 예전 이메일 계정은 이메일을 그대로 넣어도 됩니다.</p>

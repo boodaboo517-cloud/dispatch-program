@@ -7,6 +7,7 @@ import { store } from './data/store.ts';
 import { isDemo, supabase } from './data/supabase.ts';
 import { lastUrl, menuOf, menuUrl, remember, saveScroll, scrollOf } from './lib/navMemory.ts';
 import { seoulToday } from './lib/time.ts';
+import { idleExpired, idleNotice, watchIdle } from './lib/idleLogout.ts';
 import { useStore } from './ui/hooks.ts';
 import { SheetProvider } from './ui/Sheet.tsx';
 import { InstallBanner } from './ui/InstallCard.tsx';
@@ -280,6 +281,13 @@ export default function App() {
       }
       return;
     }
+    const idleLogout = async () => {
+      idleNotice.set();
+      await store.logAccess('로그아웃').catch(() => undefined);
+      await supabase!.auth.signOut({ scope: 'local' });
+      await store.stop();
+      setChecking(false);
+    };
     const startFor = async (userId: string | undefined) => {
       if (!userId) {
         await store.stop();
@@ -297,6 +305,11 @@ export default function App() {
         return;
       }
       setBlocked(false);
+      // 이 기기에서 24시간 동안 아무 활동이 없었으면 로그아웃 (다른 기기는 그대로)
+      if (idleExpired(userId)) {
+        await idleLogout();
+        return;
+      }
       await store.start({ userId, name: data?.name ?? '', loginId: (data as { login_id?: string | null } | null)?.login_id ?? '', role: (data?.role ?? 'viewer') as Role, driverId: data?.driver_id ?? null, demo: false });
       setChecking(false);
     };
@@ -308,6 +321,16 @@ export default function App() {
     });
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  // 쓰는 중에도 24시간 동안 손대지 않으면 이 기기만 로그아웃
+  const userId = session && !session.demo ? session.userId : null;
+  useEffect(() => {
+    if (!userId) return;
+    return watchIdle(userId, () => {
+      idleNotice.set();
+      void store.logAccess('로그아웃').catch(() => undefined).finally(() => supabase!.auth.signOut({ scope: 'local' }));
+    });
+  }, [userId]);
 
   if (checking) return <div className="page"><p>불러오는 중…</p></div>;
   return (
