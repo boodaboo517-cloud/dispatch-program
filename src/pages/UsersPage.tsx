@@ -97,6 +97,53 @@ export function UsersPage() {
         </div>
       ))}
     </div>
+    <AccessLog />
+    </div>
+  );
+}
+
+type AccessRow = { id: number; at: string; login_id: string; event: string; device: string };
+
+/** 아이디별 최근 24시간 접속 기록 (로그인 · 앱 열기 · 로그아웃 · 창 닫기) */
+function AccessLog() {
+  const [rows, setRows] = useState<AccessRow[] | null>(null);
+  const [err, setErr] = useState('');
+  const [who, setWho] = useState('');
+  const load = async () => {
+    await supabase!.rpc('purge_change_log');
+    const { data, error } = await supabase!.from('access_log').select('id,at,login_id,event,device')
+      .gte('at', new Date(Date.now() - 24 * 3600 * 1000).toISOString()).order('at', { ascending: false }).limit(2000);
+    if (error) return setErr(needSql(error.message).replace('update_20261101.sql', 'update_20261101d.sql'));
+    setRows(data as AccessRow[]);
+  };
+  useEffect(() => { void load(); }, []);
+  const ids = [...new Set((rows ?? []).map((r) => r.login_id))].sort();
+  const list = (rows ?? []).filter((r) => !who || r.login_id === who);
+  const t = (at: string) => dayjs(at).tz(TZ).format('M/D HH:mm');
+  return (
+    <div className="card">
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+        <h3 style={{ margin: 0 }}>🕘 최근 24시간 접속 기록</h3>
+        <button className="chip" onClick={() => void load()}>새로고침</button>
+      </div>
+      <p className="muted small">로그인 · 접속(앱 열기) · 로그아웃 · 종료(창 닫기). 휴대폰은 창을 닫을 때 "종료"가 빠질 수 있습니다. 24시간 지나면 자동 삭제.</p>
+      {err && <div className="banner yellow small">{err}</div>}
+      {rows && (
+        <>
+          <select style={{ width: 'auto', marginBottom: 6 }} value={who} onChange={(e) => setWho(e.target.value)}>
+            <option value="">아이디 전체</option>{ids.map((x) => <option key={x} value={x}>{x}</option>)}
+          </select>
+          {list.length ? (
+            <table className="simple" style={{ width: '100%' }}>
+              <thead><tr><th>시각</th><th>아이디</th><th>기록</th><th>기기</th></tr></thead>
+              <tbody>{list.slice(0, 300).map((r) => (
+                <tr key={r.id}><td>{t(r.at)}</td><td><b>{r.login_id}</b></td>
+                  <td style={{ color: r.event === '로그인' || r.event === '접속' ? '#166534' : '#991b1b' }}>{r.event}</td><td>{r.device}</td></tr>
+              ))}</tbody>
+            </table>
+          ) : <p className="muted">기록이 없습니다.</p>}
+        </>
+      )}
     </div>
   );
 }

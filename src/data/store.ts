@@ -8,11 +8,13 @@ import {
 } from '../domain/index.ts';
 import { seoulToday } from '../lib/time.ts';
 import { initialSnapshot, type DemoData } from './demo.ts';
-import { supabase } from './supabase.ts';
+import { rpcOnClose, supabase } from './supabase.ts';
 
 export interface Session {
   userId: string;
   name: string;
+  /** 로그인 아이디 (예전 이메일 계정은 비어 있을 수 있음) */
+  loginId?: string;
   role: Role;
   driverId: string | null;
   demo: boolean;
@@ -42,6 +44,8 @@ export interface StoreState {
   changes: ChangeEntry[];
   /** 최근 24시간 안에 바뀐 줄 → 바뀐 칸들 ('' = 새로 등록) */
   changedRows: Map<string, Set<string>>;
+  /** 지금 접속 중 (나 포함, 창마다) */
+  onlineUsers: OnlineUser[];
 }
 
 /** 수정 이력 한 줄 (서버 change_log, 최근 24시간) */
@@ -62,6 +66,27 @@ export interface ChangeEntry {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** 지금 접속 중인 사람 (Realtime Presence) — 창(탭)마다 한 줄 */
+export interface OnlineUser {
+  key: string;
+  user_id: string;
+  login_id: string;
+  name: string;
+  since: string;
+  tab: string;
+  device: 'PC' | '모바일';
+  /** 지금 편집 중인 줄 id */
+  editing: string | null;
+  beat: number;
+}
+
+export const deviceKind = (): 'PC' | '모바일' =>
+  typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ? '모바일' : 'PC';
+
+/** 1분 넘게 신호가 없으면 목록에서 뺀다 */
+const STALE_MS = 60 * 1000;
+const BEAT_MS = 20 * 1000;
 
 export interface EditConflict {
   seq: number;
@@ -102,7 +127,14 @@ class Store {
     conflict: null,
     changes: [],
     changedRows: new Map(),
+    onlineUsers: [],
   };
+  private presence: RealtimeChannel | null = null;
+  private presenceKey = '';
+  private presenceSince = '';
+  private presenceMeta: { tab: string; editing: string | null } = { tab: '', editing: null };
+  private presenceTimer: ReturnType<typeof setInterval> | null = null;
+  private editingTimer: ReturnType<typeof setTimeout> | null = null;
   /** 보낼 줄 → "내가 본 시점의 수정시각" (서버가 그 뒤 다른 사람이 먼저 고쳤는지 확인) */
   private bases = new Map<string, string>();
   /** 고치기 시작한 줄 → 그때 수정시각 (다음 저장 때 bases 로 옮김) */
@@ -179,6 +211,10 @@ class Store {
     } else {
       await this.refresh();
       this.subscribeRealtime();
+      this.startPresence();
+      void this.logAccess('접속');
+      window.removeEventListener('pagehide', this.onClose);
+      window.addEventListener('pagehide', this.onClose);
       void this.loadChanges();
       // 24시간 지난 표시는 저절로 사라지게
       if (!this.pruneTimer) this.pruneTimer = setInterval(() => this.setChanges(this.state.changes), 10 * 60 * 1000);
@@ -193,8 +229,86 @@ class Store {
   async stop() {
     if (this.channel) await supabase?.removeChannel(this.channel);
     this.channel = null;
+    await this.stopPresence();
     this.undoStack = [];
-    this.setState({ session: null, snap: emptySnapshot(), ready: false, undoCount: 0, changes: [], changedRows: new Map() });
+    this.setState({ session: null, snap: emptySnapshot(), ready: false, undoCount: 0, changes: [], changedRows: new Map(), onlineUsers: [] });
+  }
+
+  // ───────── 접속자 표시 (Realtime Presence) ─────────
+
+  private startPresence() {
+    const s = this.state.session;
+    if (!supabase || !s || s.demo || this.presence) return;
+    this.presenceKey = `${s.userId}:${Math.random().toString(36).slice(2, 8)}`;
+    this.presenceSince = new Date().toISOString();
+    this.presence = supabase.channel('online-users', { config: { presence: { key: this.presenceKey } } });
+    this.presence
+      .on('presence', { event: 'sync' }, () => this.syncPresence())
+      .subscribe((status) => { if (status === 'SUBSCRIBED') void this.track(); });
+    // 20초마다 "살아 있음" 신호, 1분 넘게 신호 없는 줄은 뺀다
+    this.presenceTimer = setInterval(() => { void this.track(); this.syncPresence(); }, BEAT_MS);
+  }
+
+  private async stopPresence() {
+    if (this.presenceTimer) clearInterval(this.presenceTimer);
+    this.presenceTimer = null;
+    if (this.presence) await supabase?.removeChannel(this.presence);
+    this.presence = null;
+  }
+
+  private syncPresence() {
+    if (!this.presence) return;
+    const now = Date.now();
+    const state = this.presence.presenceState<Omit<OnlineUser, 'key'>>();
+    const list: OnlineUser[] = [];
+    for (const [key, metas] of Object.entries(state)) {
+      const m = metas[metas.length - 1];
+      if (!m || now - (m.beat ?? 0) > STALE_MS) continue;
+      list.push({ ...m, key });
+    }
+    list.sort((a, b) => a.since.localeCompare(b.since));
+    this.setState({ onlineUsers: list });
+  }
+
+  private async track() {
+    const s = this.state.session;
+    if (!this.presence || !s) return;
+    await this.presence.track({
+      user_id: s.userId, login_id: s.loginId || '', name: s.name, since: this.presenceSince,
+      tab: this.presenceMeta.tab, device: deviceKind(), editing: this.presenceMeta.editing, beat: Date.now(),
+    });
+  }
+
+  /** 지금 보는 화면 */
+  setViewing(tab: string) {
+    if (this.presenceMeta.tab === tab) return;
+    this.presenceMeta.tab = tab;
+    void this.track();
+  }
+
+  /** 지금 편집 중인 줄 (다른 사람 화면에 아이디·테두리 표시). null = 편집 끝 */
+  setEditing(id: string | null, ttlMs = 0) {
+    if (this.editingTimer) clearTimeout(this.editingTimer);
+    this.editingTimer = ttlMs && id ? setTimeout(() => this.setEditing(null), ttlMs) : null;
+    if (this.presenceMeta.editing === id) return;
+    this.presenceMeta.editing = id;
+    void this.track();
+  }
+
+  /** 다른 사람이 편집 중인 줄 → 그 사람 아이디 */
+  editorsOf(id: string | null | undefined): string[] {
+    if (!id) return [];
+    return this.state.onlineUsers.filter((u) => u.editing === id && u.key !== this.presenceKey).map((u) => u.login_id || u.name);
+  }
+
+  private onClose = () => {
+    if (this.state.session && !this.state.session.demo) rpcOnClose('log_access', { p_event: '종료', p_device: deviceKind() });
+  };
+
+  /** 접속 기록 남기기 (로그인 · 접속 · 로그아웃 · 종료) */
+  async logAccess(event: '로그인' | '접속' | '로그아웃' | '종료') {
+    if (!supabase || this.state.session?.demo) return;
+    await supabase.rpc('log_access', { p_event: event, p_device: deviceKind() });
   }
 
   async resetDemo(kind: DemoData) {
@@ -262,6 +376,8 @@ class Store {
   expectOnly(...rows: ({ id: string; updated_at?: string } | null | undefined)[]) {
     this.expected.clear();
     for (const r of rows) this.expect(r);
+    // 다른 사람 화면에 "편집 중" 표시 (메뉴를 닫고 아무것도 안 해도 2분 뒤 사라짐)
+    if (!this.watched.size) this.setEditing(rows.find(Boolean)?.id ?? null, 2 * 60 * 1000);
   }
 
   clearConflict() {
@@ -284,7 +400,10 @@ class Store {
       if (base && !this.bases.has(k)) this.bases.set(k, base);
     }
     // 한 번 저장하면 그 작업은 끝 — 남은 기준 시각이 나중 연쇄 변경에 잘못 붙지 않게
-    if (!undo) this.expected.clear();
+    if (!undo) {
+      this.expected.clear();
+      if (!this.watched.size) this.setEditing(null);
+    }
   }
 
   /** 도메인 함수를 트랜잭션으로 실행하고 결과를 반영 */

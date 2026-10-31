@@ -32,6 +32,20 @@ const authStorage = {
 export const supabase: SupabaseClient | null = url && key ? createClient(url, key, { auth: { storage: authStorage, persistSession: true } }) : null;
 export const isDemo = !supabase;
 
+/** 창을 닫는 순간 보낼 기록용: 마지막 로그인 토큰 (비동기로 다시 읽을 시간이 없음) */
+let accessToken = '';
+supabase?.auth.onAuthStateChange((_e, s) => { accessToken = s?.access_token ?? ''; });
+
+/** 창을 닫을 때도 끝까지 보내지는 RPC 호출 (keepalive) */
+export function rpcOnClose(fn: string, body: Record<string, unknown>) {
+  if (!url || !key || !accessToken) return;
+  void fetch(`${url}/rest/v1/rpc/${fn}`, {
+    method: 'POST', keepalive: true,
+    headers: { apikey: key, Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).catch(() => undefined);
+}
+
 /** 로그인 아이디 → 로그인용 이메일 ("@" 가 있으면 예전 이메일 계정 그대로) */
 export const loginEmail = (id: string) => {
   const v = id.trim().toLowerCase();

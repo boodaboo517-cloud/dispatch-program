@@ -10,6 +10,7 @@ import { seoulToday } from './lib/time.ts';
 import { useStore } from './ui/hooks.ts';
 import { SheetProvider } from './ui/Sheet.tsx';
 import { InstallBanner } from './ui/InstallCard.tsx';
+import { OnlineBadge, screenName } from './ui/Online.tsx';
 import { ClientDetailPage, ClientsPage } from './pages/ClientsPage.tsx';
 import { DriverHome } from './pages/DriverHome.tsx';
 import { FleetPage } from './pages/FleetPage.tsx';
@@ -122,6 +123,8 @@ function TopMenu({ role }: { role: Role }) {
           <NavLink to="/history">🕘 수정 이력</NavLink>
           {role === 'admin' && <NavLink to="/users">👥 사용자 관리</NavLink>}
           {role === 'admin' ? <NavLink to="/settings">설정</NavLink> : <NavLink to="/settings">👤 내 계정</NavLink>}
+          <span style={{ flex: 1 }} />
+          <OnlineBadge />
         </>
       ) : (
         <>
@@ -149,6 +152,7 @@ function NavMemory() {
       }
     }
     remember(loc.pathname, loc.search);
+    store.setViewing(screenName(loc.pathname, loc.search));
     const key = loc.pathname + loc.search;
     const y = scrollOf(key);
     // 화면이 다 그려진 뒤에 한 번 더 (느린 휴대폰)
@@ -224,6 +228,7 @@ function Shell() {
       <LockBanner role={session.role} />
       <InstallBanner />
       {!viewer && <UndoButton />}
+      {!viewer && <OnlineBadge float />}
       {viewer ? (
         // 기사(조회) 계정: 내 배차만 (품목 주의사항·사진은 배차 카드에서 열림)
         <Routes>
@@ -281,8 +286,9 @@ export default function App() {
         setChecking(false);
         return;
       }
-      let { data, error } = await supabase!.from('profiles').select('name,role,driver_id,blocked').eq('id', userId).single();
-      // 회원 관리 SQL 적용 전 서버 (blocked 칸 없음)
+      let { data, error } = await supabase!.from('profiles').select('name,role,driver_id,blocked,login_id').eq('id', userId).single();
+      // 아이디 SQL 전 서버 (login_id 칸 없음) · 회원 관리 SQL 적용 전 서버 (blocked 칸 없음)
+      if (error) ({ data, error } = await supabase!.from('profiles').select('name,role,driver_id,blocked').eq('id', userId).single() as never);
       if (error) ({ data } = await supabase!.from('profiles').select('name,role,driver_id').eq('id', userId).single() as never);
       if ((data as { blocked?: boolean } | null)?.blocked) {
         await store.stop();
@@ -291,7 +297,7 @@ export default function App() {
         return;
       }
       setBlocked(false);
-      await store.start({ userId, name: data?.name ?? '', role: (data?.role ?? 'viewer') as Role, driverId: data?.driver_id ?? null, demo: false });
+      await store.start({ userId, name: data?.name ?? '', loginId: (data as { login_id?: string | null } | null)?.login_id ?? '', role: (data?.role ?? 'viewer') as Role, driverId: data?.driver_id ?? null, demo: false });
       setChecking(false);
     };
     supabase!.auth.getSession().then(({ data }) => startFor(data.session?.user.id));

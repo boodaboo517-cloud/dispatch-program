@@ -79,12 +79,15 @@ export function usePress(onTap: () => void, onLong?: () => void) {
 }
 
 /** 편집 중인 행을 store 에 알려 다른 사람 변경 알림을 받는다 */
+/** 이 줄을 화면에 열어 둠: 다른 사람이 바꾸면 알림 + 다른 사람 화면에 "편집 중" 표시 */
 export function useWatch(id: string | null | undefined) {
   useEffect(() => {
     if (!id) return;
     store.watched.add(id);
+    store.setEditing(id);
     return () => {
       store.watched.delete(id);
+      if (!store.watched.size) store.setEditing(null);
     };
   }, [id]);
 }

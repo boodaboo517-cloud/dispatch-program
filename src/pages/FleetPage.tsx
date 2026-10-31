@@ -9,7 +9,7 @@ import {
 import { store } from '../data/store.ts';
 import { fmtDate, seoulToday } from '../lib/time.ts';
 import { Editable } from '../ui/Editable.tsx';
-import { useRole, useSnap } from '../ui/hooks.ts';
+import { useRole, useSnap, useWatch } from '../ui/hooks.ts';
 import { ManageTabs, useManageSwipe } from '../ui/ManageTabs.tsx';
 import { ZONE_LABEL, driverName, vehicleNo } from '../ui/labels.ts';
 import { WeekdayChips } from '../ui/Picker.tsx';
@@ -28,6 +28,7 @@ const TYPES: VehicleType[] = ['5톤', '통윙', '통윙2냉', '1톤', '승용'];
 function VehicleSheet({ v, close }: { v: Vehicle; close: () => void }) {
   const snap = useSnap();
   const cur = snap.vehicles.find((x) => x.id === v.id) ?? v;
+  useWatch(v.id);
   const save = (p: Partial<Vehicle>) => {
     store.expectOnly(cur);
     store.run((tx) => (tx.get('vehicles', v.id) ? tx.update('vehicles', v.id, p) : tx.insert('vehicles', { ...v, ...p })));
@@ -190,6 +191,7 @@ function DriverSheet({ d, close }: { d: Driver; close: () => void }) {
   const snap = useSnap();
   const { staff } = useRole();
   const cur = snap.drivers.find((x) => x.id === d.id) ?? d;
+  useWatch(d.id);
   const save = (p: Partial<Driver>) => {
     store.expectOnly(cur);
     store.run((tx) => (tx.get('drivers', d.id) ? tx.update('drivers', d.id, p) : tx.insert('drivers', { ...d, ...p })));

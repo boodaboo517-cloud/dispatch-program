@@ -5,7 +5,7 @@ import { store } from '../data/store.ts';
 import { fmtDate } from '../lib/time.ts';
 import { Editable } from '../ui/Editable.tsx';
 import { ManageTabs, useManageSwipe } from '../ui/ManageTabs.tsx';
-import { useRole, useSnap } from '../ui/hooks.ts';
+import { useRole, useSnap, useWatch } from '../ui/hooks.ts';
 import { ZONE_LABEL, kindLabel, orderText, vehicleNo } from '../ui/labels.ts';
 import { StorageBadge, tempText } from '../ui/OrderSheet.tsx';
 import { RecurringList, RecurringSheet } from '../ui/RecurringSheet.tsx';
@@ -96,6 +96,7 @@ export function ClientDetailPage() {
   const { staff } = useRole();
   const [tab, setTab] = useState<'products' | 'recurring' | 'history'>('products');
   const c = snap.clients.find((x) => x.id === id);
+  useWatch(id);
   if (!c) return <div className="page"><p>거래처를 찾을 수 없습니다.</p></div>;
   const save = (k: keyof Client) => (staff ? (v: string) => { store.expectOnly(c); store.run((tx) => tx.update('clients', c.id, { [k]: v || (k === 'default_ship' ? null : '') })); } : undefined);
   const products = snap.products.filter((p) => p.client_id === c.id);

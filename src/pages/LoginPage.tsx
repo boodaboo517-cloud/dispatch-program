@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Role } from '../domain/index.ts';
 import { isDemo, loginEmail, rememberLogin, supabase } from '../data/supabase.ts';
 import { seedSnapshot } from '../data/seed.ts';
-import { savedDemoData } from '../data/store.ts';
+import { savedDemoData, store } from '../data/store.ts';
 import { Seg } from '../ui/Picker.tsx';
 import { InstallBanner } from '../ui/InstallCard.tsx';
 
@@ -29,6 +29,7 @@ export function LoginPage({ onDemo }: { onDemo: (role: Role, driverId: string | 
     if (!email.trim() || !pw) return setMsg('아이디와 비밀번호를 넣어 주세요');
     rememberLogin.set(remember);
     const { error } = await supabase!.auth.signInWithPassword({ email: loginEmail(email), password: pw });
+    if (!error) void store.logAccess('로그인');
     if (error) setMsg(/invalid/i.test(error.message) ? '아이디 또는 비밀번호가 맞지 않습니다' : /fetch|network/i.test(error.message) ? '서버에 연결하지 못했습니다 — 인터넷 연결을 확인하세요' : error.message);
   };
 
